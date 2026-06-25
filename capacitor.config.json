@@ -2,8 +2,7 @@
   "appId": "com.faithstream.app",
   "appName": "FaithStream",
   "server": {
-    "url": "http://localhost:3000",
-    "cleartext": true,
+    "url": "https://churchproject1-three.vercel.app",
     "androidScheme": "https"
   },
   "plugins": {
