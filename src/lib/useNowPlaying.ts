@@ -1,0 +1,46 @@
+"use client";
+
+import { useState, useEffect, useRef, useCallback } from "react";
+import { getNowPlaying, type NowPlayingData } from "./azuracast";
+
+interface UseNowPlayingResult {
+  data: NowPlayingData | null;
+  isLive: boolean;
+  listeners: number;
+  nowPlaying: NowPlayingData["nowPlaying"];
+  error: string | null;
+  refetch: () => void;
+}
+
+export function useNowPlaying(stationId = "1"): UseNowPlayingResult {
+  const [data, setData] = useState<NowPlayingData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchNowPlaying = useCallback(async () => {
+    try {
+      const result = await getNowPlaying(stationId);
+      setData(result);
+      setError(null);
+    } catch {
+      setError("Failed to fetch now playing data");
+    }
+  }, [stationId]);
+
+  useEffect(() => {
+    fetchNowPlaying();
+    intervalRef.current = setInterval(fetchNowPlaying, 5000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [fetchNowPlaying]);
+
+  return {
+    data,
+    isLive: data?.live?.isLive ?? false,
+    listeners: data?.listeners?.current ?? 0,
+    nowPlaying: data?.nowPlaying ?? null,
+    error,
+    refetch: fetchNowPlaying,
+  };
+}

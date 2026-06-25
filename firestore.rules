@@ -1,0 +1,165 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /* ================================================================
+       HELPER FUNCTIONS
+       ================================================================ */
+
+    function isAuth() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function userRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isAuth() && userRole() == 'admin';
+    }
+
+    function isOwnUser(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+
+    function canReadUser(uid) {
+      return isAdmin() || isOwnUser(uid);
+    }
+
+    function canWriteUser(uid) {
+      return isAdmin() || isOwnUser(uid);
+    }
+
+    function isValidUserDoc() {
+      return request.resource.data.keys().hasAll(['uid', 'email', 'display_name', 'church_id', 'role', 'created_at'])
+        && request.resource.data.role in ['admin', 'member']
+        && request.resource.data.church_id is string
+        && request.resource.data.uid is string;
+    }
+
+    /* ================================================================
+       USERS COLLECTION
+       Members: read/write own doc only.
+       Admins: read/write any user doc.
+       ================================================================ */
+
+    match /users/{userId} {
+      allow read: if canReadUser(userId);
+      allow create: if isOwnUser(userId) && isValidUserDoc();
+      allow update: if canWriteUser(userId)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'uid']));
+      allow delete: if isAdmin();
+
+      /* ---- User-isolated subcollections ---- */
+      match /watch_progress/{docId} {
+        allow read, write: if canWriteUser(userId);
+      }
+
+      match /saved_content/{docId} {
+        allow read, write: if canWriteUser(userId);
+      }
+
+      match /song_requests/{docId} {
+        allow read, write: if canWriteUser(userId);
+      }
+
+      match /devices/{deviceId} {
+        allow read, write: if canWriteUser(userId);
+      }
+
+      match /{document=**} {
+        allow read, write: if false;
+      }
+    }
+
+    /* ================================================================
+       SHARED CHURCH CONTENT
+       All authenticated users can read.
+       Only admins can create, update, delete.
+       ================================================================ */
+
+    // Sermons / Events / Announcements — unified content store
+    match /content/{contentId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAdmin();
+
+      // Validate required fields on create
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasAll(['type', 'title', 'status', 'createdAt'])
+        && request.resource.data.type in ['sermon', 'event', 'announcement', 'video']
+        && request.resource.data.status in ['draft', 'published', 'archived'];
+    }
+
+    // Photo albums
+    match /albums/{albumId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Gallery — individual photos within albums
+    match /gallery/{photoId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Videos (standalone — may also appear in /content)
+    match /videos/{videoId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Sermon series
+    match /series/{seriesId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Events (standalone — may also appear in /content)
+    match /events/{eventId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Announcements (standalone — may also appear in /content)
+    match /announcements/{announcementId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Banners (homepage hero banners)
+    match /banners/{bannerId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Radio schedule / now-playing metadata
+    match /radio/{docId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Radio station configurations
+    match /radioStations/{stationId} {
+      allow read: if isAuth();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Giving records — members can create their own, admins can CRUD all
+    match /giving/{givingId} {
+      allow read: if isAdmin() || (isAuth() && resource.data.memberId == request.auth.uid);
+      allow create: if isAuth()
+        && request.resource.data.keys().hasAll(['memberId', 'amount', 'date', 'createdAt'])
+        && request.resource.data.memberId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    /* ================================================================
+       DENY ALL OTHER ACCESS
+       ================================================================ */
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
