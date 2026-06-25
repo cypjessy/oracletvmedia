@@ -156,8 +156,15 @@ export function useVideoPlayer({ videos, seriesList }: VideoPlayerDeps): VideoPl
     }
   }, [selectedVideo]);
 
-  const watchOnYT = useCallback(() => {
-    if (selectedVideo) window.open(`https://www.youtube.com/watch?v=${selectedVideo.youtubeId}`, "_blank");
+  const watchOnYT = useCallback(async () => {
+    if (selectedVideo) {
+      try {
+        const { Browser } = await import("@capacitor/browser");
+        await Browser.open({ url: `https://www.youtube.com/watch?v=${selectedVideo.youtubeId}` });
+      } catch {
+        window.open(`https://www.youtube.com/watch?v=${selectedVideo.youtubeId}`, "_blank");
+      }
+    }
   }, [selectedVideo]);
 
   const handlePlayFrom = useCallback((position: number) => {
@@ -215,6 +222,22 @@ export function useVideoPlayer({ videos, seriesList }: VideoPlayerDeps): VideoPl
     }, 1000);
     return () => { if (upNextTimerRef.current) clearInterval(upNextTimerRef.current); };
   }, [showUpNext, selectedVideo, upNextVideo, play]);
+
+  // Lock to landscape when player opens, unlock on close
+  useEffect(() => {
+    if (!isOpen) return;
+    let locked = false;
+    import("@capacitor/screen-orientation").then(({ ScreenOrientation }) => {
+      ScreenOrientation.lock({ orientation: "landscape-primary" }).then(() => { locked = true; }).catch(() => {});
+    }).catch(() => {});
+    return () => {
+      if (locked) {
+        import("@capacitor/screen-orientation").then(({ ScreenOrientation }) => {
+          ScreenOrientation.unlock().catch(() => {});
+        }).catch(() => {});
+      }
+    };
+  }, [isOpen]);
 
   // Hydrate watched videos on mount
   useEffect(() => {

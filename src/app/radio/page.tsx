@@ -1020,22 +1020,22 @@ export default function RadioPage() {
                 {/* Social Links from churchConfig */}
                 <div className="about-social-row">
                   {(churchConfig.social.facebook_url || true) && (
-                    <button className="about-social-btn" onClick={() => churchConfig.social.facebook_url && window.open(churchConfig.social.facebook_url, "_blank")}>
+                    <button className="about-social-btn" onClick={async () => { if (churchConfig.social.facebook_url) { try { const { Browser } = await import("@capacitor/browser"); await Browser.open({ url: churchConfig.social.facebook_url }); } catch { window.open(churchConfig.social.facebook_url, "_blank"); } } }}>
                       <i className="fab fa-facebook" style={{ color: "#1877F2" }}></i>
                     </button>
                   )}
                   {(churchConfig.social.youtube_url || true) && (
-                    <button className="about-social-btn" onClick={() => churchConfig.social.youtube_url && window.open(churchConfig.social.youtube_url, "_blank")}>
+                    <button className="about-social-btn" onClick={async () => { if (churchConfig.social.youtube_url) { try { const { Browser } = await import("@capacitor/browser"); await Browser.open({ url: churchConfig.social.youtube_url }); } catch { window.open(churchConfig.social.youtube_url, "_blank"); } } }}>
                       <i className="fab fa-youtube" style={{ color: "#FF0000" }}></i>
                     </button>
                   )}
                   {(churchConfig.social.whatsapp_number || true) && (
-                    <button className="about-social-btn" onClick={() => churchConfig.social.whatsapp_number && window.open(`https://wa.me/${churchConfig.social.whatsapp_number.replace(/[^0-9]/g, "")}`, "_blank")}>
+                    <button className="about-social-btn" onClick={async () => { if (churchConfig.social.whatsapp_number) { try { const { Browser } = await import("@capacitor/browser"); await Browser.open({ url: `https://wa.me/${churchConfig.social.whatsapp_number.replace(/[^0-9]/g, "")}` }); } catch { window.open(`https://wa.me/${churchConfig.social.whatsapp_number.replace(/[^0-9]/g, "")}`, "_blank"); } } }}>
                       <i className="fab fa-whatsapp" style={{ color: "#25D366" }}></i>
                     </button>
                   )}
                   {(churchConfig.social.instagram_url || true) && (
-                    <button className="about-social-btn" onClick={() => churchConfig.social.instagram_url && window.open(churchConfig.social.instagram_url, "_blank")}>
+                    <button className="about-social-btn" onClick={async () => { if (churchConfig.social.instagram_url) { try { const { Browser } = await import("@capacitor/browser"); await Browser.open({ url: churchConfig.social.instagram_url }); } catch { window.open(churchConfig.social.instagram_url, "_blank"); } } }}>
                       <i className="fab fa-instagram" style={{ color: "#E4405F" }}></i>
                     </button>
                   )}

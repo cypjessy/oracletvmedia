@@ -500,7 +500,6 @@ export default function RadioStationPage() {
           <div className="rs-header-logo"><i className="fas fa-tower-broadcast"></i></div>
           <div className="rs-header-info">
             <div className="rs-header-name">Kingdom Seekers Radio</div>
-            <div className="rs-header-sub">FaithStream Radio Station</div>
           </div>
           <div className="rs-header-right">
             {activeDJ && <div className="rs-dj-name"><i className="fas fa-user"></i> {activeDJ}</div>}

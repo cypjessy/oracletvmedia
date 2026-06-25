@@ -1143,7 +1143,6 @@ export default function AdminContentPage() {
           <button className="header-back" onClick={() => window.history.back()}><i className="fas fa-arrow-left"></i></button>
           <div className="header-info">
             <div className="header-title">Content Management</div>
-            <div className="header-sub">{storageUsage.formattedUsed} used of {storageUsage.formattedTotal}</div>
           </div>
           <div className="header-actions">
             <button className="header-upload-btn" onClick={() => setShowUploadModal(true)}>
@@ -1195,6 +1194,22 @@ export default function AdminContentPage() {
                     <div className="header-actions">
                       <button className="header-upload-btn" onClick={() => setShowUploadModal(true)}>
                         <i className="fas fa-cloud-arrow-up"></i> Upload
+                      </button>
+                      <button className="header-icon-btn" onClick={async () => {
+                        try {
+                          const { Camera, CameraResultType } = await import("@capacitor/camera");
+                          const photo = await Camera.getPhoto({ quality: 90, allowEditing: false, resultType: CameraResultType.DataUrl });
+                          if (photo.dataUrl) {
+                            const blob = await (await fetch(photo.dataUrl)).blob();
+                            const file = new File([blob], `camera_${Date.now()}.jpg`, { type: "image/jpeg" });
+                            setUploadFiles((prev) => [...prev, { file, preview: photo.dataUrl!, title: `Camera ${new Date().toLocaleString()}`, category: "events", progress: 0 }]);
+                            setShowUploadModal(true);
+                          }
+                        } catch {
+                          // User cancelled or error
+                        }
+                      }} title="Take photo with camera">
+                        <i className="fas fa-camera"></i>
                       </button>
                       <button className="header-icon-btn" onClick={() => quickInputRef.current?.click()} title="Quick import photos">
                         <i className="fas fa-bolt"></i>

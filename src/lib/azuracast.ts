@@ -6,13 +6,13 @@
 
 const STATION_ID = "1";
 
-function getApiBase(): string {
+export function getApiBase(): string {
   if (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_AZURACAST_URL)
     return process.env.NEXT_PUBLIC_AZURACAST_URL;
   return "https://azuracast.histoview.co.ke";
 }
 
-function getApiKey(): string {
+export function getApiKey(): string {
   if (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_AZURACAST_API_KEY)
     return process.env.NEXT_PUBLIC_AZURACAST_API_KEY;
   return "";

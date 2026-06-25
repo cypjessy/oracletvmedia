@@ -27,6 +27,8 @@ import {
   updateSettings as apiUpdateSettings,
   getQueue as apiGetQueue,
   getStationSourceInfo,
+  getApiBase,
+  getApiKey,
 } from "@/lib/azuracast";
 import { hapticSuccess } from "@/lib/haptics";
 import type { Streamer, Playlist, StationFile, QueueItem, StationSourceInfo } from "@/lib/azuracast";
@@ -203,8 +205,8 @@ export default function AdminRadioPage() {
     setSettingsError(null);
     Promise.all([
       apiGetSettings(),
-      fetch("https://azuracast.histoview.co.ke/api/station/1/mounts", {
-        headers: { Authorization: "Bearer fa2f4050cde11b3f:800c5d8b345ff6e692f73a01daf92456" },
+      fetch(`${getApiBase()}/api/station/1/mounts`, {
+        headers: getApiKey() ? { Authorization: `Bearer ${getApiKey()}` } : {},
       }).then((r) => r.json()).catch(() => [] as any[]),
     ]).then(([s, mounts]) => {
       setSettings({
@@ -634,7 +636,7 @@ export default function AdminRadioPage() {
             onClick={() => {
               setIsPlaying(!isPlaying);
               if (isPlaying) {
-                window.open(overviewNP?.station ? `https://azuracast.histoview.co.ke/public/${overviewNP.station.shortName}` : "#", "_blank");
+                import("@capacitor/browser").then(({ Browser }) => Browser.open({ url: overviewNP?.station ? `https://azuracast.histoview.co.ke/public/${overviewNP.station.shortName}` : "#" })).catch(() => window.open(overviewNP?.station ? `https://azuracast.histoview.co.ke/public/${overviewNP.station.shortName}` : "#", "_blank"));
               }
             }}
             title={backendRunning ? "" : "Station is offline"}

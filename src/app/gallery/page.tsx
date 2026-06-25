@@ -379,7 +379,6 @@ export default function GalleryPage() {
           <div className="header-logo"><i className="fas fa-images"></i></div>
           <div className="header-info">
             <div className="header-church">Kingdom Seekers Church</div>
-            <div className="header-sub">Photo Gallery</div>
           </div>
           <div className="header-actions">
           </div>
@@ -416,7 +415,9 @@ export default function GalleryPage() {
                   <div className="hero-carousel">
                     <div className="hero-slide" onClick={() => {
                       const b = activeBanners[bannerIndex];
-                      if (b.ctaLink) window.open(b.ctaLink, "_blank");
+                      if (b.ctaLink) {
+                        import("@capacitor/browser").then(({ Browser }) => Browser.open({ url: b.ctaLink })).catch(() => window.open(b.ctaLink, "_blank"));
+                      }
                     }}>
                       <img src={activeBanners[bannerIndex].cdnUrl} alt={activeBanners[bannerIndex].title} />
                       <div className="hero-overlay">

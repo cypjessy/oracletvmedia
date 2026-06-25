@@ -867,7 +867,6 @@ export default function WatchPage() {
           <div className="header-logo"><i className="fas fa-video"></i></div>
           <div className="header-info">
             <div className="header-church">Kingdom Seekers Church</div>
-            <div className="header-sub">Video Library</div>
           </div>
           <div className="header-actions">
             <button

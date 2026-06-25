@@ -1391,7 +1391,6 @@ export default function AdminPage() {
             </div>
             <div className="dash-header-info">
               <h1>{churchInfo.name}</h1>
-              <span className="tagline">{churchInfo.tagline}</span>
             </div>
           </div>
 

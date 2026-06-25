@@ -39,8 +39,7 @@ export default function AdminTopBar() {
       <div className="header-brand">
         <div className="header-logo"><i className="fas fa-cross"></i></div>
         <div className="header-text">
-          <h1>Admin</h1>
-          <span>Kingdom Seekers Church</span>
+          <h1>Kingdom Seekers Church</h1>
         </div>
       </div>
       <div className="header-actions">

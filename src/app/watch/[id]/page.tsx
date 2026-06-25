@@ -33,6 +33,22 @@ export default function WatchVideoPage() {
 
   const player = useVideoPlayer({ videos: allVideos, seriesList });
 
+  // Lock to landscape when video is present (dynamic import for web fallback)
+  useEffect(() => {
+    if (!video) return;
+    let locked = false;
+    import("@capacitor/screen-orientation").then(({ ScreenOrientation }) => {
+      ScreenOrientation.lock({ orientation: "landscape-primary" }).then(() => { locked = true; }).catch(() => {});
+    }).catch(() => {});
+    return () => {
+      if (locked) {
+        import("@capacitor/screen-orientation").then(({ ScreenOrientation }) => {
+          ScreenOrientation.unlock().catch(() => {});
+        }).catch(() => {});
+      }
+    };
+  }, [video]);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -149,8 +165,15 @@ export default function WatchVideoPage() {
     }
   };
 
-  const handleWatchOnYT = () => {
-    if (video) window.open(`https://www.youtube.com/watch?v=${video.youtubeId}`, "_blank");
+  const handleWatchOnYT = async () => {
+    if (video) {
+      try {
+        const { Browser } = await import("@capacitor/browser");
+        await Browser.open({ url: `https://www.youtube.com/watch?v=${video.youtubeId}` });
+      } catch {
+        window.open(`https://www.youtube.com/watch?v=${video.youtubeId}`, "_blank");
+      }
+    }
   };
 
   if (loading) {
