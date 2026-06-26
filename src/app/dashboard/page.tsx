@@ -370,7 +370,7 @@ export default function DashboardPage() {
   const [scheduleLoading, setScheduleLoading] = useState(true);
   const [stations, setStations] = useState<Station[]>([]);
   const [stationsLoading, setStationsLoading] = useState(true);
-  const [selectedStationId, setSelectedStationId] = useState<number>(Number(getStationId()) || 2);
+  const [selectedStationId, setSelectedStationId] = useState<number>(2);
   const [carouselIdx, setCarouselIdx] = useState(0);
   const [carouselPaused, setCarouselPaused] = useState(false);
   const carouselTouchRef = useRef({ startX: 0, startY: 0, isSwiping: false });
