@@ -24,7 +24,7 @@ export default function RadioPage() {
   const [streamers, setStreamers] = useState<Streamer[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
   const [stationsLoading, setStationsLoading] = useState(true);
-  const [selectedStationId, setSelectedStationId] = useState(1);
+  const [selectedStationId, setSelectedStationId] = useState<number>(Number(getStationId()) || 2);
   const [radioLoading, setRadioLoading] = useState(true);
 
   // Song request state
