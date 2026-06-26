@@ -1,7 +1,17 @@
 "use client";
 
 import { createContext, useContext, useRef, useState, useCallback, useEffect, type ReactNode } from "react";
-import { MediaSession } from "@jofr/capacitor-media-session";
+
+// Dynamic import for the Capacitor MediaSession plugin.
+// On web (Vercel) this gracefully degrades; on native Android it
+// provides lock-screen playback controls.
+let MediaSession: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  MediaSession = require("@jofr/capacitor-media-session").MediaSession;
+} catch {
+  // Not available (web or missing dependency)
+}
 
 // ============================================================
 // GLOBAL AUDIO PROVIDER
