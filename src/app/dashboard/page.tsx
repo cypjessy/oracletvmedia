@@ -10,7 +10,7 @@ import BottomNavBar from "@/components/shared/BottomNavBar";
 import ToastBridge from "@/components/dashboard/ToastBridge";
 import { useVideoPlayer } from "@/components/shared/VideoPlayer";
 import { useImageLightbox } from "@/components/shared/ImageLightbox";
-import { getNowPlaying, getSongHistory, getStationPlaylists, getStations, getStationEmbedUrl } from "@/lib/azuracast";
+import { getNowPlaying, getSongHistory, getStationPlaylists, getStations, getStationEmbedUrl, getStationId } from "@/lib/azuracast";
 import { getVideosPage, getSeries } from "@/lib/youtube";
 import { getAlbums } from "@/lib/albums";
 import { getAllAlbumEntries } from "@/lib/albumEntries";
@@ -370,7 +370,7 @@ export default function DashboardPage() {
   const [scheduleLoading, setScheduleLoading] = useState(true);
   const [stations, setStations] = useState<Station[]>([]);
   const [stationsLoading, setStationsLoading] = useState(true);
-  const [selectedStationId, setSelectedStationId] = useState<number>(1);
+  const [selectedStationId, setSelectedStationId] = useState<number>(Number(getStationId()) || 2);
   const [carouselIdx, setCarouselIdx] = useState(0);
   const [carouselPaused, setCarouselPaused] = useState(false);
   const carouselTouchRef = useRef({ startX: 0, startY: 0, isSwiping: false });
