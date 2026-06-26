@@ -316,21 +316,7 @@ export default function AdminRadioPage() {
           </div>
         </div>
 
-        {/* ========== LIVE PLAYER EMBED ========== */}
-        <div className="section-block">
-          <div className="section-block-header">
-            <h3><i className="fas fa-radio" style={{ marginRight: 6 }}></i>Live Player</h3>
-          </div>
-          <div className="ov-embed-wrap">
-            <iframe
-              src={`${getPublicPlayerUrl()}/embed`}
-              frameBorder="0"
-              allowTransparency
-              style={{ width: "100%", minHeight: 150, height: 150, border: 0, borderRadius: "var(--radius-sm)" }}
-              title="Live Radio Player"
-            />
-          </div>
-        </div>
+        {/* Live Player embed removed — use Now Playing card above */}
 
         {/* ========== PLAY CONTROL (integrated) ========== */}
         <div className="section-block">

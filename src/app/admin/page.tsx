@@ -6,7 +6,7 @@ import { signOut as firebaseSignOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAppStore } from "@/lib/useAppStore";
 import { getYouTubeStats } from "@/lib/youtube";
-import { getNowPlaying as azuracastGetNowPlaying, getSongHistory, getStationStatus, getQueue, toggleAutoDJ, getStreamers, deleteStreamer, getPlaylists, getStationId, getPublicPlayerUrl, getApiHost } from "@/lib/azuracast";
+import { getNowPlaying as azuracastGetNowPlaying, getSongHistory, getStationStatus, getQueue, toggleAutoDJ, getStreamers, deleteStreamer, getPlaylists, getStationId, getApiHost } from "@/lib/azuracast";
 import type { QueueItem, Streamer, Playlist } from "@/lib/azuracast";
 import { getGalleryPhotos } from "@/lib/content";
 import { getBunnyStorageStats, formatBytes } from "@/lib/bunny";
@@ -1534,20 +1534,7 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* LIVE PLAYER EMBED */}
-              <div className="widget-card">
-                <div className="widget-label">
-                  <i className="fas fa-radio" style={{ marginRight: 6, color: "var(--primary)" }}></i>
-                  Live Player
-                </div>
-                <iframe
-                  src={`${getPublicPlayerUrl()}/embed`}
-                  frameBorder="0"
-                  allowTransparency
-                  style={{ width: "100%", minHeight: 150, height: 150, border: 0, borderRadius: "var(--radius-sm)" }}
-                  title="Live Radio Player"
-                />
-              </div>
+              {/* Live Player embed removed — use Now Playing card above */}
 
               {/* TODAY AT A GLANCE */}
               <div className="widget-card">

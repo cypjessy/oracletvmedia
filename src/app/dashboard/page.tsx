@@ -10,7 +10,7 @@ import BottomNavBar from "@/components/shared/BottomNavBar";
 import ToastBridge from "@/components/dashboard/ToastBridge";
 import { useVideoPlayer } from "@/components/shared/VideoPlayer";
 import { useImageLightbox } from "@/components/shared/ImageLightbox";
-import { getNowPlaying, getSongHistory, getPlaylists, getStationId, getPublicPlayerUrl } from "@/lib/azuracast";
+import { getNowPlaying, getSongHistory, getPlaylists, getStationId } from "@/lib/azuracast";
 import { getVideosPage, getSeries } from "@/lib/youtube";
 import { getAlbums } from "@/lib/albums";
 import { getAllAlbumEntries } from "@/lib/albumEntries";
@@ -608,15 +608,7 @@ export default function DashboardPage() {
           <h2 className="section-title">Live Radio</h2>
           <button className="section-link" onClick={() => router.push("/radio")}>Full Radio <i className="fas fa-chevron-right"></i></button>
         </div>
-        <div className="azura-embed">
-          <iframe
-            src={`${getPublicPlayerUrl()}/embed`}
-            frameBorder="0"
-            allowTransparency={true}
-            style={{ width: "100%", minHeight: 150, height: 150, border: 0, borderRadius: 16 }}
-            title="Live Radio"
-          />
-        </div>
+        {/* Live Radio embed removed — use the mini player above for audio */}
       </section>
 
       {/* PERSISTENT MINI PLAYER */}

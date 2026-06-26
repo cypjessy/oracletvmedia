@@ -767,15 +767,7 @@ export default function RadioPage() {
                       />
                     </div>
                   </div>
-                  <div className="np-embed-wrap">
-                    <iframe
-                      src={embedUrl}
-                      frameBorder="0"
-                      title={stationName}
-                      allow="autoplay *"
-                      style={{ pointerEvents: "none" }}
-                    />
-                  </div>
+                  {/* AzuraCast embed iframe removed — use the player above for audio */}
                   {audio.isPlaying && (
                     <div className="np-bg-indicator">
                       <i className="fas fa-volume-high" style={{ color: "var(--primary)" }}></i>
