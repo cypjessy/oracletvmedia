@@ -24,7 +24,7 @@ function saveWatchProgress(videoId: string, position: number, duration: number) 
 }
 
 function parseISOToSeconds(iso: string): number {
-  const m = iso.match(/PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?/);
+  const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!m) return 0;
   const h = parseInt(m[1] || "0", 10);
   const mn = parseInt(m[2] || "0", 10);
@@ -333,7 +333,7 @@ export function GlobalVideoPlayer({ video, allVideos, seriesList, onClose, onPla
                 <div className="gvp-upnext-title">
                   <span>Up Next</span>
                 </div>
-                <button className="gvp-upnext-cancel" onClick={() => setUpNext(false)}>Dismiss</button>
+
               </div>
               <div
                 className="gvp-upnext-item"
