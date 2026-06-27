@@ -2,11 +2,11 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getVideosPage, getSeries } from "@/lib/youtube";
+import { getVideo, getVideosPage, getSeries } from "@/lib/youtube";
 import type { YouTubeVideo, YouTubeSeries } from "@/lib/youtube";
 import BottomNavBar from "@/components/shared/BottomNavBar";
 import ToastBridge from "@/components/dashboard/ToastBridge";
-import { useVideoPlayer } from "@/components/shared/VideoPlayer";
+import { useGlobalVideoPlayer } from "@/lib/video/VideoPlayerProvider";
 
 const CATEGORY_COLORS: Record<string, string> = {
   sermon: "#E8A838",
@@ -31,38 +31,24 @@ export default function WatchVideoClient() {
   const [showDesc, setShowDesc] = useState(false);
   const [watchProgress, setWatchProgress] = useState<number>(0);
 
-  const player = useVideoPlayer({ videos: allVideos, seriesList });
-
-  // Lock to landscape when video is present (dynamic import for web fallback)
-  useEffect(() => {
-    if (!video) return;
-    let locked = false;
-    import("@capacitor/screen-orientation").then(({ ScreenOrientation }) => {
-      ScreenOrientation.lock({ orientation: "landscape-primary" }).then(() => { locked = true; }).catch(() => {});
-    }).catch(() => {});
-    return () => {
-      if (locked) {
-        import("@capacitor/screen-orientation").then(({ ScreenOrientation }) => {
-          ScreenOrientation.unlock().catch(() => {});
-        }).catch(() => {});
-      }
-    };
-  }, [video]);
+  const globalPlayer = useGlobalVideoPlayer();
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const [vpResult, sResult] = await Promise.all([
-          getVideosPage(50),
-          getSeries(),
+        // Fetch the specific video + related data in parallel
+        // Use getVideo() for a single document read instead of fetching 50 unnecessarily
+        const [videoData, vpResult, sResult] = await Promise.all([
+          getVideo(id),
+          getVideosPage(12).catch(() => ({ videos: [] as YouTubeVideo[], lastDoc: null })),
+          getSeries().catch(() => [] as YouTubeSeries[]),
         ]);
         if (cancelled) return;
-        setAllVideos(vpResult.videos);
-        setSeriesList(sResult);
-        const found = vpResult.videos.find((v) => v.youtubeId === id);
-        if (found) setVideo(found);
+        if (videoData) setVideo(videoData);
         else setVideo(null);
+        setAllVideos(vpResult?.videos || []);
+        setSeriesList(sResult || []);
       } catch {} finally {
         if (!cancelled) setLoading(false);
       }
@@ -300,9 +286,14 @@ export default function WatchVideoClient() {
           <button className="w-back" onClick={() => router.back()}><i className="fas fa-chevron-left"></i></button>
           <div className="w-top-title">{video.title}</div>
         </div>
-        <div className="w-scroll">
-          <div className="w-player">
-            <iframe src={`https://www.youtube.com/embed/${video.youtubeId}?autoplay=1&rel=0`} allow="autoplay; encrypted-media; fullscreen" allowFullScreen title={video.title} />
+        <div className="w-scroll">            <div className="w-player">
+            <iframe
+              src={`https://www.youtube.com/embed/${video.youtubeId}?autoplay=1&rel=0&modestbranding=1&playsinline=1`}
+              allow="autoplay; encrypted-media; fullscreen"
+              allowFullScreen
+              title={video.title}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+            />
           </div>
           <div className="w-info">
             <div className="w-title">{video.title}</div>
@@ -334,7 +325,7 @@ export default function WatchVideoClient() {
             <div className="w-related-title"><i className="fas fa-list"></i> Related Videos</div>
             {relatedVideos.length===0?<div className="w-empty-related" style={{padding:20,textAlign:'center',color:'var(--text-tertiary)',fontSize:13}}>No related videos found</div>
             :<div className="w-related-list">{relatedVideos.slice(0,10).map(rv=>(
-              <div className="w-related-item" key={rv.youtubeId} onClick={()=>router.push(`/watch/${rv.youtubeId}`)}>
+              <div className="w-related-item" key={rv.youtubeId} onClick={()=>globalPlayer.play(rv.youtubeId)}>
                 <div className="w-related-thumb"><img src={rv.thumbnail} alt={rv.title} loading="lazy"/><span className="w-related-duration">{rv.duration}</span></div>
                 <div className="w-related-info">
                   <div className="w-related-name">{rv.title}</div>

@@ -177,6 +177,16 @@ export async function deleteSeries(id: string) {
   await deleteDoc(seriesDoc(id));
 }
 
+export async function getVideo(youtubeId: string): Promise<YouTubeVideo | null> {
+  try {
+    const snap = await getDoc(doc(db, "youtube_videos", youtubeId));
+    if (!snap.exists()) return null;
+    return { id: snap.id, ...snap.data() } as YouTubeVideo;
+  } catch {
+    return null;
+  }
+}
+
 export async function getLiveStatus(): Promise<YouTubeLiveStatus | null> {
   try {
     const snap = await getDoc(liveDoc());

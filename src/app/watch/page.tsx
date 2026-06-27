@@ -8,7 +8,7 @@ import { getVideosPage, getSeries } from "@/lib/youtube";
 import type { YouTubeVideo, YouTubeSeries } from "@/lib/youtube";
 import { getNowPlaying, getStationId } from "@/lib/azuracast";
 import type { NowPlayingData } from "@/lib/azuracast";
-import { useVideoPlayer } from "@/components/shared/VideoPlayer";
+import { useGlobalVideoPlayer } from "@/lib/video/VideoPlayerProvider";
 import { useYouTubeLive } from "@/hooks/useYouTubeLive";
 
 // ========== MOCK DATA ==========
@@ -81,8 +81,6 @@ function saveRecentLocalSearches(searches: string[]) {
 export default function WatchPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"home" | "series" | "live" | "search">("home");
-  // [REMOVED playerOpen — handled by shared hook]
-  // [REMOVED selectedVideo — handled by shared hook]
   const [seriesFilter, setSeriesFilter] = useState<string>("all");
   const [expandedSeries, setExpandedSeries] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -92,14 +90,6 @@ export default function WatchPage() {
   const [isLive, setIsLive] = useState(false);
   const [liveViewers, setLiveViewers] = useState(247);
   const [liveDuration, setLiveDuration] = useState(3840); // 1h 04m
-  // [REMOVED playerPlaying — handled by shared hook]
-  // [REMOVED playerVolume — handled by shared hook]
-  // [REMOVED playerTime — handled by shared hook]
-  // [REMOVED playerTotalTime — handled by shared hook]
-  // [REMOVED showUpNext — handled by shared hook]
-  // [REMOVED upNextCountdown — handled by shared hook]
-  // [REMOVED showResumePrompt — handled by shared hook]
-  // [REMOVED resumePosition — handled by shared hook]
   const [offline, setOffline] = useState(false);
   const [watchedVideos, setWatchedVideos] = useState<Set<string>>(new Set());
   const [submittedSearch, setSubmittedSearch] = useState("");
@@ -112,11 +102,9 @@ export default function WatchPage() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // [REMOVED progressTimerRef — handled by shared hook]
-  // [REMOVED upNextTimerRef — handled by shared hook]
   const liveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const player = useVideoPlayer({ videos, seriesList });
+  const globalPlayer = useGlobalVideoPlayer();
   const ytLive = useYouTubeLive();
 
   // ========== REAL DATA FETCHING ==========
@@ -345,10 +333,6 @@ export default function WatchPage() {
     };
   }, [isLive]);
 
-  // [REMOVED watch progress saving — handled by shared hook]
-
-  // [REMOVED up-next countdown — handled by shared hook]
-
   // Search debounce
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -390,22 +374,16 @@ export default function WatchPage() {
   }, [activeTab]);
 
   function handlePlayVideo(video: VideoData) {
-    router.push(`/watch/${video.id}`);
+    globalPlayer.play(video.id);
   }
+
+  // [REMOVED inline player — using global VideoPlayerProvider]
 
   // [REMOVED body overflow cleanup — handled by shared hook]
 
   // [REMOVED handlePlayFrom — handled by shared hook]
 
-  function handleClosePlayer() {
-    player.close();
-  }
-
-  // [REMOVED handleTogglePlay — handled by shared hook]
-
-  // [REMOVED handleSkip — handled by shared hook]
-
-  // [REMOVED handleWatchOnYT — handled by shared player's YouTube button]
+  // [REMOVED handleClosePlayer, handleTogglePlay, handleSkip, handleWatchOnYT — handled by GlobalVideoPlayer overlay]
 
   // [REMOVED getUpNextVideo — handled by shared hook]
 
@@ -1173,7 +1151,7 @@ export default function WatchPage() {
                     <p>Check back for upcoming broadcasts or browse past recordings</p>
                   </div>
 
-                  {/* Next scheduled */}
+                  {/* Next Scheduled */}
                   <div className="next-scheduled">
                     <div className="next-scheduled-icon"><i className="fas fa-calendar"></i></div>
                     <div className="next-scheduled-info">
@@ -1182,7 +1160,7 @@ export default function WatchPage() {
                     </div>
                     <button className="next-remind-btn" onClick={() => {
                       window.dispatchEvent(new CustomEvent("show-toast", {
-                        detail: { title: "Reminder Set", message: "We'll remind you 30 minutes before the stream starts", type: "success", duration: 3000 },
+                        detail: { title: "Reminder Set", message: "We'll notify you when this broadcast starts", type: "success", duration: 2500 },
                       }));
                     }}>Remind Me</button>
                   </div>
@@ -1385,9 +1363,7 @@ export default function WatchPage() {
         </div>
 
         {/* ========== VIDEO PLAYER MODAL ========== */}
-        {/* [REMOVED inline player — using shared VideoPlayer hook] */}
-
-        {player.VideoPlayer}
+        {/* Video player handled by global VideoPlayerProvider at layout level */}
 
         <BottomNavBar activeTab="watch" />
       </div>

@@ -49,13 +49,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         info: "fa-info",
       };
 
+      const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
       toast.innerHTML = `
-        <div class="toast-icon ${type}">
+        <div class="toast-icon ${esc(type)}">
           <i class="fas ${icons[type] || "fa-info"}"></i>
         </div>
         <div class="toast-content">
-          <div class="title">${title}</div>
-          <div class="message">${message}</div>
+          <div class="title">${esc(title)}</div>
+          <div class="message">${esc(message)}</div>
         </div>
         <button class="toast-close"><i class="fas fa-xmark"></i></button>
       `;

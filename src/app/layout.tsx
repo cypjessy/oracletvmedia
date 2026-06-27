@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from "next";
 import { ToastProvider } from "@/components/ui/Toast";
 import { AuthProvider } from "@/lib/AuthProvider";
 import { AudioProvider } from "@/lib/audio/AudioContext";
+import { VideoPlayerProvider } from "@/lib/video/VideoPlayerProvider";
 import { BackButtonHandler } from "@/components/shared/BackButtonHandler";
+import { RootErrorBoundary } from "@/components/shared/RootErrorBoundary";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -36,7 +38,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning style={{ background: "#0F0F0F" }}>
       <head>
-        <base target="_blank" />
+        {/* base target removed — broke navigation in APK. Use explicit target="_blank" on anchor tags instead. */}
         <link
           rel="stylesheet"
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
@@ -52,8 +54,12 @@ export default function RootLayout({
       <body style={{ background: "#0F0F0F", margin: 0 }}>
         <AuthProvider>
           <AudioProvider>
-            <ToastProvider>{children}</ToastProvider>
-            <BackButtonHandler />
+            <VideoPlayerProvider>
+              <ToastProvider>
+                <RootErrorBoundary>{children}</RootErrorBoundary>
+              </ToastProvider>
+              <BackButtonHandler />
+            </VideoPlayerProvider>
           </AudioProvider>
         </AuthProvider>
       </body>

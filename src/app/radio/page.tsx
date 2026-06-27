@@ -192,56 +192,6 @@ export default function RadioPage() {
   const isLive = npData?.live?.isLive ?? false;
   const liveStreamerName = npData?.live?.streamerName;
   const currentListeners = npData?.listeners?.current ?? 0;
-  /* Build schedule from real playlists */
-  const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const todayIdx = new Date().getDay();
-  function getNextNDays(n: number): { idx: number; label: string }[] {
-    const days: { idx: number; label: string }[] = [];
-    for (let i = 0; i < n; i++) {
-      const idx = (todayIdx + i) % 7;
-      const label = i === 0 ? "Today" : i === 1 ? "Tomorrow" : DAY_NAMES[idx];
-      days.push({ idx, label });
-    }
-    return days;
-  }
-
-  const scheduledPlaylists = playlists.filter((p) => p.type === "scheduled" && p.schedule && p.schedule.days.length > 0);
-  const nextDays = getNextNDays(7);
-  const scheduleByDay = nextDays.map((d) => ({
-    day: d.label,
-    items: scheduledPlaylists
-      .filter((p) => p.schedule!.days.includes(d.idx))
-      .map((p) => ({
-        name: p.name,
-        time: p.schedule!.startTime,
-        endTime: p.schedule!.endTime,
-        type: /worship/i.test(p.name) ? "Worship" : /praise/i.test(p.name) ? "Praise" : /sermon|bible|devotion|prayer|morning|evening/i.test(p.name) ? "Sermon" : "Worship",
-        active: false,
-      }))
-      .sort((a, b) => a.time.localeCompare(b.time)),
-  })).filter((d) => d.items.length > 0);
-
-  /* Find next upcoming show */
-  const nowH = new Date().getHours();
-  const nowM = new Date().getMinutes();
-  const nowStr = `${String(nowH).padStart(2, "0")}:${String(nowM).padStart(2, "0")}`;
-  let nextShow = "";
-  let nextShowTime = "";
-  for (const day of scheduleByDay) {
-    for (const item of day.items) {
-      if (item.time > nowStr) {
-        nextShow = item.name;
-        nextShowTime = item.time;
-        break;
-      }
-    }
-    if (nextShow) break;
-  }
-  // If nothing later today, take first show of first day with items
-  if (!nextShow && scheduleByDay.length > 0 && scheduleByDay[0].items.length > 0) {
-    nextShow = scheduleByDay[0].items[0].name;
-    nextShowTime = scheduleByDay[0].items[0].time;
-  }
 
   /* Filter requestable songs */
   const filteredRequests = stationFiles.filter(
@@ -249,6 +199,34 @@ export default function RadioPage() {
   );
 
   const activeStreamers = streamers.filter((s) => s.isLive);
+
+  /* ===== SCHEDULE TAB DERIVATION ===== */
+  const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const getNextNDays = (n: number) => {
+    const today = new Date().getDay();
+    return Array.from({ length: n }, (_, i) => (today + i) % 7);
+  };
+  const scheduledPlaylists = playlists.filter((p) => p.type === "scheduled" && p.schedule);
+  const nextDays = getNextNDays(7);
+  const scheduleByDay = nextDays.map((dayIdx) => {
+    const dayName = DAY_NAMES[dayIdx];
+    const isToday = dayIdx === new Date().getDay();
+    const items = scheduledPlaylists
+      .filter((p) => p.schedule!.days.includes(dayIdx))
+      .map((p) => ({
+        name: p.name,
+        time: p.schedule!.startTime?.slice(0, 5) || "09:00",
+        type: (p.name.toLowerCase().includes("worship") ? "worship" : p.name.toLowerCase().includes("sermon") ? "sermon" : "praise") as "worship" | "sermon" | "praise",
+      }))
+      .sort((a, b) => a.time.localeCompare(b.time));
+    return { dayName, isToday, items };
+  }).filter((d) => d.items.length > 0);
+  const nextShow = scheduleByDay[0]?.items[0] || null;
+  const nextShowTime = nextShow ? `${scheduleByDay[0]?.dayName === "Sun" ? "Today" : scheduleByDay[0]?.dayName} at ${nextShow.time}` : "";
+  const now = new Date();
+  const nowH = now.getHours();
+  const nowM = now.getMinutes();
+  const nowStr = `${String(nowH).padStart(2, "0")}:${String(nowM).padStart(2, "0")}`;
 
   return (
     <>
@@ -391,7 +369,7 @@ export default function RadioPage() {
           border: 2px solid var(--bg);
         }
         .np-embed-wrap { margin-top: 16px; position: relative; z-index: 1; }
-        .np-embed-wrap iframe { width: 100%; height: 120px; border: none; border-radius: var(--radius-md); opacity: 0.6; }
+        .np-embed-wrap iframe { width: 100%; height: 150px; border: none; border-radius: var(--radius-md); }
         .np-bg-indicator { text-align: center; margin-top: 12px; padding: 6px 14px; background: rgba(232,168,56,0.06); border: 1px solid rgba(232,168,56,0.08); border-radius: 20px; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-tertiary); position: relative; z-index: 1; width: auto; }
 
         /* ===== LIVE DJ CARD ===== */
@@ -767,7 +745,11 @@ export default function RadioPage() {
                       />
                     </div>
                   </div>
-                  {/* AzuraCast embed iframe removed — use the player above for audio */}
+                  {/* AzuraCast Embed Player */}
+                  <div className="np-embed-wrap">
+                    <iframe src="https://azuracast.histoview.co.ke/public/turningpoint_church/embed?theme=dark" style={{ width: "100%", minHeight: 150, height: 150, border: "none", display: "block", borderRadius: 12 }}></iframe>
+                  </div>
+
                   {audio.isPlaying && (
                     <div className="np-bg-indicator">
                       <i className="fas fa-volume-high" style={{ color: "var(--primary)" }}></i>
@@ -831,44 +813,46 @@ export default function RadioPage() {
             {/* ===== TAB 2: SCHEDULE ===== */}
             {activeTab === "schedule" && (
               <div className="section-spacer">
-                {/* Next Up */}
-                {nextShow ? (
+                {/* Next Show Card */}
+                {nextShow && (
                   <div className="sched-next">
-                    <div className="sched-next-icon"><i className="fas fa-tower-broadcast"></i></div>
+                    <div className="sched-next-icon"><i className="fas fa-calendar"></i></div>
                     <div className="sched-next-info">
                       <div className="sched-next-label">Next Show</div>
-                      <div className="sched-next-name">{nextShow}</div>
+                      <div className="sched-next-name">{nextShow.name}</div>
                     </div>
                     <div className="sched-next-time">{nextShowTime}</div>
                   </div>
-                ) : null}
+                )}
 
-                {/* Schedule by Day */}
-                {scheduleByDay.length > 0 ? scheduleByDay.map((dayGroup, gi) => (
-                  <div className="sched-day-group" key={gi}>
-                    <div className={`sched-day-header ${dayGroup.day === "Today" ? "today" : ""}`}>
-                      {dayGroup.day === "Today" ? <><i className="fas fa-star" style={{ fontSize: 12, color: "var(--primary)" }}></i> </> : null}
-                      {dayGroup.day}
-                      <span className="day-line"></span>
-                    </div>
-                    {dayGroup.items.map((item, ii) => (
-                      <div className={`sched-item${item.active ? " active" : ""}`} key={ii}>
-                        <span className="sched-time">{item.time}</span>
-                        <span className={`sched-dot ${item.type.toLowerCase()}`}></span>
-                        <div className="sched-info">
-                          <div className="sched-name">{item.name}</div>
-                          <div className="sched-host">{stationName}</div>
-                        </div>
-                        <span className={`sched-type-badge ${item.type.toLowerCase()}`}>{item.type}</span>
-                      </div>
-                    ))}
-                  </div>
-                )) : (
+                {/* Schedule By Day */}
+                {scheduleByDay.length === 0 ? (
                   <div className="sched-empty-state">
-                    <i className="fas fa-calendar"></i>
+                    <i className="fas fa-calendar-xmark"></i>
                     <h3>No Scheduled Broadcasts</h3>
-                    <p>AutoDJ is running — music will play until the next scheduled show.</p>
+                    <p>Check back for upcoming shows</p>
                   </div>
+                ) : (
+                  scheduleByDay.map((day, di) => (
+                    <div className="sched-day-group" key={di}>
+                      <div className={`sched-day-header${day.isToday ? " today" : ""}`}>
+                        <span className="day-line"></span>
+                        {day.isToday ? "Today" : day.dayName}
+                        <span className="day-line"></span>
+                      </div>
+                      {day.items.map((item, ii) => (
+                        <div className={`sched-item${nowStr >= item.time ? " active" : ""}`} key={ii}>
+                          <span className="sched-time">{item.time}</span>
+                          <div className={`sched-dot ${item.type}`}></div>
+                          <div className="sched-info">
+                            <div className="sched-name">{item.name}</div>
+                            <div className="sched-host">Turningpoint Church</div>
+                          </div>
+                          <span className={`sched-type-badge ${item.type}`}>{item.type}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))
                 )}
               </div>
             )}

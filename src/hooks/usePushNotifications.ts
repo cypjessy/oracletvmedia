@@ -32,10 +32,11 @@ export function usePushNotifications() {
 
         const { PushNotifications } = await import("@capacitor/push-notifications");
 
+        // Only register silently if permission is already granted.
+        // We do NOT auto-prompt — the user must opt in explicitly via
+        // onboarding or settings to avoid spamming on every login.
         const permStatus = await PushNotifications.checkPermissions();
-        if (permStatus.receive === "prompt") {
-          await PushNotifications.requestPermissions();
-        }
+        if (permStatus.receive !== "granted") return;
 
         await PushNotifications.register();
 

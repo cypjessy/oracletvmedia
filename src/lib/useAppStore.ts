@@ -23,6 +23,7 @@ export interface UserDoc {
   };
   created_at: number;
   last_seen?: number;
+  onboarding_done?: boolean;
 }
 
 interface AppState {

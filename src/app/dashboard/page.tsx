@@ -7,10 +7,12 @@ import { churchConfig } from "@/lib/churchConfig";
 import { auth } from "@/lib/firebase";
 import { useAppStore } from "@/lib/useAppStore";
 import BottomNavBar from "@/components/shared/BottomNavBar";
+import { doc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import ToastBridge from "@/components/dashboard/ToastBridge";
-import { useVideoPlayer } from "@/components/shared/VideoPlayer";
+import { useGlobalVideoPlayer } from "@/lib/video/VideoPlayerProvider";
 import { useImageLightbox } from "@/components/shared/ImageLightbox";
-import { getNowPlaying, getSongHistory, getPlaylists, getStationId } from "@/lib/azuracast";
+import { getNowPlaying, getSongHistory, getStationId, getPlaylists } from "@/lib/azuracast";
 import { getVideosPage, getSeries } from "@/lib/youtube";
 import { getAlbums } from "@/lib/albums";
 import { getAllAlbumEntries } from "@/lib/albumEntries";
@@ -32,15 +34,6 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
-interface ScheduleSlot {
-  time: string;
-  label: string;
-  stationName: string;
-  stationId: number;
-  ended: boolean;
-  isNow: boolean;
-}
-
 /* ==================================================================
    MOCK DATA
    ================================================================== */
@@ -53,47 +46,6 @@ const church = {
 
 const memberName = "Derick";
 
-function getFallbackSchedule(): ScheduleSlot[] {
-  const h = new Date().getHours();
-  if (h < 6)  return [{ time: "6:00 AM", label: "No broadcasts scheduled", stationName: "", stationId: 0, ended: false, isNow: false }];
-  if (h < 9)  return [{ time: "6:00 AM", label: "Morning Devotion", stationName: "Turningpoint", stationId: 1, ended: false, isNow: true }, { time: "9:00 AM", label: "Sunday Worship", stationName: "Turningpoint", stationId: 1, ended: false, isNow: false }];
-  if (h < 14) return [{ time: "6:00 AM", label: "Morning Devotion", stationName: "Turningpoint", stationId: 1, ended: true, isNow: false }, { time: "9:00 AM", label: "Sunday Worship", stationName: "Turningpoint", stationId: 1, ended: false, isNow: true }, { time: "2:00 PM", label: "Afternoon Praise", stationName: "Turningpoint", stationId: 1, ended: false, isNow: false }];
-  if (h < 19) return [{ time: "6:00 AM", label: "Morning Devotion", stationName: "Turningpoint", stationId: 1, ended: true, isNow: false }, { time: "9:00 AM", label: "Sunday Worship", stationName: "Turningpoint", stationId: 1, ended: true, isNow: false }, { time: "2:00 PM", label: "Afternoon Praise", stationName: "Turningpoint", stationId: 1, ended: false, isNow: true }, { time: "7:00 PM", label: "Evening Service", stationName: "Turningpoint", stationId: 1, ended: false, isNow: false }];
-  return [
-    { time: "6:00 AM", label: "Morning Devotion", stationName: "Turningpoint", stationId: 1, ended: true, isNow: false },
-    { time: "9:00 AM", label: "Sunday Worship", stationName: "Turningpoint", stationId: 1, ended: true, isNow: false },
-    { time: "2:00 PM", label: "Afternoon Praise", stationName: "Turningpoint", stationId: 1, ended: true, isNow: false },
-    { time: "7:00 PM", label: "Evening Service", stationName: "Turningpoint", stationId: 1, ended: false, isNow: true },
-  ];
-}
-
-function computeTodaySchedule(stationId: number, stationName: string, playlists: Playlist[]): ScheduleSlot[] {
-  const today = new Date().getDay();
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const items: ScheduleSlot[] = [];
-  for (const p of playlists) {
-    if (p.type !== "scheduled" || !p.schedule) continue;
-    if (!p.schedule.days.some((d) => d === today)) continue;
-    const [sh, sm] = p.schedule.startTime.split(":").map(Number);
-    const [eh, em] = p.schedule.endTime.split(":").map(Number);
-    const startMin = sh * 60 + sm;
-    const endMin = eh * 60 + em;
-    const hour = sh % 12 || 12;
-    const ampm = sh >= 12 ? "PM" : "AM";
-    const time = `${hour}:${String(sm).padStart(2, "0")} ${ampm}`;
-    items.push({ time, label: p.name, stationName, stationId, ended: nowMinutes > endMin, isNow: nowMinutes >= startMin && nowMinutes <= endMin });
-  }
-  items.sort((a, b) => {
-    const aH = parseInt(a.time.split(":")[0]) + (a.time.includes("PM") && parseInt(a.time.split(":")[0]) !== 12 ? 12 : 0) - (a.time.includes("AM") && parseInt(a.time.split(":")[0]) === 12 ? 12 : 0);
-    const bH = parseInt(b.time.split(":")[0]) + (b.time.includes("PM") && parseInt(b.time.split(":")[0]) !== 12 ? 12 : 0) - (b.time.includes("AM") && parseInt(b.time.split(":")[0]) === 12 ? 12 : 0);
-    const aM = parseInt(a.time.split(":")[1].split(" ")[0]);
-    const bM = parseInt(b.time.split(":")[1].split(" ")[0]);
-    return (aH * 60 + aM) - (bH * 60 + bM);
-  });
-  return items;
-}
-
 /* ==================================================================
    HELPERS
    ================================================================== */
@@ -103,14 +55,6 @@ function getGreeting(): { text: string; emoji: string } {
   if (h < 12) return { text: "Good Morning", emoji: "🌅" };
   if (h < 17) return { text: "Good Afternoon", emoji: "☀️" };
   return { text: "Good Evening", emoji: "🌙" };
-}
-
-function parseTimeToMinutes(time: string): number {
-  const [hhmm, ampm] = time.split(" ");
-  let [h, m] = hhmm.split(":").map(Number);
-  if (ampm === "PM" && h !== 12) h += 12;
-  if (ampm === "AM" && h === 12) h = 0;
-  return h * 60 + m;
 }
 
 /* ==================================================================
@@ -332,6 +276,58 @@ function formatTime(seconds: number): string {
 }
 
 /* ==================================================================
+   SCHEDULE HELPERS
+   ================================================================== */
+
+interface ScheduleSlot {
+  time: string;
+  label: string;
+  isNow: boolean;
+  hasContent: boolean;
+  stationName?: string;
+}
+
+function getFallbackSchedule(): ScheduleSlot[] {
+  const h = new Date().getHours();
+  if (h < 9) return [{ time: "9:00 AM", label: "Sunday Worship Service", isNow: false, hasContent: true, stationName: "Turningpoint Radio" }];
+  if (h < 12) return [{ time: "9:00 AM", label: "Sunday Worship Service", isNow: true, hasContent: true, stationName: "Turningpoint Radio" }];
+  return [{ time: "9:00 AM", label: "Sunday Worship Service", isNow: false, hasContent: true, stationName: "Turningpoint Radio" }];
+}
+
+function parseTimeToMinutes(t: string): number {
+  if (!t) return 0;
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + (m || 0);
+}
+
+function computeTodaySchedule(stationId: number, stationName: string, playlists: Playlist[]): ScheduleSlot[] {
+  const today = new Date().getDay(); // 0=Sun, 6=Sat
+  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+  const slots: ScheduleSlot[] = [];
+  for (const pl of playlists) {
+    if (pl.type !== "scheduled" || !pl.schedule) continue;
+    const days = pl.schedule.days || [];
+    if (!days.includes(today)) continue;
+    const startH = parseInt(pl.schedule.startTime?.split(":")[0] || "0");
+    const startM = parseInt(pl.schedule.startTime?.split(":")[1] || "0");
+    const endH = parseInt(pl.schedule.endTime?.split(":")[0] || "0") || startH + 1;
+    const endM = parseInt(pl.schedule.endTime?.split(":")[1] || "0");
+    const startMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
+    const isNow = nowMinutes >= startMinutes && nowMinutes < endMinutes;
+    const displayTime = `${startH > 12 ? startH - 12 : startH === 0 ? 12 : startH}:${String(startM).padStart(2, "0")} ${startH >= 12 ? "PM" : "AM"}`;
+    slots.push({
+      time: displayTime,
+      label: pl.name,
+      isNow,
+      hasContent: true,
+      stationName: stationName || "Radio",
+    });
+  }
+  return slots;
+}
+
+/* ==================================================================
    COMPONENT
    ================================================================== */
 
@@ -339,6 +335,18 @@ export default function DashboardPage() {
   const router = useRouter();
   const storeLogout = useAppStore((s) => s.logout);
   const greeting = getGreeting();
+  const userDoc = useAppStore((s) => s.userDoc);
+
+  const completeOnboarding = useCallback(async () => {
+    localStorage.setItem("onboarding_done", "true");
+    setShowOnboarding(false);
+    // Persist to Firestore for cross-device sync
+    if (userDoc?.uid) {
+      try {
+        await updateDoc(doc(db, "users", userDoc.uid), { onboarding_done: true });
+      } catch {}
+    }
+  }, [userDoc]);
 
   const handleLogout = async () => {
     try {
@@ -348,11 +356,23 @@ export default function DashboardPage() {
     window.location.href = "/";
   };
   const [showOnboarding, setShowOnboarding] = useState(() => {
+    // Check Firestore first (persists across devices), then localStorage fallback
     if (typeof window !== "undefined") {
-      return localStorage.getItem("onboarding_done") !== "true";
+      const localDone = localStorage.getItem("onboarding_done") === "true";
+      return localDone ? false : true; // default true, updated when userDoc loads
     }
     return true;
   });
+
+  // Once userDoc loads, respect Firestore's onboarding_done
+  useEffect(() => {
+    if (userDoc) {
+      if (userDoc.onboarding_done === true) {
+        setShowOnboarding(false);
+        localStorage.setItem("onboarding_done", "true");
+      }
+    }
+  }, [userDoc]);
   const [onboardingSlide, setOnboardingSlide] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [listeners, setListeners] = useState(0);
@@ -368,7 +388,6 @@ export default function DashboardPage() {
   const [galleryIndices, setGalleryIndices] = useState<number[]>([]);
   const [scheduleItems, setScheduleItems] = useState<ScheduleSlot[]>([]);
   const [scheduleLoading, setScheduleLoading] = useState(true);
-
   const [contentReady, setContentReady] = useState(false);
 
   // Delay full content render to prevent ANR on Android WebView
@@ -377,7 +396,7 @@ export default function DashboardPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  const player = useVideoPlayer({ videos, seriesList });
+  const globalPlayer = useGlobalVideoPlayer();
   const imageViewer = useImageLightbox();
   const ytLive = useYouTubeLive();
   const audio = useAudio();
@@ -486,28 +505,21 @@ export default function DashboardPage() {
     return () => { mounted = false; };
   }, []);
 
-  /* Fetch schedule from single station's AzuraCast playlists */
+  /* Fetch schedule playlists every 60 seconds */
   useEffect(() => {
     let mounted = true;
     const fetchSchedule = async () => {
+      const stationName = npData?.station?.name || church.name;
       const playlists = await getPlaylists().catch(() => [] as Playlist[]);
       if (!mounted) return;
-      const stationName = npData?.station?.name || church.name;
       const allSlots = computeTodaySchedule(Number(getStationId()), stationName, playlists);
-      allSlots.sort((a, b) => {
-        const aMin = parseTimeToMinutes(a.time);
-        const bMin = parseTimeToMinutes(b.time);
-        return aMin - bMin;
-      });
       setScheduleItems(allSlots.length > 0 ? allSlots : getFallbackSchedule());
       setScheduleLoading(false);
     };
     fetchSchedule();
     const interval = setInterval(fetchSchedule, 60000);
     return () => { mounted = false; clearInterval(interval); };
-  }, [npData?.station?.name]);
-
-
+  }, [npData]);
 
   /* Pull to refresh */
   const [touchStartY, setTouchStartY] = useState(0);
@@ -543,12 +555,6 @@ export default function DashboardPage() {
       title: "Listen Live",
       subtitle: "Tune into our radio station anytime",
       color: "var(--gradient-blue)",
-    },
-    {
-      icon: "fa-bell",
-      title: "Stay Connected",
-      subtitle: "Get notified when we go live",
-      color: "var(--gradient-purple)",
     },
   ];
 
@@ -602,37 +608,93 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* LIVE RADIO — AzuraCast Public Embed */}
+      {/* ===== PREMIUM RADIO HERO CARD ===== */}
       <section className="feed-section">
-        <div className="section-header-inline">
-          <h2 className="section-title">Live Radio</h2>
-          <button className="section-link" onClick={() => router.push("/radio")}>Full Radio <i className="fas fa-chevron-right"></i></button>
-        </div>
-        {/* Live Radio embed removed — use the mini player above for audio */}
-      </section>
+        <div className="rh-hero">
+          {/* Animated background glow layers */}
+          <div className="rh-glow-1"></div>
+          <div className="rh-glow-2"></div>
 
-      {/* PERSISTENT MINI PLAYER */}
-      <section className="feed-section" style={{ paddingTop: 0 }}>
-        <div className="minibar">
-          <div className="minibar-cover">
-            {np?.song?.albumArt ? (
-              <img src={np.song.albumArt} alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-            ) : (
-              <div className="minibar-cover-fallback"><i className="fas fa-radio"></i></div>
-            )}
-            {isPlaying && <div className="minibar-eq"><span></span><span></span><span></span></div>}
+          {/* Top row: station name + badges */}
+          <div className="rh-top">
+            <div className="rh-station">
+              <i className="fas fa-tower-broadcast"></i>
+              <span>{npData?.station?.name || stationName}</span>
+            </div>
+            <div className="rh-badges">
+              <div className={`rh-live-badge ${isPlaying || isLive ? "live" : "off"}`}>
+                <span className="rh-live-dot"></span>
+                {isPlaying || isLive ? "Live" : "Off Air"}
+              </div>
+              <div className="rh-listener-badge">
+                <i className="fas fa-headphones"></i>
+                {listeners}
+              </div>
+            </div>
           </div>
-          <div className="minibar-info">
-            <div className="minibar-station">{npData?.station?.name || stationName}</div>
-            <div className="minibar-track">{np?.song?.title || "Station Offline"}{np?.song?.artist ? ` — ${np.song.artist}` : ""}</div>
+
+          {/* Main content: album art + info */}
+          <div className="rh-main">
+            <div className="rh-art-wrap">
+              <div className="rh-art-ring"></div>
+              <div className={`rh-art ${isPlaying ? "spinning" : ""}`}>
+                {np?.song?.albumArt ? (
+                  <img src={np.song.albumArt} alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                ) : (
+                  <div className="rh-art-fallback">
+                    <i className="fas fa-radio"></i>
+                  </div>
+                )}
+              </div>
+              {/* Equalizer overlay when playing */}
+              {isPlaying && (
+                <div className="rh-eq">
+                  <span></span><span></span><span></span><span></span>
+                </div>
+              )}
+              {/* Spinning vinyl lines when playing */}
+              {isPlaying && <div className="rh-vinyl-lines"></div>}
+            </div>
+
+            <div className="rh-info">
+              <div className="rh-track-name">{np?.song?.title || "Station Offline"}</div>
+              <div className="rh-track-artist">{np?.song?.artist || "Not currently playing"}</div>
+              <div className="rh-source">
+                <i className="fas fa-radio"></i> {npData?.station?.name || "Radio"}
+              </div>
+            </div>
           </div>
-          <div className="minibar-actions">
-            <button className="minibar-play-btn" onClick={togglePlay}>
-              <i className={`fas fa-${isPlaying ? "pause" : "play"}`}></i>
+
+          {/* Progress bar */}
+          <div className="rh-progress-wrap">
+            <div className="rh-progress-bar">
+              <div className="rh-progress-fill" style={{ width: `${isPlaying && np && np.duration > 0 ? Math.min(100, (np.elapsed / np.duration) * 100) : 0}%` }}>
+                <div className="rh-progress-glow"></div>
+              </div>
+            </div>
+            <div className="rh-progress-time">
+              <span>{np && np.duration > 0 ? formatTime(np.elapsed) : "0:00"}</span>
+              <span>{np && np.duration > 0 ? formatTime(np.duration) : "0:00"}</span>
+            </div>
+          </div>
+
+          {/* Controls row */}
+          <div className="rh-actions">
+            <button className="rh-shuffle-btn" title="Shuffle">
+              <i className="fas fa-shuffle"></i>
             </button>
-            <button className="minibar-expand" onClick={() => router.push("/radio")}>
+            <button className={`rh-play-btn ${isPlaying ? "playing" : ""}`} onClick={togglePlay}>
+              <i className={`fas fa-${isPlaying ? "pause" : "play"}`}></i>
+              <div className="rh-play-ring"></div>
+            </button>
+            <button className="rh-expand-btn" onClick={() => router.push("/radio")} title="Open Radio">
               <i className="fas fa-expand"></i>
             </button>
+          </div>
+
+          {/* AzuraCast embed below */}
+          <div className="rh-embed">
+            <iframe src="https://azuracast.histoview.co.ke/public/turningpoint_church/embed?theme=dark" style={{ width: "100%", height: 120, border: "none", display: "block", borderRadius: 8 }}></iframe>
           </div>
         </div>
       </section>
@@ -687,7 +749,7 @@ export default function DashboardPage() {
           <h2 className="section-title">Featured Video</h2>
               <button className="section-link" onClick={() => router.push("/watch")}>See All Videos <i className="fas fa-chevron-right"></i></button>
         </div>
-        <div className="fv-card" onClick={() => router.push(`/watch/${featuredVideo.youtubeId}`)}>
+        <div className="fv-card" onClick={() => globalPlayer.play(featuredVideo.youtubeId)}>
           <div className="fv-thumb">
             <div className="fv-thumb-glow"></div>
             <img src={featuredVideo.thumbnail} alt="" />
@@ -756,7 +818,7 @@ export default function DashboardPage() {
         </div>
         <div className="vg-grid">
           {latestVideos.slice(0, 6).map((v) => (
-            <div className="vg-card" key={v.youtubeId} onClick={() => router.push(`/watch/${v.youtubeId}`)}>
+            <div className="vg-card" key={v.youtubeId} onClick={() => globalPlayer.play(v.youtubeId)}>
               <div className="vg-thumb">
                 <img src={v.thumbnail} alt="" />
                 <div className="vg-play-icon"><i className="fas fa-play"></i></div>
@@ -793,10 +855,10 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* TODAY'S SCHEDULE */}
+      {/* TODAY'S BROADCAST SCHEDULE */}
       <section className="feed-section">
         <div className="section-header-inline">
-          <h2 className="section-title">Today&apos;s Broadcast Schedule</h2>
+          <h2 className="section-title">Today's Broadcast Schedule</h2>
           <button className="section-link" onClick={() => router.push("/radio")}>Full Schedule <i className="fas fa-chevron-right"></i></button>
         </div>
         <div className="schedule-today">
@@ -806,14 +868,14 @@ export default function DashboardPage() {
             <div className="st-empty">No broadcasts scheduled for today</div>
           ) : (
             scheduleItems.map((slot, i) => (
-              <div className={`st-item${slot.isNow ? " now" : ""}${slot.ended ? " ended" : ""}`} key={i}>
+              <div className={`st-item${slot.isNow ? " now" : ""}${!slot.isNow ? "" : ""}`} key={i}>
                 <div className="st-indicator">
-                  {slot.ended ? <i className="fas fa-check-circle"></i> : slot.isNow ? <span className="st-pulse"></span> : <span className="st-dot"></span>}
+                  {slot.isNow ? <div className="st-pulse"></div> : <div className="st-dot"></div>}
                 </div>
                 <div className="st-time">{slot.time}</div>
                 <div className="st-body">
-                  <div className={`st-label${!slot.isNow && !slot.ended ? " upcoming" : ""}`}>{slot.label}</div>
-                  {slot.stationName && <div className="st-station"><i className="fas fa-radio"></i> {slot.stationName}</div>}
+                  <div className={`st-label${slot.isNow ? "" : " upcoming"}`}>{slot.label}</div>
+                  <div className="st-station"><i className="fas fa-radio"></i> {slot.stationName || "Turningpoint Radio"}</div>
                 </div>
                 {slot.isNow && <span className="st-now-badge">NOW</span>}
               </div>
@@ -821,8 +883,6 @@ export default function DashboardPage() {
           )}
         </div>
       </section>
-
-
 
     </>
   );
@@ -1350,57 +1410,248 @@ export default function DashboardPage() {
             display: block;
         }
 
-        /* ===== MINI BAR ===== */
-        .minibar {
-            display: flex; align-items: center; gap: 12px;
-            padding: 10px 14px;
-            background: var(--surface-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            transition: all 0.2s ease;
+        /* ===== PREMIUM RADIO HERO CARD ===== */
+        .rh-hero {
+            position: relative;
+            background: linear-gradient(180deg, rgba(232,168,56,0.06) 0%, rgba(15,15,15,0.5) 100%);
+            border: 1px solid rgba(232,168,56,0.12);
+            border-radius: var(--radius-xl);
+            padding: 20px 18px 16px;
+            overflow: hidden;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 0 80px rgba(232,168,56,0.04);
+            animation: rhFadeIn 0.6s ease;
         }
-        .minibar-cover {
-            width: 40px; height: 40px; border-radius: 10px;
-            overflow: hidden; flex-shrink: 0; position: relative;
-            background: var(--surface-elevated);
+        @keyframes rhFadeIn {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        .minibar-cover img { width: 100%; height: 100%; object-fit: cover; }
-        .minibar-cover-fallback {
-            width: 100%; height: 100%;
-            display: flex; align-items: center; justify-content: center;
-            color: var(--text-tertiary); font-size: 16px;
+        .rh-glow-1 {
+            position: absolute; top: -80px; left: 50%; transform: translateX(-50%);
+            width: 300px; height: 300px;
+            background: radial-gradient(circle, rgba(232,168,56,0.12) 0%, transparent 70%);
+            pointer-events: none;
+            animation: rhGlowPulse 4s ease-in-out infinite;
         }
-        .minibar-eq {
-            position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);
-            display: flex; gap: 2px; align-items: flex-end;
+        .rh-glow-2 {
+            position: absolute; bottom: -60px; right: -60px;
+            width: 200px; height: 200px;
+            background: radial-gradient(circle, rgba(212,118,42,0.06) 0%, transparent 70%);
+            pointer-events: none;
+            animation: rhGlowPulse 5s ease-in-out infinite reverse;
         }
-        .minibar-eq span {
-            width: 3px; background: var(--primary); border-radius: 1px;
-            animation: eqBounce 0.6s ease-in-out infinite alternate;
+        @keyframes rhGlowPulse {
+            0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+            50% { opacity: 1; transform: translateX(-50%) scale(1.15); }
         }
-        .minibar-eq span:nth-child(1) { height: 8px; animation-delay: 0s; }
-        .minibar-eq span:nth-child(2) { height: 12px; animation-delay: 0.2s; }
-        .minibar-eq span:nth-child(3) { height: 6px; animation-delay: 0.4s; }
-        @keyframes eqBounce { from { transform: scaleY(0.5); } to { transform: scaleY(1); } }
-        .minibar-info { flex: 1; min-width: 0; }
-        .minibar-station { font-size: 11px; font-weight: 700; color: var(--primary); }
-        .minibar-track { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-        .minibar-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-        .minibar-play-btn {
-            width: 34px; height: 34px; border-radius: var(--radius-full);
-            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
-            border: none; color: #fff; font-size: 13px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: var(--shadow-soft); transition: all 0.2s ease;
+        .rh-glow-2 {
+            animation: rhGlowPulse2 5s ease-in-out infinite reverse;
         }
-        .minibar-play-btn:active { transform: scale(0.88); }
-        .minibar-expand {
-            width: 30px; height: 30px; border-radius: var(--radius-full);
+        @keyframes rhGlowPulse2 {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.2); }
+        }
+
+        .rh-top {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 16px; position: relative; z-index: 1;
+        }
+        .rh-station {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; font-weight: 700;
+        }
+        .rh-station i { color: var(--primary); font-size: 14px; }
+        .rh-badges { display: flex; align-items: center; gap: 8px; }
+        .rh-live-badge {
+            display: flex; align-items: center; gap: 5px;
+            padding: 4px 10px; border-radius: 20px;
+            font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+        }
+        .rh-live-badge.live {
+            background: rgba(74,222,128,0.12); color: var(--success);
+        }
+        .rh-live-badge.off {
+            background: rgba(107,107,107,0.12); color: var(--text-tertiary);
+        }
+        .rh-live-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+        }
+        .rh-live-badge.live .rh-live-dot {
+            background: var(--success);
+            animation: livePulse 1.5s ease-in-out infinite;
+        }
+        .rh-live-badge.off .rh-live-dot {
+            background: var(--text-tertiary);
+        }
+        .rh-listener-badge {
+            display: flex; align-items: center; gap: 4px;
+            padding: 4px 10px; border-radius: 20px;
             background: var(--surface); border: 1px solid var(--border);
-            color: var(--text-secondary); font-size: 12px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 600; color: var(--text-secondary);
         }
-        .minibar-expand:active { background: var(--surface-elevated); }
+        .rh-listener-badge i { font-size: 10px; color: var(--primary); }
+
+        .rh-main {
+            display: flex; align-items: center; gap: 18px;
+            margin-bottom: 14px; position: relative; z-index: 1;
+        }
+        .rh-art-wrap {
+            position: relative; flex-shrink: 0;
+            width: 100px; height: 100px;
+        }
+        .rh-art-ring {
+            position: absolute; inset: -4px;
+            border-radius: 50%;
+            border: 2px solid rgba(232,168,56,0.2);
+            animation: rhRingSpin 8s linear infinite;
+        }
+        @keyframes rhRingSpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .rh-art-ring::before {
+            content: ''; position: absolute; top: -2px; left: 50%; transform: translateX(-50%);
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--primary);
+            box-shadow: 0 0 12px rgba(232,168,56,0.6);
+        }
+        .rh-art {
+            width: 100%; height: 100%;
+            border-radius: 50%; overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 2px rgba(232,168,56,0.1);
+            transition: all 0.5s ease;
+            position: relative;
+        }
+        .rh-art.spinning {
+            animation: rhSpin 12s linear infinite;
+        }
+        @keyframes rhSpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .rh-art img { width: 100%; height: 100%; object-fit: cover; }
+        .rh-art-fallback {
+            width: 100%; height: 100%;
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            display: flex; align-items: center; justify-content: center;
+            font-size: 38px; color: #fff;
+        }
+        .rh-vinyl-lines {
+            position: absolute; inset: 0; border-radius: 50%;
+            background: conic-gradient(from 0deg, transparent 0deg, rgba(255,255,255,0.03) 10deg, transparent 20deg, rgba(255,255,255,0.03) 30deg, transparent 40deg, rgba(255,255,255,0.03) 50deg, transparent 60deg, rgba(255,255,255,0.03) 70deg, transparent 80deg, rgba(255,255,255,0.03) 90deg, transparent 100deg, rgba(255,255,255,0.03) 110deg, transparent 120deg, rgba(255,255,255,0.03) 130deg, transparent 140deg, rgba(255,255,255,0.03) 150deg, transparent 160deg, rgba(255,255,255,0.03) 170deg, transparent 180deg, rgba(255,255,255,0.03) 190deg, transparent 200deg, rgba(255,255,255,0.03) 210deg, transparent 220deg, rgba(255,255,255,0.03) 230deg, transparent 240deg, rgba(255,255,255,0.03) 250deg, transparent 260deg, rgba(255,255,255,0.03) 270deg, transparent 280deg, rgba(255,255,255,0.03) 290deg, transparent 300deg, rgba(255,255,255,0.03) 310deg, transparent 320deg, rgba(255,255,255,0.03) 330deg, transparent 340deg, rgba(255,255,255,0.03) 350deg, transparent 360deg);
+            pointer-events: none; z-index: 2;
+        }
+        .rh-eq {
+            position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 3px; align-items: flex-end;
+            z-index: 3;
+        }
+        .rh-eq span {
+            width: 4px; background: var(--primary); border-radius: 2px;
+            animation: rhEqBounce 0.6s ease-in-out infinite alternate;
+        }
+        .rh-eq span:nth-child(1) { height: 10px; animation-delay: 0s; }
+        .rh-eq span:nth-child(2) { height: 16px; animation-delay: 0.15s; }
+        .rh-eq span:nth-child(3) { height: 12px; animation-delay: 0.3s; }
+        .rh-eq span:nth-child(4) { height: 8px; animation-delay: 0.45s; }
+        @keyframes rhEqBounce {
+            from { transform: scaleY(0.5); }
+            to { transform: scaleY(1); }
+        }
+
+        .rh-info { flex: 1; min-width: 0; }
+        .rh-track-name {
+            font-size: 18px; font-weight: 800;
+            letter-spacing: -0.3px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .rh-track-artist {
+            font-size: 14px; color: var(--primary-light);
+            margin-top: 4px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .rh-source {
+            font-size: 11px; color: var(--text-tertiary);
+            margin-top: 6px; display: flex; align-items: center; gap: 4px;
+        }
+        .rh-source i { color: var(--primary); font-size: 10px; }
+
+        .rh-progress-wrap {
+            margin-bottom: 14px; position: relative; z-index: 1;
+        }
+        .rh-progress-bar {
+            width: 100%; height: 4px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 3px; overflow: hidden;
+        }
+        .rh-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end));
+            border-radius: 3px;
+            transition: width 1s ease;
+            position: relative;
+        }
+        .rh-progress-glow {
+            position: absolute; right: 0; top: -2px;
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--primary);
+            box-shadow: 0 0 12px rgba(232,168,56,0.6);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .rh-progress-bar:hover .rh-progress-glow { opacity: 1; }
+        .rh-progress-time {
+            display: flex; justify-content: space-between;
+            font-size: 11px; color: var(--text-tertiary);
+            margin-top: 4px; font-weight: 500;
+        }
+
+        .rh-actions {
+            display: flex; align-items: center; justify-content: center;
+            gap: 20px; position: relative; z-index: 1;
+            margin-bottom: 12px;
+        }
+        .rh-play-btn {
+            width: 56px; height: 56px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            border: none; color: #fff; font-size: 22px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; position: relative;
+            box-shadow: 0 6px 24px rgba(232,168,56,0.35);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .rh-play-btn:active { transform: scale(0.88); }
+        .rh-play-btn.playing {
+            box-shadow: 0 6px 28px rgba(232,168,56,0.4), 0 0 40px rgba(232,168,56,0.1);
+        }
+        .rh-play-ring {
+            position: absolute; inset: -6px; border-radius: 50%;
+            border: 1.5px solid rgba(232,168,56,0.15);
+            animation: rhRingPulse 2s ease-in-out infinite;
+        }
+        .rh-play-btn.playing .rh-play-ring {
+            border-color: rgba(74,222,128,0.3);
+        }
+        @keyframes rhRingPulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0; }
+        }
+        .rh-shuffle-btn, .rh-expand-btn {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: var(--surface); border: 1px solid var(--border);
+            color: var(--text-secondary); font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.2s ease;
+        }
+        .rh-shuffle-btn:active, .rh-expand-btn:active {
+            background: var(--surface-elevated); transform: scale(0.88);
+        }
+
+        .rh-embed {
+            position: relative; z-index: 1;
+            border-radius: 8px; overflow: hidden;
+            border: 1px solid var(--border);
+        }
 
         /* ===== ONBOARDING ===== */
         .onboarding-overlay {
@@ -1663,12 +1914,9 @@ export default function DashboardPage() {
           {onboardingSlide < onboardingSlides.length - 1 ? (
             <button className="ob-btn primary" onClick={() => setOnboardingSlide((s) => s + 1)}>Continue</button>
           ) : (
-            <>
-              <button className="ob-btn primary" onClick={() => { localStorage.setItem("onboarding_done", "true"); setShowOnboarding(false); }}>
-                <i className="fas fa-bell" style={{ marginRight: 8 }}></i> Enable Notifications
-              </button>
-              <button className="ob-btn secondary" onClick={() => { localStorage.setItem("onboarding_done", "true"); setShowOnboarding(false); }}>Skip</button>
-            </>
+            <button className="ob-btn primary" onClick={() => { completeOnboarding(); }}>
+              Get Started
+            </button>
           )}
         </div>
       )}
@@ -1725,7 +1973,6 @@ export default function DashboardPage() {
         <BottomNavBar activeTab="home" />
       </div>
 
-      {player.VideoPlayer}
       {imageViewer.ImageLightbox}
       </>}
     </>

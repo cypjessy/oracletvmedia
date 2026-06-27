@@ -10,12 +10,19 @@ export function useBackButton() {
   const pathname = usePathname();
 
   useEffect(() => {
+    let mounted = true;
     let unsub: (() => void) | null = null;
 
     (async () => {
       try {
         const { App } = await import("@capacitor/app");
+        // Guard: if unmounted while importing, don't register
+        if (!mounted) return;
+        
         const listener = await App.addListener("backButton", () => {
+          // Guard: skip if already navigating away
+          if (!mounted) return;
+          
           // 1. Check for open modals — close them first
           const activeModal = document.querySelector(".modal-overlay.active, .onboarding-overlay, .w-detail-modal.active, .series-detail-modal.active");
           if (activeModal) {
@@ -52,6 +59,7 @@ export function useBackButton() {
 
           // 4. Guard: after a short delay, if we ended up on a public page, redirect to dashboard
           const guardTimer = setTimeout(() => {
+            if (!mounted) return;
             const currentPath = window.location.pathname;
             if (PUBLIC_PATHS.includes(currentPath)) {
               router.replace("/dashboard");
@@ -63,12 +71,24 @@ export function useBackButton() {
           window.addEventListener("beforeunload", cancelGuard, { once: true });
         });
 
-        unsub = () => listener.remove();
+        if (!mounted) {
+          // Unmounted after async import completed — remove immediately
+          listener.remove();
+          return;
+        }
+
+        unsub = () => {
+          mounted = false;
+          listener.remove();
+        };
       } catch {
         // Not in Capacitor environment — nothing to do
       }
     })();
 
-    return () => { unsub?.(); };
+    return () => {
+      mounted = false;
+      unsub?.();
+    };
   }, [router, pathname]);
 }

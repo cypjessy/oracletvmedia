@@ -30,6 +30,7 @@
     "@capacitor/share": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
+    "@capgo/capacitor-youtube-player": "^8.2.12",
     "capacitor-native-biometric": "^4.2.2",
     "firebase": "^12.15.0",
     "next": "16.2.9",

@@ -2,15 +2,20 @@
 
 import { createContext, useContext, useRef, useState, useCallback, useEffect, type ReactNode } from "react";
 
-// Dynamic import for the Capacitor MediaSession plugin.
+// Lazy-loaded Capacitor MediaSession plugin.
 // On web (Vercel) this gracefully degrades; on native Android it
 // provides lock-screen playback controls.
-let MediaSession: any = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  MediaSession = require("@jofr/capacitor-media-session").MediaSession;
-} catch {
-  // Not available (web or missing dependency)
+// We use a dynamic import() so the bundler doesn't fail at build time
+// when the package is absent, and we always null-check before calling.
+let MediaSessionPromise: Promise<any> | null = null;
+function getMediaSession(): Promise<any> {
+  if (!MediaSessionPromise) {
+    // @ts-expect-error - package may be absent; handled at runtime via .catch()
+    MediaSessionPromise = import("@jofr/capacitor-media-session")
+      .then((m) => m.MediaSession)
+      .catch(() => null);
+  }
+  return MediaSessionPromise;
 }
 
 // ============================================================
@@ -56,9 +61,12 @@ async function syncMediaSession(props: {
   onPrev: (() => void) | null;
 }) {
   try {
+    const ms = await getMediaSession();
+    if (!ms) return;
+
     if (props.isPlaying) {
-      await MediaSession.setPlaybackState({ playbackState: "playing" });
-      await MediaSession.setMetadata({
+      await ms.setPlaybackState({ playbackState: "playing" });
+      await ms.setMetadata({
         title: props.title || "Turningpoint Radio",
         artist: props.artist || "Turningpoint Church Nakuru",
         album: "Radio Stream",
@@ -67,15 +75,25 @@ async function syncMediaSession(props: {
           : [{ src: "https://via.placeholder.com/512?text=KSC", sizes: "512x512", type: "image/png" }],
       });
     } else {
-      await MediaSession.setPlaybackState({ playbackState: "paused" });
+      await ms.setPlaybackState({ playbackState: "paused" });
     }
 
     // Register action handlers (they persist across metadata updates)
-    await MediaSession.setActionHandler({ action: "play" }, () => props.onPlay());
-    await MediaSession.setActionHandler({ action: "pause" }, () => props.onPause());
-    await MediaSession.setActionHandler({ action: "nexttrack" }, () => props.onNext?.());
-    await MediaSession.setActionHandler({ action: "previoustrack" }, () => props.onPrev?.());
-    await MediaSession.setActionHandler({ action: "stop" }, () => props.onPause());
+    await ms.setActionHandler({ action: "play" }, () => {
+      try { props.onPlay(); } catch {}
+    });
+    await ms.setActionHandler({ action: "pause" }, () => {
+      try { props.onPause(); } catch {}
+    });
+    await ms.setActionHandler({ action: "nexttrack" }, () => {
+      try { props.onNext?.(); } catch {}
+    });
+    await ms.setActionHandler({ action: "previoustrack" }, () => {
+      try { props.onPrev?.(); } catch {}
+    });
+    await ms.setActionHandler({ action: "stop" }, () => {
+      try { props.onPause(); } catch {}
+    });
   } catch {
     // Plugin may not be available
   }
@@ -127,21 +145,27 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     });
   }, [isPlaying]);
 
-  const updateMediaSession = useCallback((title: string, artist: string, albumArt?: string) => {
+  const updateMediaSession = useCallback(async (title: string, artist: string, albumArt?: string) => {
     mediaTitleRef.current = title;
     mediaArtistRef.current = artist;
     mediaArtRef.current = albumArt;
     // Update the notification immediately so subsequent song changes
     // reflect in the Android media notification without waiting for a
     // play/pause state change.
-    MediaSession.setMetadata({
-      title,
-      artist,
-      album: "Radio Stream",
-      artwork: albumArt
-        ? [{ src: albumArt, sizes: "512x512", type: "image/jpeg" }]
-        : [{ src: "https://via.placeholder.com/512?text=KSC", sizes: "512x512", type: "image/png" }],
-    }).catch(() => {});
+    try {
+      const ms = await getMediaSession();
+      if (!ms) return;
+      await ms.setMetadata({
+        title,
+        artist,
+        album: "Radio Stream",
+        artwork: albumArt
+          ? [{ src: albumArt, sizes: "512x512", type: "image/jpeg" }]
+          : [{ src: "https://via.placeholder.com/512?text=KSC", sizes: "512x512", type: "image/png" }],
+      });
+    } catch {
+      // Plugin not available
+    }
   }, []);
 
   const setNextStationCallback = useCallback((cb: (() => void) | null) => {

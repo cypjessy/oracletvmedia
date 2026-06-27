@@ -28,6 +28,7 @@ const sidebarTabs = [
   { id: "overview", icon: "fa-house", label: "Overview" },
   { id: "media", icon: "fa-music", label: "Media" },
   { id: "playlists", icon: "fa-list", label: "Playlists" },
+  { id: "golive", icon: "fa-microphone", label: "Go Live" },
 ];
 
 // ========== REFERENCE DATA ==========
@@ -316,7 +317,15 @@ export default function AdminRadioPage() {
           </div>
         </div>
 
-        {/* Live Player embed removed — use Now Playing card above */}
+        {/* AzuraCast Embed Player */}
+        <div className="section-block">
+          <div className="section-block-header">
+            <h3><i className="fas fa-tower-broadcast" style={{ marginRight: 6 }}></i>Live Player</h3>
+          </div>
+          <div style={{ borderRadius: "var(--radius-sm)", overflow: "hidden" }}>
+            <iframe src="https://azuracast.histoview.co.ke/public/turningpoint_church/embed?theme=dark" style={{ width: "100%", minHeight: 150, height: 150, border: "none", display: "block" }}></iframe>
+          </div>
+        </div>
 
         {/* ========== PLAY CONTROL (integrated) ========== */}
         <div className="section-block">
@@ -1668,12 +1677,35 @@ export default function AdminRadioPage() {
     );
   };
 
-  // ========== PLAY CONTROL SECTION ==========
+  // ========== GO LIVE SECTION ==========
+  const renderGoLive = () => {
+    return (
+      <div className="golive-content">
+        <div className="section-block">
+          <div className="section-block-header">
+            <h3><i className="fas fa-microphone" style={{ marginRight: 6 }}></i>Broadcast Studio</h3>
+          </div>
+          <div className="golive-embed-wrapper">
+            <iframe
+              src="https://azuracast.histoview.co.ke/public/turningpoint_church/dj"
+              style={{ width: "100%", height: "100%", border: "none", display: "block" }}
+              title="Broadcast Studio"
+              allow="microphone; autoplay; clipboard-write"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+            ></iframe>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ========== RENDER CONTENT ==========
   const renderContent = () => {
     switch (activeTab) {
       case "overview": return renderOverview();
       case "media": return renderMedia();
       case "playlists": return renderPlaylists();
+      case "golive": return renderGoLive();
       default: return renderOverview();
     }
   };
@@ -2629,6 +2661,29 @@ export default function AdminRadioPage() {
           .skeleton-img { background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 50%, var(--surface) 75%); background-size: 200% 100%; animation: shimmer 1.5s ease-in-out infinite; border-radius: var(--radius-md); }
           .skeleton-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
           @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+          /* ========== GO LIVE TAB ========== */
+          .golive-content { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+          .golive-external-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 16px; border-radius: var(--radius-sm);
+            background: var(--surface-card); border: 1px solid var(--border);
+            color: var(--primary); font-size: 12px; font-weight: 600;
+            cursor: pointer; text-decoration: none; transition: all 0.2s ease;
+          }
+          .golive-external-btn:active { background: var(--surface-hover); }
+          .golive-embed-wrapper {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            background: var(--surface-card);
+            border: 1px solid var(--border);
+          }
+          @media (max-width: 480px) {
+            .golive-embed-wrapper { height: calc(100vh - 320px); min-height: 400px; }
+          }
 
           `}</style>
 

@@ -91,6 +91,7 @@ export function useVideoPlayer({ videos, seriesList }: VideoPlayerDeps): VideoPl
   const [resumePosition, setResumePosition] = useState(0);
   const [showUpNext, setShowUpNext] = useState(false);
   const [upNextCountdown, setUpNextCountdown] = useState(10);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [watchedVideos, setWatchedVideos] = useState<Set<string>>(new Set());
 
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -118,6 +119,31 @@ export function useVideoPlayer({ videos, seriesList }: VideoPlayerDeps): VideoPl
     if (upNextTimerRef.current) clearInterval(upNextTimerRef.current);
   }, []);
 
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      const { ScreenOrientation } = await import("@capacitor/screen-orientation");
+      if (isFullscreen) {
+        await ScreenOrientation.unlock().catch(() => {});
+        setIsFullscreen(false);
+      } else {
+        await ScreenOrientation.lock({ orientation: "landscape-primary" }).catch(() => {});
+        setIsFullscreen(true);
+      }
+    } catch {
+      setIsFullscreen(prev => !prev);
+    }
+  }, [isFullscreen]);
+
+  // Unlock orientation when player closes
+  useEffect(() => {
+    if (!isOpen) return;
+    return () => {
+      import("@capacitor/screen-orientation").then(({ ScreenOrientation }) => {
+        ScreenOrientation.unlock().catch(() => {});
+      }).catch(() => {});
+    };
+  }, [isOpen]);
+
   const togglePlay = useCallback(() => { setIsPlaying(p => !p); }, []);
 
   const skip = useCallback((seconds: number) => {
@@ -137,6 +163,10 @@ export function useVideoPlayer({ videos, seriesList }: VideoPlayerDeps): VideoPl
     setCurrentTime(newTime);
     if (selectedVideo) saveWatchProgress(selectedVideo.youtubeId, newTime, durationSec);
   }, [selectedVideo]);
+
+  const toggleMute = useCallback(() => {
+    setVolume(v => v === 0 ? 80 : 0);
+  }, []);
 
   const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setVolume(Number(e.target.value));
@@ -210,34 +240,19 @@ export function useVideoPlayer({ videos, seriesList }: VideoPlayerDeps): VideoPl
   // Up-next auto-play countdown
   useEffect(() => {
     if (!showUpNext || !selectedVideo) return;
+    let count = 10;
     setUpNextCountdown(10);
     upNextTimerRef.current = setInterval(() => {
-      setUpNextCountdown(c => {
-        if (c <= 1) {
-          if (upNextVideo) play(upNextVideo);
-          return 0;
-        }
-        return c - 1;
-      });
+      count -= 1;
+      setUpNextCountdown(count);
+      if (count <= 0) {
+        if (upNextVideo) play(upNextVideo);
+      }
     }, 1000);
     return () => { if (upNextTimerRef.current) clearInterval(upNextTimerRef.current); };
   }, [showUpNext, selectedVideo, upNextVideo, play]);
 
-  // Lock to landscape when player opens, unlock on close
-  useEffect(() => {
-    if (!isOpen) return;
-    let locked = false;
-    import("@capacitor/screen-orientation").then(({ ScreenOrientation }) => {
-      ScreenOrientation.lock({ orientation: "landscape-primary" }).then(() => { locked = true; }).catch(() => {});
-    }).catch(() => {});
-    return () => {
-      if (locked) {
-        import("@capacitor/screen-orientation").then(({ ScreenOrientation }) => {
-          ScreenOrientation.unlock().catch(() => {});
-        }).catch(() => {});
-      }
-    };
-  }, [isOpen]);
+
 
   // Hydrate watched videos on mount
   useEffect(() => {
@@ -502,10 +517,12 @@ export function useVideoPlayer({ videos, seriesList }: VideoPlayerDeps): VideoPl
             </div>
             <div className="pm-bottom-bar">
               <div className="pm-vol-area">
-                <button className="pm-vol-btn"><i className={`fas fa-${volIcon}`}></i></button>
+                <button className="pm-vol-btn" onClick={toggleMute}><i className={`fas fa-${volIcon}`}></i></button>
                 <input className="pm-vol-slider" type="range" min="0" max="100" value={volume} onChange={handleVolumeChange} />
               </div>
-              <button className="pm-full-btn" onClick={watchOnYT}><i className="fab fa-youtube"></i></button>
+              <button className={`pm-full-btn ${isFullscreen ? "active" : ""}`} onClick={toggleFullscreen} title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}>
+                <i className={`fas fa-${isFullscreen ? "compress" : "expand"}`}></i>
+              </button>
             </div>
           </div>
         </div>

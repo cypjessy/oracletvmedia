@@ -11,6 +11,7 @@ import type { QueueItem, Streamer, Playlist } from "@/lib/azuracast";
 import { getGalleryPhotos } from "@/lib/content";
 import { getBunnyStorageStats, formatBytes } from "@/lib/bunny";
 import AlbumArt from "@/components/shared/AlbumArt";
+import { useAudio } from "@/lib/audio/AudioContext";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import ToastBridge from "@/components/dashboard/ToastBridge";
 
@@ -189,11 +190,10 @@ export default function AdminPage() {
   const [wasStreamerLive, setWasStreamerLive] = useState(false);
   const prevHistoryLenRef = useRef(0);
   const [liveActivities, setLiveActivities] = useState<ActivityItem[]>([]);
-  const [liveStreamers, setLiveStreamers] = useState<Streamer[]>([]);
-  const [streamDeletingId, setStreamDeletingId] = useState<string | null>(null);
-
   // Schedule from AzuraCast playlists
   const [scheduleSlots, setScheduleSlots] = useState<{time: string; label: string; isNow: boolean; hasContent: boolean; source?: string}[]>([]);
+  const [liveStreamers, setLiveStreamers] = useState<Streamer[]>([]);
+  const [streamDeletingId, setStreamDeletingId] = useState<string | null>(null);
 
   const [stationUptime, setStationUptime] = useState("");
 
@@ -290,6 +290,21 @@ export default function AdminPage() {
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const audio = useAudio();
+  const [isAdminPlaying, setIsAdminPlaying] = useState(false);
+  const adminStreamUrl = radioNP?.station?.listenUrl || "";
+
+  useEffect(() => {
+    const nowPlaying = audio.isPlaying && audio.currentStreamUrl === adminStreamUrl;
+    setIsAdminPlaying(nowPlaying);
+  }, [audio.isPlaying, audio.currentStationId, radioNP]);
+
+  const toggleAdminPlay = useCallback(() => {
+    if (adminStreamUrl) {
+      audio.toggle(adminStreamUrl, Number(getStationId()));
+    }
+  }, [audio, adminStreamUrl]);
+
   const handleLogout = async () => {
     setShowProfileDropdown(false);
     try {
@@ -331,51 +346,6 @@ export default function AdminPage() {
       }));
     }
     setStreamDeletingId(null);
-  }, []);
-
-  // Fetch schedule from AzuraCast playlists
-  const fetchSchedule = useCallback(async () => {
-    try {
-      const playlists = await getPlaylists();
-      const now = new Date();
-      const currentHour = now.getHours();
-      const currentMin = now.getMinutes();
-      const currentTotalMinutes = currentHour * 60 + currentMin;
-      const today = now.getDay();
-
-      const scheduled = playlists
-        .filter((p) => p.type === "scheduled" && p.schedule?.days?.includes(today))
-        .sort((a, b) => {
-          const aStart = parseInt(a.schedule?.startTime || "0");
-          const bStart = parseInt(b.schedule?.startTime || "0");
-          return aStart - bStart;
-        });
-
-      const slots = scheduled.map((p) => {
-        const startHour = parseInt(p.schedule?.startTime || "0");
-        const startMin = 0;
-        const endHour = parseInt(p.schedule?.endTime || "0") || startHour + 1;
-        const startMins = startHour * 60 + startMin;
-        const endMins = endHour * 60;
-        const isNow = currentTotalMinutes >= startMins && currentTotalMinutes < endMins;
-        const timeStr = startHour === 0 ? "12AM" : startHour < 12 ? `${startHour}AM` : startHour === 12 ? "12PM" : `${startHour - 12}PM`;
-        return {
-          time: isNow ? "NOW" : timeStr,
-          label: p.name,
-          isNow,
-          hasContent: p.songCount > 0,
-          source: p.enabled ? "AutoDJ" : "Scheduled",
-        };
-      });
-
-      if (slots.length === 0) {
-        setScheduleSlots([{ time: "—", label: "No playlists scheduled today", isNow: false, hasContent: false }]);
-      } else {
-        setScheduleSlots(slots);
-      }
-    } catch {
-      setScheduleSlots([{ time: "—", label: "Could not load schedule", isNow: false, hasContent: false }]);
-    }
   }, []);
 
   // Fetch content summary + storage from Firestore and BunnyCDN
@@ -427,6 +397,48 @@ export default function AdminPage() {
     }
     setContentLoading(false);
   }, [ytStats]);
+
+  /* Fetch schedule from AzuraCast playlists */
+  const fetchSchedule = useCallback(async () => {
+    try {
+      const playlists = await getPlaylists();
+      const today = new Date().getDay();
+      const scheduled = playlists
+        .filter((p) => p.type === "scheduled" && p.schedule?.days?.includes(today))
+        .sort((a, b) => {
+          const aStart = parseInt(a.schedule?.startTime || "0");
+          const bStart = parseInt(b.schedule?.startTime || "0");
+          return aStart - bStart;
+        });
+      const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+      const slots = scheduled.map((p) => {
+        const startHour = parseInt(p.schedule?.startTime || "0");
+        const startMinute = parseInt(p.schedule?.startTime?.split(":")[1] || "0");
+        const endHour = parseInt(p.schedule?.endTime || "0") || startHour + 1;
+        const endMinute = parseInt(p.schedule?.endTime?.split(":")[1] || "0");
+        const startMinutes = startHour * 60 + startMinute;
+        const endMinutes = endHour * 60 + endMinute;
+        const isNow = nowMinutes >= startMinutes && nowMinutes < endMinutes;
+        const displayHour = startHour > 12 ? startHour - 12 : startHour === 0 ? 12 : startHour;
+        const displayMin = String(startMinute).padStart(2, "0");
+        const ampm = startHour >= 12 ? "PM" : "AM";
+        return {
+          time: `${displayHour}:${displayMin} ${ampm}`,
+          label: p.name,
+          isNow,
+          hasContent: true,
+          source: p.enabled ? "AutoDJ" : "Scheduled",
+        };
+      });
+      if (slots.length === 0) {
+        setScheduleSlots([{ time: "—", label: "No playlists scheduled today", isNow: false, hasContent: false }]);
+      } else {
+        setScheduleSlots(slots);
+      }
+    } catch {
+      setScheduleSlots([{ time: "—", label: "Could not load schedule", isNow: false, hasContent: false }]);
+    }
+  }, []);
 
   // Compute uptime from earliest song in history
   useEffect(() => {
@@ -1341,6 +1353,249 @@ export default function AdminPage() {
         .toast-content { flex: 1; }
         .toast-content .title { font-size: 14px; font-weight: 600; }
         .toast-content .message { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+
+        /* ===== PREMIUM RADIO HERO CARD ===== */
+        .rh-hero {
+            position: relative;
+            background: linear-gradient(180deg, rgba(232,168,56,0.06) 0%, rgba(15,15,15,0.5) 100%);
+            border: 1px solid rgba(232,168,56,0.12);
+            border-radius: var(--radius-xl);
+            padding: 20px 18px 16px;
+            overflow: hidden;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 0 80px rgba(232,168,56,0.04);
+            animation: rhFadeIn 0.6s ease;
+        }
+        @keyframes rhFadeIn {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .rh-glow-1 {
+            position: absolute; top: -80px; left: 50%; transform: translateX(-50%);
+            width: 300px; height: 300px;
+            background: radial-gradient(circle, rgba(232,168,56,0.12) 0%, transparent 70%);
+            pointer-events: none;
+            animation: rhGlowPulse 4s ease-in-out infinite;
+        }
+        .rh-glow-2 {
+            position: absolute; bottom: -60px; right: -60px;
+            width: 200px; height: 200px;
+            background: radial-gradient(circle, rgba(212,118,42,0.06) 0%, transparent 70%);
+            pointer-events: none;
+            animation: rhGlowPulse 5s ease-in-out infinite reverse;
+        }
+        @keyframes rhGlowPulse {
+            0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+            50% { opacity: 1; transform: translateX(-50%) scale(1.15); }
+        }
+        .rh-glow-2 {
+            animation: rhGlowPulse2 5s ease-in-out infinite reverse;
+        }
+        @keyframes rhGlowPulse2 {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.2); }
+        }
+
+        .rh-top {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 16px; position: relative; z-index: 1;
+        }
+        .rh-station {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; font-weight: 700;
+        }
+        .rh-station i { color: var(--primary); font-size: 14px; }
+        .rh-badges { display: flex; align-items: center; gap: 8px; }
+        .rh-live-badge {
+            display: flex; align-items: center; gap: 5px;
+            padding: 4px 10px; border-radius: 20px;
+            font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+        }
+        .rh-live-badge.live {
+            background: rgba(74,222,128,0.12); color: var(--success);
+        }
+        .rh-live-badge.off {
+            background: rgba(107,107,107,0.12); color: var(--text-tertiary);
+        }
+        .rh-live-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+        }
+        .rh-live-badge.live .rh-live-dot {
+            background: var(--success);
+            animation: livePulse 1.5s ease-in-out infinite;
+        }
+        .rh-live-badge.off .rh-live-dot {
+            background: var(--text-tertiary);
+        }
+        .rh-listener-badge {
+            display: flex; align-items: center; gap: 4px;
+            padding: 4px 10px; border-radius: 20px;
+            background: var(--surface); border: 1px solid var(--border);
+            font-size: 11px; font-weight: 600; color: var(--text-secondary);
+        }
+        .rh-listener-badge i { font-size: 10px; color: var(--primary); }
+
+        .rh-main {
+            display: flex; align-items: center; gap: 18px;
+            margin-bottom: 14px; position: relative; z-index: 1;
+        }
+        .rh-art-wrap {
+            position: relative; flex-shrink: 0;
+            width: 100px; height: 100px;
+        }
+        .rh-art-ring {
+            position: absolute; inset: -4px;
+            border-radius: 50%;
+            border: 2px solid rgba(232,168,56,0.2);
+            animation: rhRingSpin 8s linear infinite;
+        }
+        @keyframes rhRingSpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .rh-art-ring::before {
+            content: ''; position: absolute; top: -2px; left: 50%; transform: translateX(-50%);
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--primary);
+            box-shadow: 0 0 12px rgba(232,168,56,0.6);
+        }
+        .rh-art {
+            width: 100%; height: 100%;
+            border-radius: 50%; overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 2px rgba(232,168,56,0.1);
+            transition: all 0.5s ease;
+            position: relative;
+        }
+        .rh-art.spinning {
+            animation: rhSpin 12s linear infinite;
+        }
+        @keyframes rhSpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .rh-art img { width: 100%; height: 100%; object-fit: cover; }
+        .rh-art-fallback {
+            width: 100%; height: 100%;
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            display: flex; align-items: center; justify-content: center;
+            font-size: 38px; color: #fff;
+        }
+        .rh-vinyl-lines {
+            position: absolute; inset: 0; border-radius: 50%;
+            background: conic-gradient(from 0deg, transparent 0deg, rgba(255,255,255,0.03) 10deg, transparent 20deg, rgba(255,255,255,0.03) 30deg, transparent 40deg, rgba(255,255,255,0.03) 50deg, transparent 60deg, rgba(255,255,255,0.03) 70deg, transparent 80deg, rgba(255,255,255,0.03) 90deg, transparent 100deg, rgba(255,255,255,0.03) 110deg, transparent 120deg, rgba(255,255,255,0.03) 130deg, transparent 140deg, rgba(255,255,255,0.03) 150deg, transparent 160deg, rgba(255,255,255,0.03) 170deg, transparent 180deg, rgba(255,255,255,0.03) 190deg, transparent 200deg, rgba(255,255,255,0.03) 210deg, transparent 220deg, rgba(255,255,255,0.03) 230deg, transparent 240deg, rgba(255,255,255,0.03) 250deg, transparent 260deg, rgba(255,255,255,0.03) 270deg, transparent 280deg, rgba(255,255,255,0.03) 290deg, transparent 300deg, rgba(255,255,255,0.03) 310deg, transparent 320deg, rgba(255,255,255,0.03) 330deg, transparent 340deg, rgba(255,255,255,0.03) 350deg, transparent 360deg);
+            pointer-events: none; z-index: 2;
+        }
+        .rh-eq {
+            position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 3px; align-items: flex-end;
+            z-index: 3;
+        }
+        .rh-eq span {
+            width: 4px; background: var(--primary); border-radius: 2px;
+            animation: rhEqBounce 0.6s ease-in-out infinite alternate;
+        }
+        .rh-eq span:nth-child(1) { height: 10px; animation-delay: 0s; }
+        .rh-eq span:nth-child(2) { height: 16px; animation-delay: 0.15s; }
+        .rh-eq span:nth-child(3) { height: 12px; animation-delay: 0.3s; }
+        .rh-eq span:nth-child(4) { height: 8px; animation-delay: 0.45s; }
+        @keyframes rhEqBounce {
+            from { transform: scaleY(0.5); }
+            to { transform: scaleY(1); }
+        }
+
+        .rh-info { flex: 1; min-width: 0; }
+        .rh-track-name {
+            font-size: 18px; font-weight: 800;
+            letter-spacing: -0.3px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .rh-track-artist {
+            font-size: 14px; color: var(--primary-light);
+            margin-top: 4px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .rh-source {
+            font-size: 11px; color: var(--text-tertiary);
+            margin-top: 6px; display: flex; align-items: center; gap: 4px;
+        }
+        .rh-source i { color: var(--primary); font-size: 10px; }
+
+        .rh-progress-wrap {
+            margin-bottom: 14px; position: relative; z-index: 1;
+        }
+        .rh-progress-bar {
+            width: 100%; height: 4px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 3px; overflow: hidden;
+        }
+        .rh-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end));
+            border-radius: 3px;
+            transition: width 1s ease;
+            position: relative;
+        }
+        .rh-progress-glow {
+            position: absolute; right: 0; top: -2px;
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--primary);
+            box-shadow: 0 0 12px rgba(232,168,56,0.6);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .rh-progress-bar:hover .rh-progress-glow { opacity: 1; }
+        .rh-progress-time {
+            display: flex; justify-content: space-between;
+            font-size: 11px; color: var(--text-tertiary);
+            margin-top: 4px; font-weight: 500;
+        }
+
+        .rh-actions {
+            display: flex; align-items: center; justify-content: center;
+            gap: 20px; position: relative; z-index: 1;
+            margin-bottom: 12px;
+        }
+        .rh-play-btn {
+            width: 56px; height: 56px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            border: none; color: #fff; font-size: 22px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; position: relative;
+            box-shadow: 0 6px 24px rgba(232,168,56,0.35);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .rh-play-btn:active { transform: scale(0.88); }
+        .rh-play-btn.playing {
+            box-shadow: 0 6px 28px rgba(232,168,56,0.4), 0 0 40px rgba(232,168,56,0.1);
+        }
+        .rh-play-ring {
+            position: absolute; inset: -6px; border-radius: 50%;
+            border: 1.5px solid rgba(232,168,56,0.15);
+            animation: rhRingPulse 2s ease-in-out infinite;
+        }
+        .rh-play-btn.playing .rh-play-ring {
+            border-color: rgba(74,222,128,0.3);
+        }
+        @keyframes rhRingPulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0; }
+        }
+        .rh-shuffle-btn, .rh-expand-btn {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: var(--surface); border: 1px solid var(--border);
+            color: var(--text-secondary); font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.2s ease;
+        }
+        .rh-shuffle-btn:active, .rh-expand-btn:active {
+            background: var(--surface-elevated); transform: scale(0.88);
+        }
+
+        .rh-embed {
+            position: relative; z-index: 1;
+            border-radius: 8px; overflow: hidden;
+            border: 1px solid var(--border);
+        }
       `}</style>
 
       <ToastBridge />
@@ -1432,14 +1687,93 @@ export default function AdminPage() {
           </div>
         </header>
 
-        {/* NOW PLAYING STRIP */}
-        <div className="dash-nowplaying-strip">
-          <AlbumArt className="dash-np-thumb" src={nowPlaying.albumArt} size={36} />
-          <div className="dash-np-info">
-            <div className="dash-np-title">{nowPlaying.title}</div>
-            <div className="dash-np-artist">{nowPlaying.artist}</div>
+        {/* PREMIUM RADIO HERO CARD */}
+        <div className="rh-hero" style={{ margin: "0 16px 12px" }}>
+          {/* Animated background glow layers */}
+          <div className="rh-glow-1"></div>
+          <div className="rh-glow-2"></div>
+
+          {/* Top row: station name + badges */}
+          <div className="rh-top">
+            <div className="rh-station">
+              <i className="fas fa-tower-broadcast"></i>
+              <span>{radioNP?.station?.name || "Radio Station"}</span>
+            </div>
+            <div className="rh-badges">
+              <div className={`rh-live-badge ${isAdminPlaying || radioBackendRunning ? "live" : "off"}`}>
+                <span className="rh-live-dot"></span>
+                {isAdminPlaying || radioBackendRunning ? "Live" : "Off Air"}
+              </div>
+              <div className="rh-listener-badge">
+                <i className="fas fa-headphones"></i>
+                {liveListeners}
+              </div>
+            </div>
           </div>
-          <span className="dash-np-badge">{nowPlaying.source}</span>
+
+          {/* Main content: album art + info */}
+          <div className="rh-main">
+            <div className="rh-art-wrap">
+              <div className="rh-art-ring"></div>
+              <div className={`rh-art ${isAdminPlaying ? "spinning" : ""}`}>
+                {nowPlaying.albumArt ? (
+                  <img src={nowPlaying.albumArt} alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                ) : (
+                  <div className="rh-art-fallback">
+                    <i className="fas fa-radio"></i>
+                  </div>
+                )}
+              </div>
+              {/* Equalizer overlay when playing */}
+              {isAdminPlaying && (
+                <div className="rh-eq">
+                  <span></span><span></span><span></span><span></span>
+                </div>
+              )}
+              {/* Spinning vinyl lines when playing */}
+              {isAdminPlaying && <div className="rh-vinyl-lines"></div>}
+            </div>
+
+            <div className="rh-info">
+              <div className="rh-track-name">{nowPlaying.title || "Station Offline"}</div>
+              <div className="rh-track-artist">{nowPlaying.artist || "Not currently playing"}</div>
+              <div className="rh-source">
+                <i className="fas fa-radio"></i> {radioNP?.station?.name || "Radio"}
+              </div>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div className="rh-progress-wrap">
+            <div className="rh-progress-bar">
+              <div className="rh-progress-fill" style={{ width: `${isAdminPlaying && nowPlaying.duration > 0 ? Math.min(100, (nowPlaying.elapsed / nowPlaying.duration) * 100) : 0}%` }}>
+                <div className="rh-progress-glow"></div>
+              </div>
+            </div>
+            <div className="rh-progress-time">
+              <span>{nowPlaying.duration > 0 ? formatTime(nowPlaying.elapsed) : "0:00"}</span>
+              <span>{nowPlaying.duration > 0 ? formatTime(nowPlaying.duration) : "0:00"}</span>
+            </div>
+          </div>
+
+          {/* Controls row */}
+          <div className="rh-actions">
+            <button className="rh-shuffle-btn" title="Shuffle">
+              <i className="fas fa-shuffle"></i>
+            </button>
+            <button className={`rh-play-btn ${isAdminPlaying ? "playing" : ""}`} onClick={toggleAdminPlay}>
+              <i className={`fas fa-${isAdminPlaying ? "pause" : "play"}`}></i>
+              <div className="rh-play-ring"></div>
+            </button>
+            <button className="rh-expand-btn" onClick={() => router.push("/admin/radio")} title="Open Radio">
+              <i className="fas fa-expand"></i>
+            </button>
+          </div>
+
+          {/* AzuraCast embed below */}
+          <div className="rh-embed">
+            <iframe src="https://azuracast.histoview.co.ke/public/turningpoint_church/embed?theme=dark" style={{ width: "100%", height: 120, border: "none", display: "block", borderRadius: 8 }}></iframe>
+          </div>
         </div>
 
         {/* CONTENT SCROLL */}
@@ -1492,49 +1826,7 @@ export default function AdminPage() {
           <div className="dash-grid">
             {/* LEFT COLUMN */}
             <div className="dash-section">
-              {/* NOW PLAYING */}
-              <div className="widget-card">
-                <div className="widget-label">
-                  <i className="fas fa-circle-play" style={{ marginRight: 6, color: "var(--primary)" }}></i>
-                  Now Playing
-                </div>
-                <div className="np-hero">
-                  <AlbumArt className="np-cover" src={nowPlaying.albumArt} size={100} />
-                  <div className="np-info">
-                    <div className="song">{nowPlaying.title}</div>
-                    <div className="artist">{nowPlaying.artist}</div>
-                    <div className="source">{nowPlaying.source}</div>
-                    <div className="playlist">{nowPlaying.playlist}</div>
-                  </div>
-                </div>
-                <div className="np-progress">
-                  <div className="np-progress-bar">
-                    <div className="np-progress-fill" style={{ width: `${(nowPlaying.elapsed / nowPlaying.duration) * 100}%` }}></div>
-                  </div>
-                  <div className="np-times">
-                    <span>{formatTime(nowPlaying.elapsed)}</span>
-                    <span>{formatTime(nowPlaying.duration)}</span>
-                  </div>
-                </div>
-                <div className="np-next">
-                  <i className="fas fa-forward-step"></i>
-                  <div className="np-next-info">
-                    <div className="np-next-label">Up Next</div>
-                    <div className="np-next-title">{nowPlaying.nextUp.title}</div>
-                    <div className="np-next-artist">{nowPlaying.nextUp.artist}</div>
-                  </div>
-                </div>
-                <div className="np-actions">
-                  <button className="np-btn secondary" onClick={() => window.dispatchEvent(new CustomEvent("show-toast", { detail: { title: "Skip Song", message: "Skipping to next track...", type: "info", duration: 2000 } }))}>
-                    <i className="fas fa-forward"></i> Skip Song
-                  </button>
-                  <button className="np-btn primary" onClick={() => router.push("/admin/radio")}>
-                    <i className="fas fa-sliders"></i> Radio Settings
-                  </button>
-                </div>
-              </div>
 
-              {/* Live Player embed removed — use Now Playing card above */}
 
               {/* TODAY AT A GLANCE */}
               <div className="widget-card">
@@ -1731,32 +2023,30 @@ export default function AdminPage() {
                 )}
               </div>
 
-              {/* UPCOMING SCHEDULE */}
+              {/* TODAY'S SCHEDULE */}
               <div className="widget-card">
-                <div className="widget-label">Today&apos;s Schedule</div>
-                <div className="schedule-timeline">
-                  {scheduleSlots.length === 0 ? (
-                    <div style={{ padding: "14px 0", textAlign: "center", color: "var(--text-tertiary)", fontSize: 13 }}>
-                      <i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }}></i> Loading schedule...
-                    </div>
-                  ) : (
-                    scheduleSlots.map((slot, i) => (
-                      <div className="schedule-slot" key={i}>
-                        <div className={`schedule-time${slot.isNow ? " now" : ""}`}>{slot.time}</div>
-                        <div className={`schedule-dot${slot.isNow ? " active" : slot.hasContent ? " upcoming" : " warning"}`}></div>
-                        <div className="schedule-info">
-                          <div className={`schedule-label${!slot.hasContent ? " warning" : ""}`}>{slot.label}</div>
-                          {slot.source && <div className="schedule-source">{slot.source}</div>}
-                        </div>
-                        {slot.isNow && <span className="schedule-badge now">Now</span>}
-                        {!slot.hasContent && <span className="schedule-badge empty">Empty</span>}
-                      </div>
-                    ))
-                  )}
+                <div className="widget-label">
+                  <i className="fas fa-calendar-days" style={{ marginRight: 6, color: "var(--primary)" }}></i>
+                  Today's Schedule
                 </div>
-                <button className="load-more-btn" style={{ marginTop: 8 }} onClick={() => window.dispatchEvent(new CustomEvent("show-toast", { detail: { title: "Add Schedule", message: "Opening schedule editor...", type: "info", duration: 2000 } }))}>
-                  <i className="fas fa-plus" style={{ marginRight: 6 }}></i> Add Schedule
-                </button>
+                <div className="schedule-timeline">
+                  {scheduleSlots.map((slot, i) => (
+                    <div className="schedule-slot" key={i}>
+                      <div className={`schedule-time${slot.isNow ? " now" : ""}`}>{slot.time}</div>
+                      <div className={`schedule-dot ${slot.isNow ? "active" : slot.hasContent ? "upcoming" : "warning"}`}></div>
+                      <div className="schedule-info">
+                        <div className={`schedule-label${!slot.hasContent ? " warning" : ""}`}>{slot.label}</div>
+                        {slot.source && <div className="schedule-source">{slot.source}</div>}
+                      </div>
+                      {slot.isNow && <span className="schedule-badge now">NOW</span>}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: 10 }}>
+                  <button className="np-btn secondary" style={{ width: "100%" }} onClick={() => window.dispatchEvent(new CustomEvent("show-toast", { detail: { title: "Add Schedule", message: "Navigate to Radio Station to add playlists", type: "info", duration: 2000 } }))}>
+                    <i className="fas fa-plus"></i> Add Schedule
+                  </button>
+                </div>
               </div>
             </div>
 

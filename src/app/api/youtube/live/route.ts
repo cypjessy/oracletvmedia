@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-
-export const dynamic = "force-static";
+import { addCorsHeaders, handleCorsPreflight } from "@/lib/cors";
 
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const BASE = "https://www.googleapis.com/youtube/v3";
@@ -33,15 +32,19 @@ function mapCategory(youtubeCategoryId: string | undefined, title: string, descr
   return "sermon";
 }
 
-export async function GET() {
+export async function OPTIONS(req: Request) {
+  return handleCorsPreflight(req);
+}
+
+export async function GET(req: Request) {
   try {
     if (!YOUTUBE_API_KEY) {
-      return NextResponse.json({ error: "YOUTUBE_API_KEY not configured" }, { status: 500 });
+      return addCorsHeaders(NextResponse.json({ error: "YOUTUBE_API_KEY not configured" }, { status: 500 }), req);
     }
 
     const channelId = process.env.NEXT_PUBLIC_YOUTUBE_CHANNEL_ID;
     if (!channelId) {
-      return NextResponse.json({ error: "NEXT_PUBLIC_YOUTUBE_CHANNEL_ID not configured" }, { status: 500 });
+      return addCorsHeaders(NextResponse.json({ error: "NEXT_PUBLIC_YOUTUBE_CHANNEL_ID not configured" }, { status: 500 }), req);
     }
 
     // Search for any active live stream on this channel
@@ -56,18 +59,18 @@ export async function GET() {
     const searchRes = await fetch(`${BASE}/search?${searchParams}`);
     if (!searchRes.ok) {
       const err = await searchRes.text();
-      return NextResponse.json({ error: `YouTube search API error: ${err}` }, { status: 502 });
+      return addCorsHeaders(NextResponse.json({ error: `YouTube search API error: ${err}` }, { status: 502 }), req);
     }
 
     const searchData = await searchRes.json();
     const liveItem = searchData?.items?.[0];
     if (!liveItem) {
-      return NextResponse.json({ isLive: false, video: null });
+      return addCorsHeaders(NextResponse.json({ isLive: false, video: null }), req);
     }
 
     const videoId = liveItem.id?.videoId;
     if (!videoId) {
-      return NextResponse.json({ isLive: false, video: null });
+      return addCorsHeaders(NextResponse.json({ isLive: false, video: null }), req);
     }
 
     // Fetch detailed video info (duration, statistics) — costs ~1 quota unit
@@ -77,7 +80,7 @@ export async function GET() {
     if (!vidRes.ok) {
       // Fall back to snippet-only data
       const s = liveItem.snippet || {};
-      return NextResponse.json({
+      return addCorsHeaders(NextResponse.json({
         isLive: true,
         video: {
           youtubeId: videoId,
@@ -90,16 +93,15 @@ export async function GET() {
           category: mapCategory(undefined, s.title || "", s.description || ""),
           tags: [],
           isFeatured: true,
-          isHidden: false,
-          seriesId: null,
+          isHidden: false,            seriesId: null,
         },
-      });
+      }), req);
     }
 
     const vidData = await vidRes.json();
     const item = vidData?.items?.[0];
     if (!item) {
-      return NextResponse.json({ isLive: true, video: null });
+      return addCorsHeaders(NextResponse.json({ isLive: true, video: null }), req);
     }
 
     const s = item.snippet || {};
@@ -118,12 +120,12 @@ export async function GET() {
       seriesId: null,
     };
 
-    return NextResponse.json({ isLive: true, video });
+    return addCorsHeaders(NextResponse.json({ isLive: true, video }), req);
   } catch (error) {
     console.error("YouTube live check error:", error);
-    return NextResponse.json(
+    return addCorsHeaders(NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
-    );
+    ), req);
   }
 }

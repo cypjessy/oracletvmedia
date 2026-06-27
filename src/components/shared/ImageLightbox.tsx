@@ -32,19 +32,34 @@ export function useImageLightbox(): ImageLightboxAPI {
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
 
+  // Track body overflow count so nested lightboxes don't double-unlock scrolling
+  const overflowCountRef = useRef(0);
+
+  const lockScroll = useCallback(() => {
+    overflowCountRef.current += 1;
+    document.body.style.overflow = "hidden";
+  }, []);
+
+  const unlockScroll = useCallback(() => {
+    overflowCountRef.current = Math.max(0, overflowCountRef.current - 1);
+    if (overflowCountRef.current === 0) {
+      document.body.style.overflow = "";
+    }
+  }, []);
+
   const open = useCallback((imgs: LightboxImage[], index = 0) => {
     setImages(imgs);
     setCurrentIndex(index);
     setZoomed(false);
     setIsOpen(true);
-    document.body.style.overflow = "hidden";
-  }, []);
+    lockScroll();
+  }, [lockScroll]);
 
   const close = useCallback(() => {
     setIsOpen(false);
     setZoomed(false);
-    document.body.style.overflow = "";
-  }, []);
+    unlockScroll();
+  }, [unlockScroll]);
 
   const goNext = useCallback(() => {
     setCurrentIndex((i) => (i + 1) % images.length);
@@ -68,8 +83,8 @@ export function useImageLightbox(): ImageLightboxAPI {
     return () => window.removeEventListener("keydown", handler);
   }, [isOpen, close, goNext, goPrev]);
 
-  // Cleanup overflow on unmount
-  useEffect(() => () => { document.body.style.overflow = ""; }, []);
+  // Cleanup overflow on unmount — only if still locked
+  useEffect(() => () => { unlockScroll(); }, [unlockScroll]);
 
   const current = images[currentIndex] || null;
 

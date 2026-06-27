@@ -16,21 +16,26 @@ export function useNowPlaying(stationId = ""): UseNowPlayingResult {
   const [data, setData] = useState<NowPlayingData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mountedRef = useRef(true);
 
   const fetchNowPlaying = useCallback(async () => {
     try {
       const result = await getNowPlaying(stationId);
+      if (!mountedRef.current) return;
       setData(result);
       setError(null);
     } catch {
+      if (!mountedRef.current) return;
       setError("Failed to fetch now playing data");
     }
   }, [stationId]);
 
   useEffect(() => {
+    mountedRef.current = true;
     fetchNowPlaying();
     intervalRef.current = setInterval(fetchNowPlaying, 5000);
     return () => {
+      mountedRef.current = false;
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [fetchNowPlaying]);

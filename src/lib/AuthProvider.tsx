@@ -26,6 +26,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Used to distinguish "initial load (no user)" from "transient null during token refresh".
   const hasHadUserRef = useRef(false);
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastNavTimeRef = useRef(Date.now());
+
+  // Track navigation timestamps to detect client-side route changes
+  // that may cause Firebase to briefly emit null (token refresh race).
+  // We use a longer timeout (3000ms) when a navigation just happened
+  // vs 500ms for other cases.
+  useEffect(() => {
+    lastNavTimeRef.current = Date.now();
+  }, [pathname]);
 
   // Register push notifications when user is authenticated
   usePushNotifications();
@@ -94,19 +103,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ) {
           if (hasHadUserRef.current) {
             // Transient null guard: Firebase can briefly emit null during
-            // token refresh. Wait 500ms to allow auth to restore before
-            // redirecting. If the user comes back, the timer is cancelled
-            // in the firebaseUser branch above. Clear any previous timer
-            // first to prevent stacking in rare rapid-null scenarios.
+            // token refresh, especially in Android WebView after a
+            // client-side navigation. Give more time (3000ms) if a
+            // navigation just happened; otherwise use 500ms as before.
+            // If the user comes back, the timer is cancelled in the
+            // firebaseUser branch above. Clear any previous timer first
+            // to prevent stacking in rare rapid-null scenarios.
             if (redirectTimerRef.current) {
               clearTimeout(redirectTimerRef.current);
             }
+            const timeSinceNav = Date.now() - lastNavTimeRef.current;
+            const delay = timeSinceNav < 2000 ? 3000 : 500;
             redirectTimerRef.current = setTimeout(() => {
               if (!auth.currentUser) {
                 router.push("/");
               }
               redirectTimerRef.current = null;
-            }, 500);
+            }, delay);
           } else {
             // First load — no user has ever been seen. Redirect immediately.
             router.push("/");
