@@ -38,31 +38,39 @@ function getMC() {
 // NOTIFICATION HELPERS
 // ============================================================
 
+/**
+ * Safely create or update the Android media notification.
+ * Wrapped entirely in try/catch because native plugin crashes can kill the app.
+ */
 async function createNotification(title: string, artist: string, albumArt?: string) {
-  const mc = getMC();
-  if (!mc) return;
   try {
-    await mc.destroy();
-  } catch { /* no-op */ }
-  try {
-    await mc.create({
-      track: title || "Kingdom Seekers Radio",
-      artist: artist || "Kingdom Seekers Church Nakuru",
-      album: "Radio Stream",
-      cover: albumArt || "",
-      hasPrev: false,
-      hasNext: false,
-      hasClose: true,
-      hasSkipForward: false,
-      hasSkipBackward: false,
-      duration: -1,
-      elapsed: 0,
-      isPlaying: true,
-      dismissable: false,
-      ticker: title ? `Now playing: ${title}` : "Kingdom Seekers Radio",
-    });
+    const mc = getMC();
+    if (!mc) return;
+    try {
+      await mc.destroy();
+    } catch { /* no existing notification to destroy */ }
+    try {
+      await mc.create({
+        track: title || "Kingdom Seekers Radio",
+        artist: artist || "Kingdom Seekers Church Nakuru",
+        album: "Radio Stream",
+        cover: albumArt || "",
+        hasPrev: false,
+        hasNext: false,
+        hasClose: true,
+        hasSkipForward: false,
+        hasSkipBackward: false,
+        duration: -1,
+        elapsed: 0,
+        isPlaying: true,
+        dismissable: false,
+        ticker: title ? `Now playing: ${title}` : "Kingdom Seekers Radio",
+      });
+    } catch {
+      // Plugin not available or create failed
+    }
   } catch {
-    // Plugin not available
+    // Native plugin crash — silently ignore to prevent app crash
   }
 }
 
@@ -155,7 +163,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
             });
           }
           // Create notification immediately (before buffering completes)
-          createNotification(mediaTitleRef.current, mediaArtistRef.current, mediaArtRef.current);
+          try { createNotification(mediaTitleRef.current, mediaArtistRef.current, mediaArtRef.current); } catch {}
           setIsPlaying(true);
         }
         break;
@@ -194,7 +202,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
               audio.play().catch(() => {});
             }
             // Create notification immediately (before buffering completes)
-            createNotification(mediaTitleRef.current, mediaArtistRef.current, mediaArtRef.current);
+            try { createNotification(mediaTitleRef.current, mediaArtistRef.current, mediaArtRef.current); } catch {}
             setIsPlaying(true);
           }
         }
@@ -300,7 +308,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
 
     // Create notification immediately (before buffering) so the user
     // sees controls as soon as they tap Play
-    createNotification(mediaTitleRef.current, mediaArtistRef.current, mediaArtRef.current);
+    try { createNotification(mediaTitleRef.current, mediaArtistRef.current, mediaArtRef.current); } catch {}
 
     const cacheBust = url.includes("?") ? `&_=${Date.now()}` : `?_=${Date.now()}`;
     audio.src = url + cacheBust;
@@ -342,7 +350,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       audio.pause();
     } else {
       // Create notification immediately (before buffering)
-      createNotification(mediaTitleRef.current, mediaArtistRef.current, mediaArtRef.current);
+      try { createNotification(mediaTitleRef.current, mediaArtistRef.current, mediaArtRef.current); } catch {}
 
       // Force a fresh stream connection with cache busting.
       const cacheBust = url.includes("?") ? `&_=${Date.now()}` : `?_=${Date.now()}`;
