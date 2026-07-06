@@ -12,6 +12,9 @@ import { getBunnyStorageStats, formatBytes } from "@/lib/bunny";
 import AlbumArt from "@/components/shared/AlbumArt";
 import { useAudio } from "@/lib/audio/AudioContext";
 import { usePlayConfig } from "@/lib/playControls";
+import { useTvPlayer } from "@/lib/tv/TvPlayerProvider";
+import { getChannel, getVideos, getUserTvState, updateUserTvProgress, autoInitUserPlaylist } from "@/lib/youtube";
+import type { YouTubeChannel, YouTubeVideo, UserTvState } from "@/lib/youtube";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import ToastBridge from "@/components/dashboard/ToastBridge";
 
@@ -126,6 +129,65 @@ export default function AdminPage() {
   const [streamDeletingId, setStreamDeletingId] = useState<string | null>(null);
 
   const [stationUptime, setStationUptime] = useState("");
+
+  // ─── TV state (channel + videos + user playlist) ───
+  const [tvChannel, setTvChannel] = useState<YouTubeChannel | null>(null);
+  const [tvVideos, setTvVideos] = useState<YouTubeVideo[]>([]);
+  const [tvLoading, setTvLoading] = useState(true);
+  const tvPlayerTargetRef = useRef<HTMLDivElement>(null);
+  const tvPlayer = useTvPlayer();
+  const [tvUserState, setTvUserState] = useState<UserTvState | null>(null);
+
+  const tvCurrentVideo = tvUserState && tvUserState.playlist.length > 0
+    ? tvVideos.find((v) => v.id === tvUserState.playlist[tvUserState.currentIndex]) ?? null
+    : null;
+
+  // Register portal target
+  useEffect(() => {
+    if (tvPlayerTargetRef.current) {
+      tvPlayer.registerTarget(tvPlayerTargetRef.current);
+    }
+    return () => {
+      tvPlayer.registerTarget(null);
+    };
+  }, [tvCurrentVideo, tvPlayer]);
+
+  // Call play() when video changes
+  useEffect(() => {
+    if (tvCurrentVideo) {
+      tvPlayer.play(tvCurrentVideo.id);
+    } else {
+      tvPlayer.hide();
+    }
+  }, [tvCurrentVideo?.id, tvPlayer]);
+
+  // Fetch TV channel and videos on mount
+  useEffect(() => {
+    let mounted = true;
+    const fetchTv = async () => {
+      const uid = auth.currentUser?.uid;
+      if (!uid) return;
+      try {
+        const [c, vids, state] = await Promise.all([
+          getChannel().catch(() => null),
+          getVideos({ max: 50 }).catch<YouTubeVideo[]>(() => []),
+          uid ? getUserTvState(uid) : Promise.resolve({ playlist: [], currentIndex: 0, currentSeek: 0, updatedAt: null }),
+        ]);
+        if (!mounted) return;
+        if (c) setTvChannel(c);
+        if (vids.length > 0) setTvVideos(vids);
+        let finalState = state;
+        if (state.playlist.length === 0 && vids.length > 0) {
+          finalState = await autoInitUserPlaylist(uid);
+        }
+        setTvUserState(finalState);
+      } catch {} finally {
+        if (mounted) setTvLoading(false);
+      }
+    };
+    fetchTv();
+    return () => { mounted = false; };
+  }, []);
 
   // Content summary from Firestore
   const [contentCounts, setContentCounts] = useState({ gallery: 0, galleryLast: "", videos: 0, videoSync: "" });
@@ -1283,61 +1345,199 @@ export default function AdminPage() {
         .toast-content .title { font-size: 14px; font-weight: 600; }
         .toast-content .message { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
 
-        /* ===== PREMIUM RADIO HERO CARD ===== */
+        /* ===== TV WRAP (edge-to-edge like member dashboard) ===== */
+        .tv-top-wrap {
+          margin: 0 calc(-1 * var(--section-px, 16px));
+        }
+        .tv-top {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 8px 14px;
+        }
+        .tv-station {
+          display: flex; align-items: center; gap: 8px;
+          font-size: 13px; font-weight: 700;
+        }
+        .tv-station i { color: #3B82F6; font-size: 14px; }
+        .tv-badges { display: flex; align-items: center; gap: 8px; }
+        .tv-live-badge {
+          display: flex; align-items: center; gap: 5px;
+          padding: 4px 10px; border-radius: 20px;
+          font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+          transition: all 0.3s ease;
+        }
+        .tv-live-badge.live { background: rgba(59,130,246,0.12); color: #3B82F6; }
+        .tv-live-badge.off { background: rgba(107,107,107,0.12); color: var(--text-tertiary); }
+        .tv-live-dot { width: 6px; height: 6px; border-radius: 50%; }
+        .tv-live-badge.live .tv-live-dot { background: #3B82F6; animation: livePulse 1.5s ease-in-out infinite; }
+        .tv-live-badge.off .tv-live-dot { background: var(--text-tertiary); }
+        .tv-sub-badge {
+          display: flex; align-items: center; gap: 4px;
+          padding: 4px 10px; border-radius: 20px;
+          background: var(--surface); border: 1px solid var(--border);
+          font-size: 11px; font-weight: 600; color: var(--text-secondary);
+        }
+        .tv-sub-badge i { font-size: 10px; color: #3B82F6; }
+
+        .tv-player-container {
+          position: relative;
+          width: 100%;
+          aspect-ratio: 16 / 9;
+          background: #000;
+          overflow: hidden;
+          z-index: 1;
+        }
+        .tv-player-container .plyr { width: 100%; height: 100%; }
+        .tv-player-container .plyr__video-wrapper { height: 100%; }
+        .tv-player-container .plyr__video-embed { aspect-ratio: auto !important; }
+        .tv-player-container .plyr__video-embed,
+        .tv-player-container iframe { width: 100% !important; height: 100% !important; }
+        .tv-player-container .plyr__video-embed iframe { transform: scale(1.03); }
+        @media (max-width: 480px) {
+          .tv-player-container .plyr__controls { padding: 6px 4px !important; }
+          .tv-player-container .plyr__control { padding: 8px 6px !important; min-width: 36px; min-height: 36px; }
+          .tv-player-container .plyr__control svg { width: 18px; height: 18px; }
+          .tv-player-container .plyr__time { font-size: 11px; }
+        }
+
+        .tv-overlay {
+          position: absolute;
+          bottom: 0; left: 0; right: 0;
+          padding: 10px 14px;
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 8px;
+          background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
+          pointer-events: none;
+        }
+        .tv-overlay > * { pointer-events: auto; }
+        .tv-overlay-info { flex: 1; min-width: 0; }
+        .tv-overlay-now {
+          font-size: 10px;
+          color: #3B82F6;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          display: flex; align-items: center; gap: 4px;
+          margin-bottom: 2px;
+        }
+        .tv-overlay-now i { font-size: 9px; }
+        .tv-overlay-title {
+          font-size: 13px;
+          font-weight: 600;
+          color: #fff;
+          text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .tv-expand-btn {
+          width: 32px; height: 32px; border-radius: 8px;
+          background: rgba(255,255,255,0.1);
+          border: 1px solid rgba(255,255,255,0.1);
+          color: rgba(255,255,255,0.8);
+          font-size: 13px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: all 0.2s;
+          backdrop-filter: blur(4px);
+        }
+        .tv-expand-btn:active { background: rgba(255,255,255,0.2); transform: scale(0.9); }
+
+        .tv-no-video {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 32px;
+          border-radius: var(--radius-md);
+          background: var(--surface-card);
+          border: 1px dashed var(--border);
+          color: var(--text-tertiary);
+          font-size: 13px;
+          margin-bottom: 10px;
+          z-index: 1;
+          position: relative;
+        }
+        .tv-no-video i { font-size: 28px; opacity: 0.4; }
+
+        .tv-channel-strip {
+          display: flex; align-items: center; gap: 12px;
+          padding: 10px 12px;
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
+          position: relative;
+          z-index: 1;
+        }
+        .tv-channel-avatar {
+          width: 36px; height: 36px; border-radius: 50%;
+          overflow: hidden; flex-shrink: 0;
+          background: var(--surface-elevated);
+          display: flex; align-items: center; justify-content: center;
+        }
+        .tv-channel-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .tv-channel-avatar i { font-size: 16px; color: #FF0000; }
+        .tv-channel-info { flex: 1; min-width: 0; }
+        .tv-channel-name { font-size: 13px; font-weight: 700; }
+        .tv-channel-meta { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
+        .tv-watch-btn {
+          flex-shrink: 0;
+          padding: 7px 14px;
+          border-radius: 8px;
+          background: linear-gradient(135deg, #3B82F6, #6366F1);
+          border: none;
+          color: #fff;
+          font-size: 11px;
+          font-weight: 700;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          transition: all 0.2s;
+        }
+        .tv-watch-btn:active { transform: scale(0.95); }
+
+                /* ===== PREMIUM RADIO CARD (compact) ===== */
         .rh-hero {
             position: relative;
             background: linear-gradient(180deg, rgba(232,168,56,0.06) 0%, rgba(15,15,15,0.5) 100%);
             border: 1px solid rgba(232,168,56,0.12);
             border-radius: var(--radius-xl);
-            padding: 20px 18px 16px;
+            padding: 14px 16px 12px;
             overflow: hidden;
             box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 0 80px rgba(232,168,56,0.04);
-            animation: rhFadeIn 0.6s ease;
-        }
-        @keyframes rhFadeIn {
-            from { opacity: 0; transform: translateY(16px); }
-            to { opacity: 1; transform: translateY(0); }
         }
         .rh-glow-1 {
             position: absolute; top: -80px; left: 50%; transform: translateX(-50%);
             width: 300px; height: 300px;
             background: radial-gradient(circle, rgba(232,168,56,0.12) 0%, transparent 70%);
             pointer-events: none;
-            animation: rhGlowPulse 4s ease-in-out infinite;
         }
         .rh-glow-2 {
             position: absolute; bottom: -60px; right: -60px;
             width: 200px; height: 200px;
             background: radial-gradient(circle, rgba(212,118,42,0.06) 0%, transparent 70%);
             pointer-events: none;
-            animation: rhGlowPulse 5s ease-in-out infinite reverse;
         }
-        @keyframes rhGlowPulse {
-            0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
-            50% { opacity: 1; transform: translateX(-50%) scale(1.15); }
-        }
-        .rh-glow-2 {
-            animation: rhGlowPulse2 5s ease-in-out infinite reverse;
-        }
-        @keyframes rhGlowPulse2 {
-            0%, 100% { opacity: 0.3; transform: scale(1); }
-            50% { opacity: 0.8; transform: scale(1.2); }
-        }
-
         .rh-top {
             display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 16px; position: relative; z-index: 1;
+            margin-bottom: 10px; position: relative; z-index: 1;
         }
         .rh-station {
-            display: flex; align-items: center; gap: 8px;
-            font-size: 13px; font-weight: 700;
+            display: flex; align-items: center; gap: 6px;
+            font-size: 12px; font-weight: 700;
         }
-        .rh-station i { color: var(--primary); font-size: 14px; }
-        .rh-badges { display: flex; align-items: center; gap: 8px; }
+        .rh-station i { color: var(--primary); font-size: 12px; }
+        .rh-badges { display: flex; align-items: center; gap: 6px; }
         .rh-live-badge {
-            display: flex; align-items: center; gap: 5px;
-            padding: 4px 10px; border-radius: 20px;
-            font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+            display: flex; align-items: center; gap: 4px;
+            padding: 3px 8px; border-radius: 20px;
+            font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
             transition: all 0.3s ease;
         }
         .rh-live-badge.live {
@@ -1347,52 +1547,31 @@ export default function AdminPage() {
             background: rgba(107,107,107,0.12); color: var(--text-tertiary);
         }
         .rh-live-dot {
-            width: 6px; height: 6px; border-radius: 50%;
+            width: 5px; height: 5px; border-radius: 50%;
         }
         .rh-live-badge.live .rh-live-dot {
             background: var(--success);
-            animation: livePulse 1.5s ease-in-out infinite;
         }
         .rh-live-badge.off .rh-live-dot {
             background: var(--text-tertiary);
         }
-        .rh-listener-badge {
-            display: flex; align-items: center; gap: 4px;
-            padding: 4px 10px; border-radius: 20px;
-            background: var(--surface); border: 1px solid var(--border);
-            font-size: 11px; font-weight: 600; color: var(--text-secondary);
-        }
-        .rh-listener-badge i { font-size: 10px; color: var(--primary); }
-
         .rh-main {
-            display: flex; align-items: center; gap: 18px;
-            margin-bottom: 14px; position: relative; z-index: 1;
+            display: flex; align-items: center; gap: 12px;
+            margin-bottom: 8px; position: relative; z-index: 1;
         }
         .rh-art-wrap {
             position: relative; flex-shrink: 0;
-            width: 100px; height: 100px;
+            width: 52px; height: 52px;
         }
         .rh-art-ring {
-            position: absolute; inset: -4px;
+            position: absolute; inset: -3px;
             border-radius: 50%;
-            border: 2px solid rgba(232,168,56,0.2);
-            animation: rhRingSpin 8s linear infinite;
-        }
-        @keyframes rhRingSpin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-        .rh-art-ring::before {
-            content: ''; position: absolute; top: -2px; left: 50%; transform: translateX(-50%);
-            width: 8px; height: 8px; border-radius: 50%;
-            background: var(--primary);
-            box-shadow: 0 0 12px rgba(232,168,56,0.6);
+            border: 1.5px solid rgba(232,168,56,0.2);
         }
         .rh-art {
             width: 100%; height: 100%;
             border-radius: 50%; overflow: hidden;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 2px rgba(232,168,56,0.1);
-            transition: all 0.5s ease;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 0 1.5px rgba(232,168,56,0.1);
             position: relative;
         }
         .rh-art.spinning {
@@ -1407,7 +1586,7 @@ export default function AdminPage() {
             width: 100%; height: 100%;
             background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
             display: flex; align-items: center; justify-content: center;
-            font-size: 38px; color: #fff;
+            font-size: 22px; color: #fff;
         }
         .rh-vinyl-lines {
             position: absolute; inset: 0; border-radius: 50%;
@@ -1415,116 +1594,82 @@ export default function AdminPage() {
             pointer-events: none; z-index: 2;
         }
         .rh-eq {
-            position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
-            display: flex; gap: 3px; align-items: flex-end;
+            position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 2px; align-items: flex-end;
             z-index: 3;
         }
         .rh-eq span {
-            width: 4px; background: var(--primary); border-radius: 2px;
+            width: 3px; background: var(--primary); border-radius: 2px;
             animation: rhEqBounce 0.6s ease-in-out infinite alternate;
         }
-        .rh-eq span:nth-child(1) { height: 10px; animation-delay: 0s; }
-        .rh-eq span:nth-child(2) { height: 16px; animation-delay: 0.15s; }
-        .rh-eq span:nth-child(3) { height: 12px; animation-delay: 0.3s; }
-        .rh-eq span:nth-child(4) { height: 8px; animation-delay: 0.45s; }
+        .rh-eq span:nth-child(1) { height: 8px; animation-delay: 0s; }
+        .rh-eq span:nth-child(2) { height: 12px; animation-delay: 0.15s; }
+        .rh-eq span:nth-child(3) { height: 10px; animation-delay: 0.3s; }
+        .rh-eq span:nth-child(4) { height: 6px; animation-delay: 0.45s; }
         @keyframes rhEqBounce {
             from { transform: scaleY(0.5); }
             to { transform: scaleY(1); }
         }
-
-        .rh-info { flex: 1; min-width: 0; }
+        .rh-info {
+            flex: 1; min-width: 0;
+        }
         .rh-track-name {
-            font-size: 18px; font-weight: 800;
-            letter-spacing: -0.3px;
+            font-size: 14px; font-weight: 700;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .rh-track-artist {
-            font-size: 14px; color: var(--primary-light);
-            margin-top: 4px;
+            font-size: 11px; color: var(--text-secondary);
+            margin-top: 2px;
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .rh-source {
-            font-size: 11px; color: var(--text-tertiary);
-            margin-top: 6px; display: flex; align-items: center; gap: 4px;
-        }
-        .rh-source i { color: var(--primary); font-size: 10px; }
-
-        .rh-progress-wrap {
-            margin-bottom: 14px; position: relative; z-index: 1;
-        }
-        .rh-progress-bar {
-            width: 100%; height: 4px;
-            background: rgba(255,255,255,0.06);
-            border-radius: 3px; overflow: hidden;
-        }
-        .rh-progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end));
-            border-radius: 3px;
-            transition: width 1s ease;
-            position: relative;
-        }
-        .rh-progress-glow {
-            position: absolute; right: 0; top: -2px;
-            width: 8px; height: 8px; border-radius: 50%;
-            background: var(--primary);
-            box-shadow: 0 0 12px rgba(232,168,56,0.6);
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .rh-progress-bar:hover .rh-progress-glow { opacity: 1; }
-        .rh-progress-time {
-            display: flex; justify-content: space-between;
-            font-size: 11px; color: var(--text-tertiary);
-            margin-top: 4px; font-weight: 500;
-        }
-
-        .rh-actions {
-            display: flex; align-items: center; justify-content: center;
-            gap: 20px; position: relative; z-index: 1;
-            margin-bottom: 12px;
-        }
         .rh-play-btn {
-            width: 56px; height: 56px; border-radius: 50%;
+            width: 40px; height: 40px; border-radius: 50%;
             background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
-            border: none; color: #fff; font-size: 22px;
+            border: none; color: #fff; font-size: 14px;
             display: flex; align-items: center; justify-content: center;
-            cursor: pointer; position: relative;
-            box-shadow: 0 6px 24px rgba(232,168,56,0.35);
+            cursor: pointer; position: relative; flex-shrink: 0;
+            box-shadow: 0 4px 16px rgba(232,168,56,0.3);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .rh-play-btn:active { transform: scale(0.88); }
         .rh-play-btn.playing {
-            box-shadow: 0 6px 28px rgba(232,168,56,0.4), 0 0 40px rgba(232,168,56,0.1);
+            box-shadow: 0 4px 20px rgba(232,168,56,0.35);
         }
         .rh-play-ring {
-            position: absolute; inset: -6px; border-radius: 50%;
+            position: absolute; inset: -4px; border-radius: 50%;
             border: 1.5px solid rgba(232,168,56,0.15);
-            animation: rhRingPulse 2s ease-in-out infinite;
         }
         .rh-play-btn.playing .rh-play-ring {
             border-color: rgba(74,222,128,0.3);
         }
-        @keyframes rhRingPulse {
-            0%, 100% { transform: scale(1); opacity: 0.5; }
-            50% { transform: scale(1.1); opacity: 0; }
-        }
-        .rh-shuffle-btn, .rh-expand-btn {
-            width: 40px; height: 40px; border-radius: 50%;
-            background: var(--surface); border: 1px solid var(--border);
-            color: var(--text-secondary); font-size: 14px;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer; transition: all 0.2s ease;
-        }
-        .rh-shuffle-btn:active, .rh-expand-btn:active {
-            background: var(--surface-elevated); transform: scale(0.88);
-        }
-
-        .rh-embed {
+        .rh-actions-row {
+            display: flex; align-items: center; gap: 8px;
             position: relative; z-index: 1;
-            border-radius: 8px; overflow: hidden;
-            border: 1px solid var(--border);
         }
+        .rh-source {
+            font-size: 10px; color: var(--text-tertiary);
+            display: flex; align-items: center; gap: 3px;
+            flex: 1; min-width: 0;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .rh-source i { color: var(--primary); font-size: 9px; }
+        .rh-listener-badge {
+            display: flex; align-items: center; gap: 3px;
+            padding: 2px 8px; border-radius: 20px;
+            background: var(--surface); border: 1px solid var(--border);
+            font-size: 10px; font-weight: 600; color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .rh-listener-badge i { font-size: 9px; color: var(--primary); }
+        .rh-expand-small {
+            width: 28px; height: 28px; border-radius: 50%;
+            background: var(--surface); border: 1px solid var(--border);
+            color: var(--text-secondary); font-size: 11px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; flex-shrink: 0; transition: all 0.2s ease;
+        }
+        .rh-expand-small:active { background: var(--surface-elevated); transform: scale(0.88); }.feed-section { padding: 0 var(--section-px, 16px) 16px; }
+        .feed-section { --section-px: 16px; }
       `}</style>
 
       <ToastBridge />
@@ -1622,94 +1767,135 @@ export default function AdminPage() {
         {/* CONTENT SCROLL */}
         <div className="content-scroll">
 
-          {/* PREMIUM RADIO HERO CARD */}
-          <div className="rh-hero" style={{ margin: "0 16px 12px" }}>
-            {/* Animated background glow layers */}
-            <div className="rh-glow-1"></div>
-            <div className="rh-glow-2"></div>
-
-            {/* Top row: station name + badges */}
-            <div className="rh-top">
-              <div className="rh-station">
-                <i className="fas fa-tower-broadcast"></i>
-                <span>{radioNP?.station?.name || "Radio Station"}</span>
+          {/* ─── TV HERO CARD ─── */}
+          <section className="feed-section">
+            <div className="tv-top-wrap">
+              <div className="tv-top">
+                <div className="tv-station">
+                  <i className="fas fa-tv"></i>
+                  <span>Church TV</span>
+                </div>
+                <div className="tv-badges">
+                  <div className={`tv-live-badge ${tvCurrentVideo ? "live" : "off"}`}>
+                    <span className="tv-live-dot"></span>
+                    {tvCurrentVideo ? "On Air" : "Off Air"}
+                  </div>
+                  {tvChannel && (
+                    <div className="tv-sub-badge">
+                      <i className="fas fa-users"></i>
+                      {tvChannel.subscriberCount || "—"}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="rh-badges">
-                <div className={`rh-live-badge ${isAdminPlaying || radioBackendRunning ? "live" : "off"}`}>
-                  <span className="rh-live-dot"></span>
-                  {isAdminPlaying || radioBackendRunning ? "Live" : "Off Air"}
+
+              {tvCurrentVideo ? (
+                <div ref={tvPlayerTargetRef} className="tv-player-container">
+                  <div className="tv-overlay">
+                    <div className="tv-overlay-info">
+                      <div className="tv-overlay-now">
+                        <i className="fas fa-tv"></i>
+                        Now Playing
+                      </div>
+                      <div className="tv-overlay-title">{tvCurrentVideo.title}</div>
+                    </div>
+                    <button className="tv-expand-btn" onClick={() => router.push("/admin/tv")} title="Manage TV">
+                      <i className="fas fa-cog"></i>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="tv-no-video">
+                  <i className="fas fa-video-slash"></i>
+                  <span>TV is off air</span>
+                </div>
+              )}
+
+              {tvChannel && (
+                <div className="tv-channel-strip">
+                  <div className="tv-channel-avatar">
+                    {tvChannel.thumbnail ? (
+                      <img src={tvChannel.thumbnail} alt="" />
+                    ) : (
+                      <i className="fab fa-youtube"></i>
+                    )}
+                  </div>
+                  <div className="tv-channel-info">
+                    <div className="tv-channel-name">{tvChannel.title}</div>
+                    <div className="tv-channel-meta">{tvVideos.length} videos</div>
+                  </div>
+                  <button className="tv-watch-btn" onClick={() => router.push("/admin/tv")}>
+                    <i className="fas fa-cog"></i> Manage
+                  </button>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* PREMIUM RADIO HERO CARD */}
+          <section className="feed-section">
+            <div className="rh-hero">
+              <div className="rh-glow-1"></div>
+              <div className="rh-glow-2"></div>
+
+              <div className="rh-top">
+                <div className="rh-station">
+                  <i className="fas fa-tower-broadcast"></i>
+                  <span>{radioNP?.station?.name || "Radio Station"}</span>
+                </div>
+                <div className="rh-badges">
+                  <div className={`rh-live-badge ${isAdminPlaying || radioBackendRunning ? "live" : "off"}`}>
+                    <span className="rh-live-dot"></span>
+                    {isAdminPlaying || radioBackendRunning ? "Live" : "Off Air"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rh-main">
+                <div className="rh-art-wrap">
+                  <div className="rh-art-ring"></div>
+                  <div className={`rh-art ${isAdminPlaying ? "spinning" : ""}`}>
+                    {nowPlaying.albumArt ? (
+                      <img src={nowPlaying.albumArt} alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    ) : (
+                      <div className="rh-art-fallback">
+                        <i className="fas fa-radio"></i>
+                      </div>
+                    )}
+                  </div>
+                  {isAdminPlaying && (
+                    <div className="rh-eq">
+                      <span></span><span></span><span></span><span></span>
+                    </div>
+                  )}
+                  {isAdminPlaying && <div className="rh-vinyl-lines"></div>}
+                </div>
+
+                <div className="rh-info">
+                  <div className="rh-track-name">{nowPlaying.title || "Station Offline"}</div>
+                  <div className="rh-track-artist">{nowPlaying.artist || "Not currently playing"}</div>
+                </div>
+
+                <button className={`rh-play-btn ${isAdminPlaying ? "playing" : ""}`} onClick={toggleAdminPlay}>
+                  <i className={`fas ${isAdminPlaying ? "fa-pause" : "fa-play"}`}></i>
+                  <div className="rh-play-ring"></div>
+                </button>
+              </div>
+
+              <div className="rh-actions-row">
+                <div className="rh-source">
+                  <i className="fas fa-radio"></i> {radioNP?.station?.name || "Radio"}
                 </div>
                 <div className="rh-listener-badge">
                   <i className="fas fa-headphones"></i>
                   {liveListeners}
                 </div>
+                <button className="rh-expand-small" onClick={() => router.push("/admin/radio")}>
+                  <i className="fas fa-external-link-alt"></i>
+                </button>
               </div>
             </div>
-
-            {/* Main content: album art + info */}
-            <div className="rh-main">
-              <div className="rh-art-wrap">
-                <div className="rh-art-ring"></div>
-                <div className={`rh-art ${isAdminPlaying ? "spinning" : ""}`}>
-                  {nowPlaying.albumArt ? (
-                    <img src={nowPlaying.albumArt} alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                  ) : (
-                    <div className="rh-art-fallback">
-                      <i className="fas fa-radio"></i>
-                    </div>
-                  )}
-                </div>
-                {/* Equalizer overlay when playing */}
-                {isAdminPlaying && (
-                  <div className="rh-eq">
-                    <span></span><span></span><span></span><span></span>
-                  </div>
-                )}
-                {/* Spinning vinyl lines when playing */}
-                {isAdminPlaying && <div className="rh-vinyl-lines"></div>}
-              </div>
-
-              <div className="rh-info">
-                <div className="rh-track-name">{nowPlaying.title || "Station Offline"}</div>
-                <div className="rh-track-artist">{nowPlaying.artist || "Not currently playing"}</div>
-                <div className="rh-source">
-                  <i className="fas fa-radio"></i> {radioNP?.station?.name || "Radio"}
-                </div>
-              </div>
-            </div>
-
-            {/* Progress bar */}
-            <div className="rh-progress-wrap">
-              <div className="rh-progress-bar">
-                <div className="rh-progress-fill" style={{ width: `${isAdminPlaying && nowPlaying.duration > 0 ? Math.min(100, (nowPlaying.elapsed / nowPlaying.duration) * 100) : 0}%` }}>
-                  <div className="rh-progress-glow"></div>
-                </div>
-              </div>
-              <div className="rh-progress-time">
-                <span>{nowPlaying.duration > 0 ? formatTime(nowPlaying.elapsed) : "0:00"}</span>
-                <span>{nowPlaying.duration > 0 ? formatTime(nowPlaying.duration) : "0:00"}</span>
-              </div>
-            </div>
-
-            {/* Controls row */}
-            <div className="rh-actions">
-              <button className="rh-shuffle-btn" title="Shuffle">
-                <i className="fas fa-shuffle"></i>
-              </button>
-              <button className={`rh-play-btn ${isAdminPlaying ? "playing" : ""}`} onClick={toggleAdminPlay}>
-                <i className={`fas ${isAdminPlaying ? "fa-pause" : "fa-play"}`}></i>
-                <div className="rh-play-ring"></div>
-              </button>
-              <button className="rh-expand-btn" onClick={() => router.push("/admin/radio")} title="Open Radio">
-                <i className="fas fa-expand"></i>
-              </button>
-            </div>
-
-            {/* AzuraCast embed below */}
-            <div className="rh-embed">
-              <iframe src="https://azuracast.histoview.co.ke/public/turningpoint_church/embed?theme=dark" style={{ width: "100%", height: 120, border: "none", display: "block", borderRadius: 8 }}></iframe>
-            </div>
-          </div>
+          </section>
 
           {/* STAT CARDS */}
           <div className="stats-grid">

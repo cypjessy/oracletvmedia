@@ -1438,12 +1438,12 @@ export default function TVPage() {
           position: relative;
           width: 100%;
           aspect-ratio: 16 / 9;
-          max-height: 50vh;
+          max-height: 70vh;
           background: #000;
           overflow: hidden;
         }
         @media (max-width: 480px) {
-          .tv-player-outer { max-height: 45vh; min-height: 240px; }
+          .tv-player-outer { max-height: 60vh; min-height: 240px; }
         }
         .tv-player-outer .plyr { width: 100%; height: 100%; }
         .tv-player-outer .plyr__video-wrapper { height: 100%; }
