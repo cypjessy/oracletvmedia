@@ -10,6 +10,11 @@ import { createContext, useContext, useRef, useState, useCallback, useEffect, ty
 let mcPlugin: any = null;
 let mcPromise: Promise<boolean> | null = null;
 
+// Lazy-loaded Capacitor Media Session plugin for better native integration
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let mediaSessionPlugin: any = null;
+let mediaSessionPromise: Promise<boolean> | null = null;
+
 async function loadMusicControls(): Promise<boolean> {
   if (!mcPromise) {
     mcPromise = (async () => {
@@ -30,8 +35,35 @@ async function loadMusicControls(): Promise<boolean> {
   return mcPromise;
 }
 
+async function loadMediaSession(): Promise<boolean> {
+  if (!mediaSessionPromise) {
+    mediaSessionPromise = (async () => {
+      try {
+        const { Capacitor } = await import("@capacitor/core");
+        if (!Capacitor.isNativePlatform()) return false;
+      } catch {
+        return false;
+      }
+      try {
+        const mod = await import("@jofr/capacitor-media-session");
+        // The plugin exports MediaSession as a named export
+        mediaSessionPlugin = mod.MediaSession || mod.default;
+        return true;
+      } catch (err) {
+        console.error('[MediaSession] Failed to load:', err);
+        return false;
+      }
+    })();
+  }
+  return mediaSessionPromise;
+}
+
 function getMC() {
   return mcPlugin?.CapacitorMusicControls ?? null;
+}
+
+function getMediaSession() {
+  return mediaSessionPlugin ?? null;
 }
 
 // ============================================================
@@ -81,6 +113,19 @@ async function updatePlaying(isPlaying: boolean) {
     await mc.updateIsPlaying({ isPlaying });
   } catch {
     // Plugin not available
+  }
+  
+  // Also update native Media Session
+  try {
+    const ms = getMediaSession();
+    if (ms && typeof ms.setPlaybackState === 'function') {
+      await ms.setPlaybackState({
+        isPlaying,
+        position: 0, // Live stream - no position tracking
+      });
+    }
+  } catch (msErr) {
+    console.error('[MediaSession] Failed to update playback state:', msErr);
   }
 }
 
@@ -154,21 +199,32 @@ export function AudioProvider({ children }: { children: ReactNode }) {
           if (url) {
             const audio = audioRef.current;
             if (audio) {
-              const cacheBust = url.includes("?") ? `&_=${Date.now()}` : `?_=${Date.now()}`;
-              audio.src = url + cacheBust;
-              audio.load();
-              audio.play().catch(() => {
-                setTimeout(() => {
-                  audio.play().catch(() => {});
-                }, 300);
-              });
+              try {
+                const cacheBust = url.includes("?") ? `&_=${Date.now()}` : `?_=${Date.now()}`;
+                audio.src = url + cacheBust;
+                audio.load();
+                audio.play().catch((err) => {
+                  console.error('[Audio] Controls play failed:', err);
+                  setTimeout(() => {
+                    audio.play().catch((err2) => {
+                      console.error('[Audio] Controls retry failed:', err2);
+                    });
+                  }, 300);
+                });
+              } catch (playErr) {
+                console.error('[Audio] Controls play exception:', playErr);
+              }
             }
             setIsPlaying(true);
           }
           break;
         }
         case "music-controls-pause":
-          audioRef.current?.pause();
+          try {
+            audioRef.current?.pause();
+          } catch (err) {
+            console.error('[Audio] Controls pause exception:', err);
+          }
           setIsPlaying(false);
           break;
         case "music-controls-destroy":
@@ -176,9 +232,13 @@ export function AudioProvider({ children }: { children: ReactNode }) {
           {
             const audio = audioRef.current;
             if (audio) {
-              audio.pause();
-              audio.removeAttribute("src");
-              audio.load();
+              try {
+                audio.pause();
+                audio.removeAttribute("src");
+                audio.load();
+              } catch (err) {
+                console.error('[Audio] Controls destroy exception:', err);
+              }
             }
             setIsPlaying(false);
             setCurrentStreamUrl(null);
@@ -187,26 +247,36 @@ export function AudioProvider({ children }: { children: ReactNode }) {
           break;
         case "music-controls-media-button":
           // Headphone button single press — toggle play/pause
-          if (isPlayingRef.current) {
-            audioRef.current?.pause();
-            setIsPlaying(false);
-          } else {
-            const url = currentStreamUrlRef.current;
-            if (url) {
-              const audio = audioRef.current;
-              if (audio) {
-                const cacheBust = url.includes("?") ? `&_=${Date.now()}` : `?_=${Date.now()}`;
-                audio.src = url + cacheBust;
-                audio.load();
-                audio.play().catch(() => {});
+          try {
+            if (isPlayingRef.current) {
+              audioRef.current?.pause();
+              setIsPlaying(false);
+            } else {
+              const url = currentStreamUrlRef.current;
+              if (url) {
+                const audio = audioRef.current;
+                if (audio) {
+                  try {
+                    const cacheBust = url.includes("?") ? `&_=${Date.now()}` : `?_=${Date.now()}`;
+                    audio.src = url + cacheBust;
+                    audio.load();
+                    audio.play().catch((err) => {
+                      console.error('[Audio] Media button play failed:', err);
+                    });
+                  } catch (playErr) {
+                    console.error('[Audio] Media button play exception:', playErr);
+                  }
+                }
+                setIsPlaying(true);
               }
-              setIsPlaying(true);
             }
+          } catch (err) {
+            console.error('[Audio] Media button exception:', err);
           }
           break;
       }
-    } catch {
-      // Native control event failure — ignore to prevent crash
+    } catch (err) {
+      console.error('[Audio] Controls action exception:', err);
     }
   }, []);
 
@@ -254,6 +324,24 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       // If currently playing, update the notification with the new metadata
       if (isPlayingRef.current) {
         await createNotification(title, artist, albumArt);
+        
+        // Also update native Media Session API for better Android integration
+        try {
+          await loadMediaSession();
+          const ms = getMediaSession();
+          if (ms && typeof ms.setMetadata === 'function') {
+            await ms.setMetadata({
+              title: title || 'Kingdom Seekers Radio',
+              artist: artist || 'Kingdom Seekers Church Nakuru',
+              album: 'Radio Stream',
+              artwork: albumArt ? [{ src: albumArt, sizes: '512x512', type: 'image/jpeg' }] : [],
+              duration: -1, // Live stream
+              isLive: true,
+            });
+          }
+        } catch (msErr) {
+          console.error('[MediaSession] Failed to set metadata:', msErr);
+        }
       }
     } catch {
       // Media session update is optional — ignore failures
@@ -271,63 +359,96 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   // Create a persistent <audio> element outside the React tree
   // so it survives any re-renders or hydration mismatches.
   useEffect(() => {
-    const audio = new Audio();
-    audio.style.display = "none";
-    audio.preload = "none";
+    try {
+      const audio = new Audio();
+      audio.style.display = "none";
+      audio.preload = "none";
+      
+      // Android-specific: Set crossOrigin to handle CORS issues
+      audio.crossOrigin = "anonymous";
+      
+      // Android-specific: Prevent autoplay restrictions
+      audio.setAttribute("playsinline", "true");
+      audio.setAttribute("webkit-playsinline", "true");
 
-    const onPlay = () => {
-      setIsPlaying(true);
-    };
-    const onPause = () => {
-      setIsPlaying(false);
-      updatePlaying(false);
-    };
-    const onEnded = () => {
-      setIsPlaying(false);
-      updatePlaying(false);
-    };
-    const onError = () => {
-      // Stream might just be connecting — don't update state
-    };
+      const onPlay = () => {
+        setIsPlaying(true);
+      };
+      const onPause = () => {
+        setIsPlaying(false);
+        updatePlaying(false);
+      };
+      const onEnded = () => {
+        setIsPlaying(false);
+        updatePlaying(false);
+      };
+      const onError = (e: Event) => {
+        // Log error details for debugging
+        const audioEl = e.target as HTMLAudioElement;
+        console.error('[Audio] Stream error:', {
+          errorCode: audioEl.error?.code,
+          errorMessage: audioEl.error?.message,
+          src: audioEl.src,
+          networkState: audioEl.networkState,
+          readyState: audioEl.readyState,
+        });
+        // Don't update state on error - stream might reconnect
+      };
 
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("pause", onPause);
-    audio.addEventListener("ended", onEnded);
-    audio.addEventListener("error", onError);
+      audio.addEventListener("play", onPlay);
+      audio.addEventListener("pause", onPause);
+      audio.addEventListener("ended", onEnded);
+      audio.addEventListener("error", onError);
 
-    document.body.appendChild(audio);
-    audioRef.current = audio;
+      document.body.appendChild(audio);
+      audioRef.current = audio;
 
-    return () => {
-      audio.removeEventListener("play", onPlay);
-      audio.removeEventListener("pause", onPause);
-      audio.removeEventListener("ended", onEnded);
-      audio.removeEventListener("error", onError);
-      audio.pause();
-      audio.removeAttribute("src");
-      audio.load();
-      audio.remove();
-      audioRef.current = null;
-      destroyNotification();
-    };
+      return () => {
+        try {
+          audio.removeEventListener("play", onPlay);
+          audio.removeEventListener("pause", onPause);
+          audio.removeEventListener("ended", onEnded);
+          audio.removeEventListener("error", onError);
+          audio.pause();
+          audio.removeAttribute("src");
+          audio.load();
+          audio.remove();
+        } catch (cleanupErr) {
+          console.error('[Audio] Cleanup exception:', cleanupErr);
+        }
+        audioRef.current = null;
+        destroyNotification();
+      };
+    } catch (err) {
+      console.error('[Audio] Failed to create audio element:', err);
+    }
   }, []);
 
   const play = useCallback((url: string, stationId?: number) => {
     const audio = audioRef.current;
     if (!audio || !url) return;
-    const cacheBust = url.includes("?") ? `&_=${Date.now()}` : `?_=${Date.now()}`;
-    audio.src = url + cacheBust;
-    audio.load();
-    const p = audio.play();
-    if (p !== undefined) {
-      p.catch(() => {
-        setTimeout(() => {
-          audio.play().catch(() => {});
-        }, 300);
-      });
+    
+    try {
+      const cacheBust = url.includes("?") ? `&_=${Date.now()}` : `?_=${Date.now()}`;
+      audio.src = url + cacheBust;
+      audio.load();
+      
+      const p = audio.play();
+      if (p !== undefined) {
+        p.catch((err) => {
+          console.error('[Audio] Play failed:', err);
+          setTimeout(() => {
+            audio.play().catch((err2) => {
+              console.error('[Audio] Retry play failed:', err2);
+            });
+          }, 300);
+        });
+      }
+      setCurrentStreamUrl(url);
+      setCurrentStationId(stationId ?? null);
+    } catch (err) {
+      console.error('[Audio] Play exception:', err);
     }
-    setCurrentStreamUrl(url);
-    setCurrentStationId(stationId ?? null);
   }, []);
 
   const pause = useCallback(() => {
@@ -349,29 +470,40 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     const audio = audioRef.current;
     if (!audio || !url) return;
 
-    if (audio.src && audio.src !== "" && !audio.paused) {
-      // Currently playing — pause
-      audio.pause();
-    } else {
-      // Force a fresh stream connection with cache busting.
-      const cacheBust = url.includes("?") ? `&_=${Date.now()}` : `?_=${Date.now()}`;
-      audio.src = url + cacheBust;
-      audio.load();
+    try {
+      if (audio.src && audio.src !== "" && !audio.paused) {
+        // Currently playing — pause
+        audio.pause();
+      } else {
+        // Force a fresh stream connection with cache busting.
+        const cacheBust = url.includes("?") ? `&_=${Date.now()}` : `?_=${Date.now()}`;
+        audio.src = url + cacheBust;
+        audio.load();
 
-      const attemptPlay = () => {
-        const p = audio.play();
-        if (p !== undefined) {
-          p.catch(() => {
-            setTimeout(() => {
-              audio.play().catch(() => {});
-            }, 300);
-          });
-        }
-      };
-      attemptPlay();
+        const attemptPlay = () => {
+          try {
+            const p = audio.play();
+            if (p !== undefined) {
+              p.catch((err) => {
+                console.error('[Audio] Toggle play failed:', err);
+                setTimeout(() => {
+                  audio.play().catch((err2) => {
+                    console.error('[Audio] Toggle retry failed:', err2);
+                  });
+                }, 300);
+              });
+            }
+          } catch (playErr) {
+            console.error('[Audio] Toggle play exception:', playErr);
+          }
+        };
+        attemptPlay();
 
-      setCurrentStreamUrl(url);
-      setCurrentStationId(stationId ?? null);
+        setCurrentStreamUrl(url);
+        setCurrentStationId(stationId ?? null);
+      }
+    } catch (err) {
+      console.error('[Audio] Toggle exception:', err);
     }
   }, []);
 

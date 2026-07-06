@@ -79,8 +79,9 @@ export default function PlyrPlayer({
 
         const timeHandler = (() => {
           let last = -1;
-          return (e: CustomEvent) => {
-            const t = e.detail?.plyr?.currentTime;
+          return () => {
+            // Use player.currentTime directly instead of event detail
+            const t = plyrRef.current?.currentTime;
             if (typeof t === "number" && Math.abs(t - last) >= 0.5) {
               last = t;
               onTimeUpdateRef.current?.(t);

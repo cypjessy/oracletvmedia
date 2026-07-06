@@ -122,6 +122,9 @@ export default function AdminPage() {
   const tvPlayer = useTvPlayer();
   const [tvUserState, setTvUserState] = useState<UserTvState | null>(null);
   const hasInteractedWithTv = useRef(false);
+  const [tvStartCountdown, setTvStartCountdown] = useState(10);
+  const lastTvSeekRef = useRef(0);
+  const lastTvIndexRef = useRef(0);
 
   const tvCurrentVideo = tvUserState && tvUserState.playlist.length > 0
     ? tvVideos.find((v) => v.id === tvUserState.playlist[tvUserState.currentIndex]) ?? null
@@ -140,6 +143,79 @@ export default function AdminPage() {
       tvPlayer.play(tvCurrentVideo.id, tvUserState?.currentSeek || undefined);
     }
   }, [tvCurrentVideo?.id, tvPlayer.currentVideoId, tvPlayer, tvUserState?.currentSeek]);
+
+  // Sync index ref when state changes
+  useEffect(() => {
+    if (tvUserState) {
+      lastTvIndexRef.current = tvUserState.currentIndex;
+    }
+  }, [tvUserState?.currentIndex]);
+
+  // Track current seek for periodic Firestore saves
+  const handleTvTimeUpdate = useCallback((time: number) => {
+    lastTvSeekRef.current = time;
+    // Log every 10 seconds to avoid spam
+    if (Math.floor(time) % 10 === 0) {
+      console.log('[Admin Dashboard TV Time Update]', { time, currentIndex: lastTvIndexRef.current });
+    }
+  }, []);
+
+  // Keep callbacks in sync with latest versions
+  useEffect(() => {
+    tvPlayer.setCallbacks({
+      onTimeUpdate: handleTvTimeUpdate,
+    });
+  }, [handleTvTimeUpdate, tvPlayer]);
+
+  /* Save current progress to Firestore (used by interval + cleanup) */
+  const saveTvProgress = useCallback(() => {
+    const uid = auth.currentUser?.uid;
+    const seek = lastTvSeekRef.current;
+    const index = lastTvIndexRef.current;
+    console.log('[Admin Dashboard TV Progress] Saving:', { uid, index, seek });
+    if (uid && seek > 0) {
+      updateUserTvProgress(uid, index, seek).catch((err) => {
+        console.error('[Admin Dashboard TV Progress] Failed to save:', err);
+      });
+    }
+  }, []);
+
+  /* Periodically save seek position (every 5s) */
+  useEffect(() => {
+    if (!tvUserState || !auth.currentUser?.uid) return;
+    const interval = setInterval(saveTvProgress, 5000);
+    return () => {
+      clearInterval(interval);
+      // Save on unmount/cleanup as well
+      saveTvProgress();
+    };
+  }, [tvUserState?.currentIndex, saveTvProgress]);
+
+  /* Save on page unload / tab hide */
+  useEffect(() => {
+    const handleUnload = () => saveTvProgress();
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") saveTvProgress();
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("beforeunload", handleUnload);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [saveTvProgress]);
+
+  // Countdown timer on Start TV button (prevents premature clicks while video preloads)
+  useEffect(() => {
+    setTvStartCountdown(10);
+    const t = setInterval(() => {
+      setTvStartCountdown((prev) => {
+        if (prev <= 1) { clearInterval(t); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, []);
 
   /* Start TV — resume saved progress, or advance if already interacted */
   const handleStartTv = useCallback(() => {
@@ -177,7 +253,8 @@ export default function AdminPage() {
     } else {
       const resumeIndex = savedSeek > 0 && savedVideo ? savedIndex : 0;
       const resumeSeek = resumeIndex === savedIndex ? savedSeek : 0;
-      if (uid) updateUserTvProgress(uid, resumeIndex, resumeSeek);
+      console.log('[Admin Dashboard Start TV] Resuming:', { resumeIndex, resumeSeek, videoTitle: savedVideo?.title });
+      // DON'T write to Firestore on resume - let the interval save actual progress
       setTvUserState((prev) => prev ? { ...prev, currentIndex: resumeIndex, currentSeek: resumeSeek } : prev);
     }
   }, [tvCurrentVideo, tvUserState, tvVideos]);
@@ -1336,6 +1413,7 @@ export default function AdminPage() {
           position: relative; z-index: 1;
         }
         .tv-start-btn:active { transform: scale(0.97); }
+        .tv-start-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
         .tv-start-btn i { font-size: 13px; }
         .tv-start-hint { font-size: 10px; color: var(--text-tertiary); text-align: center; padding: 4px 16px 0; opacity: 0.7; }
         .tv-next-slot {
@@ -1693,9 +1771,9 @@ export default function AdminPage() {
                 </div>
               )}
 
-              <button className="tv-start-btn" onClick={handleStartTv} title="Starts TV or skips to next if already playing">
+              <button className="tv-start-btn" onClick={handleStartTv} title={tvStartCountdown > 0 ? `Ready in ${tvStartCountdown}s` : "Starts TV or skips to next if already playing"} disabled={tvStartCountdown > 0}>
                 <i className="fas fa-play"></i>
-                <span>Start TV</span>
+                <span>{tvStartCountdown > 0 ? `Starting in ${tvStartCountdown}s` : 'Start TV'}</span>
               </button>
               <div className="tv-start-hint">Starts TV · Skips to next if already playing</div>
 

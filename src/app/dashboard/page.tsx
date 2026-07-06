@@ -435,6 +435,7 @@ export default function DashboardPage() {
   const [tvLoading, setTvLoading] = useState(true);
   const [showEndCard, setShowEndCard] = useState(false);
   const [nextTvVideo, setNextTvVideo] = useState<YouTubeVideo | null>(null);
+  const [tvStartCountdown, setTvStartCountdown] = useState(10);
   const lastTvSeekRef = useRef(0);
   const lastTvIndexRef = useRef(0);
   const tvPlayerTargetRef = useRef<HTMLDivElement>(null);
@@ -455,6 +456,18 @@ export default function DashboardPage() {
       lastTvIndexRef.current = tvUserState.currentIndex;
     }
   }, [tvUserState?.currentIndex]);
+
+  // Countdown timer on Start TV button (prevents premature clicks while video preloads)
+  useEffect(() => {
+    setTvStartCountdown(10);
+    const t = setInterval(() => {
+      setTvStartCountdown((prev) => {
+        if (prev <= 1) { clearInterval(t); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, []);
 
   // Register portal target for the global player overlay
   useEffect(() => {
@@ -698,7 +711,8 @@ export default function DashboardPage() {
         const next = tvVideos.find((v) => v.id === tvUserState.playlist[nextIdx]) ?? null;
         if (next) setNextTvVideo(next);
       }
-      if (uid) updateUserTvProgress(uid, resumeIndex, resumeSeek);
+      console.log('[Dashboard Start TV] Resuming:', { resumeIndex, resumeSeek, videoTitle: savedVideo?.title });
+      // DON'T write to Firestore on resume - let the interval save actual progress
       setTvUserState((prev) => prev ? { ...prev, currentIndex: resumeIndex, currentSeek: resumeSeek } : prev);
     }
   }, [tvCurrentVideo, tvUserState, tvVideos, router]);
@@ -736,6 +750,10 @@ export default function DashboardPage() {
   /* Track current time for periodic Firestore saves */
   const handleTvTimeUpdate = useCallback((time: number) => {
     lastTvSeekRef.current = time;
+    // Log every 10 seconds to avoid spam
+    if (Math.floor(time) % 10 === 0) {
+      console.log('[Dashboard TV Time Update]', { time, currentIndex: lastTvIndexRef.current });
+    }
   }, []);
 
   // Keep callbacks in sync with latest versions (defined after advanceTvVideo/handleTvTimeUpdate)
@@ -749,8 +767,13 @@ export default function DashboardPage() {
   /* Save current progress to Firestore (used by interval + cleanup) */
   const saveTvProgress = useCallback(() => {
     const uid = auth.currentUser?.uid;
-    if (uid && lastTvSeekRef.current > 0) {
-      updateUserTvProgress(uid, lastTvIndexRef.current, lastTvSeekRef.current);
+    const seek = lastTvSeekRef.current;
+    const index = lastTvIndexRef.current;
+    console.log('[Dashboard TV Progress] Saving:', { uid, index, seek });
+    if (uid && seek > 0) {
+      updateUserTvProgress(uid, index, seek).catch((err) => {
+        console.error('[Dashboard TV Progress] Failed to save:', err);
+      });
     }
   }, []);
 
@@ -792,10 +815,20 @@ export default function DashboardPage() {
         const { App } = AppModule;
         App.addListener("appStateChange", (state) => {
           if (state.isActive) {
+            console.log('[Dashboard App Resume] App came back to foreground');
+            // Save any unsaved progress BEFORE re-fetching
+            saveTvProgress();
             const uid = auth.currentUser?.uid;
             if (uid) {
-              // Re-fetch TV state from Firestore to pick up any changes from other tabs/pages
-              getUserTvState(uid).then((s) => setTvUserState(s));
+              getUserTvState(uid).then((s) => {
+                console.log('[Dashboard App Resume] Fetched state:', { index: s.currentIndex, seek: s.currentSeek });
+                // Only update if we don't have active playback
+                if (!tvCurrentVideo || !hasInteractedWithTv.current) {
+                  setTvUserState(s);
+                } else {
+                  console.log('[Dashboard App Resume] Skipping state update - video is actively playing');
+                }
+              });
             }
           }
         }).then((handler) => {
@@ -803,16 +836,27 @@ export default function DashboardPage() {
         });
       });
     return () => { canceled = true; };
-  }, []);
+  }, [saveTvProgress, tvCurrentVideo]);
 
   /* Tab visibility — re-fetch TV state when tab comes back into focus (web) */
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
+        console.log('[Dashboard Tab Visible] Tab became visible');
+        // Save any unsaved progress BEFORE re-fetching
+        saveTvProgress();
         const uid = auth.currentUser?.uid;
         if (uid) {
           // Re-fetch TV state from Firestore when tab becomes visible
-          getUserTvState(uid).then((s) => setTvUserState(s));
+          getUserTvState(uid).then((s) => {
+            console.log('[Dashboard Tab Visible] Fetched state:', { index: s.currentIndex, seek: s.currentSeek });
+            // Only update if we don't have active playback
+            if (!tvCurrentVideo || !hasInteractedWithTv.current) {
+              setTvUserState(s);
+            } else {
+              console.log('[Dashboard Tab Visible] Skipping state update - video is actively playing');
+            }
+          });
         }
       }
     };
@@ -820,7 +864,7 @@ export default function DashboardPage() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [saveTvProgress, tvCurrentVideo]);
 
   /* Pull to refresh */
   const [touchStartY, setTouchStartY] = useState(0);
@@ -981,9 +1025,9 @@ export default function DashboardPage() {
           )}
 
           {/* Start TV button — always visible */}
-          <button className="tv-start-btn" onClick={handleStartTv} title="Starts TV or skips to next if already playing">
+          <button className="tv-start-btn" onClick={handleStartTv} title={tvStartCountdown > 0 ? `Ready in ${tvStartCountdown}s` : "Starts TV or skips to next if already playing"} disabled={tvStartCountdown > 0}>
             <i className="fas fa-play"></i>
-            <span>Start TV</span>
+            <span>{tvStartCountdown > 0 ? `Starting in ${tvStartCountdown}s` : 'Start TV'}</span>
           </button>
           <div className="tv-start-hint">Starts TV · Skips to next if already playing</div>
 
@@ -2171,6 +2215,7 @@ export default function DashboardPage() {
           position: relative; z-index: 1;
         }
         .tv-start-btn:active { transform: scale(0.97); }
+        .tv-start-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
         .tv-start-btn i { font-size: 13px; }
         .tv-start-hint { font-size: 10px; color: var(--text-tertiary); text-align: center; padding: 4px 16px 0; opacity: 0.7; }
 

@@ -77,6 +77,18 @@ export default function AdminTVPage() {
     }
   }, []);
 
+  // Countdown timer on Start TV button (prevents premature clicks while video preloads)
+  useEffect(() => {
+    setTvStartCountdown(10);
+    const t = setInterval(() => {
+      setTvStartCountdown((prev) => {
+        if (prev <= 1) { clearInterval(t); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, []);
+
   // Firestore-backed TV progress (persists across browser sessions like member dashboard)
   const [tvFirestoreLoaded, setTvFirestoreLoaded] = useState(false);
 
@@ -85,6 +97,7 @@ export default function AdminTVPage() {
   );
   const [broadcasting, setBroadcasting] = useState(false);
   const [broadcastSlotCount, setBroadcastSlotCount] = useState(0);
+  const [tvStartCountdown, setTvStartCountdown] = useState(10);
   // ─── External video paste ───
   const [externalUrl, setExternalUrl] = useState("");
   const [externalAdding, setExternalAdding] = useState(false);
@@ -363,6 +376,10 @@ export default function AdminTVPage() {
     if (typeof window !== "undefined") {
       localStorage.setItem(ADMIN_TV_SEEK_KEY, String(time));
     }
+    // Log every 10 seconds to avoid spam
+    if (Math.floor(time) % 10 === 0) {
+      console.log('[Admin TV Time Update]', { time, currentIndex: lastAdminTvIndexRef.current });
+    }
   }, []);
 
   // Call play() when current video changes
@@ -387,6 +404,7 @@ export default function AdminTVPage() {
   const saveAdminTvProgress = useCallback(() => {
     const seek = lastAdminTvSeekRef.current;
     const index = lastAdminTvIndexRef.current;
+    console.log('[Admin TV Progress] Saving:', { index, seek });
     // Always persist to localStorage for instant cross-page resume
     if (typeof window !== "undefined") {
       localStorage.setItem(ADMIN_TV_SEEK_KEY, String(seek));
@@ -395,7 +413,9 @@ export default function AdminTVPage() {
     // Persist to Firestore for cross-session resume
     const uid = auth.currentUser?.uid;
     if (uid && seek > 0) {
-      updateUserTvProgress(uid, index, seek);
+      updateUserTvProgress(uid, index, seek).catch((err) => {
+        console.error('[Admin TV Progress] Failed to save to Firestore:', err);
+      });
     }
   }, []);
 
@@ -426,21 +446,32 @@ export default function AdminTVPage() {
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === "visible") {
+        console.log('[Admin Tab Visible] Tab became visible');
+        // Save any unsaved progress BEFORE re-fetching
+        saveAdminTvProgress();
         const uid = auth.currentUser?.uid;
         if (uid) {
           // Re-fetch TV state from Firestore to pick up changes from other tabs/pages
           try {
             const state = await getUserTvState(uid);
-            if (state.currentIndex >= 0 && state.currentIndex < allVideos.length) {
-              setCurrentTvIndex(state.currentIndex);
-            }
-            if (state.currentSeek > 0.1) {
-              if (typeof window !== "undefined") {
-                localStorage.setItem(ADMIN_TV_SEEK_KEY, String(state.currentSeek));
+            console.log('[Admin Tab Visible] Fetched state:', { index: state.currentIndex, seek: state.currentSeek });
+            // Only update if we don't have active playback
+            if (!currentVideo || !hasInteractedWithTv.current) {
+              if (state.currentIndex >= 0 && state.currentIndex < allVideos.length) {
+                setCurrentTvIndex(state.currentIndex);
               }
-              lastAdminTvSeekRef.current = state.currentSeek;
+              if (state.currentSeek > 0.1) {
+                if (typeof window !== "undefined") {
+                  localStorage.setItem(ADMIN_TV_SEEK_KEY, String(state.currentSeek));
+                }
+                lastAdminTvSeekRef.current = state.currentSeek;
+              }
+            } else {
+              console.log('[Admin Tab Visible] Skipping state update - video is actively playing');
             }
-          } catch {}
+          } catch (err) {
+            console.error('[Admin Tab Visible] Failed to fetch state:', err);
+          }
         }
       }
     };
@@ -448,7 +479,7 @@ export default function AdminTVPage() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [allVideos.length]);
+  }, [saveAdminTvProgress, currentVideo, allVideos.length]);
 
   // Generate today's broadcast
   const handleGenerateBroadcast = useCallback(async () => {
@@ -1791,6 +1822,7 @@ export default function AdminTVPage() {
           position: relative; z-index: 1;
         }
         .tv-start-btn:active { transform: scale(0.97); }
+        .tv-start-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
         .tv-start-btn i { font-size: 13px; }
         .tv-start-hint { font-size: 10px; color: var(--text-tertiary); text-align: center; padding: 4px 16px 0; opacity: 0.7; }
         .tv-channel-strip {
@@ -2197,9 +2229,9 @@ export default function AdminTVPage() {
                     </button>
                   </div>
 
-                  <button className="tv-start-btn" onClick={handleStartTv} title="Starts TV or skips to next if already playing">
+                  <button className="tv-start-btn" onClick={handleStartTv} title={tvStartCountdown > 0 ? `Ready in ${tvStartCountdown}s` : "Starts TV or skips to next if already playing"} disabled={tvStartCountdown > 0}>
                     <i className="fas fa-play"></i>
-                    <span>Start TV</span>
+                    <span>{tvStartCountdown > 0 ? `Starting in ${tvStartCountdown}s` : 'Start TV'}</span>
                   </button>
                   <div className="tv-start-hint">Starts TV · Skips to next if already playing</div>
                 </div>

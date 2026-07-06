@@ -112,9 +112,22 @@ export default function TVPage() {
   const lastTvSeekRef = useRef(0);
   const lastTvIndexRef = useRef(0);
   const hasInteractedWithTv = useRef(false);
+  const [tvStartCountdown, setTvStartCountdown] = useState(10);
 
   const tvPlayerTargetRef = useRef<HTMLDivElement>(null);
   const tvPlayer = useTvPlayer();
+
+  // Countdown timer on Start TV button (prevents premature clicks while video preloads)
+  useEffect(() => {
+    setTvStartCountdown(10);
+    const t = setInterval(() => {
+      setTvStartCountdown((prev) => {
+        if (prev <= 1) { clearInterval(t); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, []);
 
   // ─── Current playing video ───
   const currentVideo = tvUserState && tvUserState.playlist.length > 0
@@ -337,6 +350,7 @@ export default function TVPage() {
     }
     const uid = auth.currentUser?.uid;
     if (currentVideo && hasInteractedWithTv.current) {
+      // User already pressed Start TV before — advance to next video
       const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
       if (uid) updateUserTvProgress(uid, nextIndex, 0);
       setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
@@ -348,13 +362,16 @@ export default function TVPage() {
     const savedVideo = videos.find((v) => v.id === tvUserState.playlist[savedIndex]);
     const nearEnd = savedVideo && savedVideo.duration > 0 && savedSeek >= savedVideo.duration * 0.9;
     if (nearEnd) {
+      // Video was nearly finished — advance to next
       const nextIndex = (savedIndex + 1) % tvUserState.playlist.length;
       if (uid) updateUserTvProgress(uid, nextIndex, 0);
       setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
     } else {
+      // Resume from saved position — DON'T write to Firestore yet, let the interval handle it
       const resumeIndex = savedSeek > 0 && savedVideo ? savedIndex : 0;
       const resumeSeek = resumeIndex === savedIndex ? savedSeek : 0;
-      if (uid) updateUserTvProgress(uid, resumeIndex, resumeSeek);
+      console.log('[Start TV] Resuming:', { resumeIndex, resumeSeek, videoTitle: savedVideo?.title });
+      // Only update local state, NOT Firestore (interval will save actual progress)
       setTvUserState((prev) => prev ? { ...prev, currentIndex: resumeIndex, currentSeek: resumeSeek } : prev);
     }
   }, [currentVideo, tvUserState, videos]);
@@ -386,6 +403,10 @@ export default function TVPage() {
   // ─── Track current seek for periodic Firestore saves ───
   const handleTvTimeUpdate = useCallback((time: number) => {
     lastTvSeekRef.current = time;
+    // Log every 10 seconds to avoid spam
+    if (Math.floor(time) % 10 === 0) {
+      console.log('[TV Time Update]', { time, currentIndex: lastTvIndexRef.current });
+    }
   }, []);
 
   // Keep callbacks in sync with latest versions (after advanceToNext/handleTvTimeUpdate)
@@ -399,8 +420,13 @@ export default function TVPage() {
   /* Save current progress to Firestore (used by interval + cleanup) */
   const saveTvProgress = useCallback(() => {
     const uid = auth.currentUser?.uid;
-    if (uid && lastTvSeekRef.current > 0) {
-      updateUserTvProgress(uid, lastTvIndexRef.current, lastTvSeekRef.current);
+    const seek = lastTvSeekRef.current;
+    const index = lastTvIndexRef.current;
+    console.log('[TV Progress] Saving:', { uid, index, seek });
+    if (uid && seek > 0) {
+      updateUserTvProgress(uid, index, seek).catch((err) => {
+        console.error('[TV Progress] Failed to save:', err);
+      });
     }
   }, []);
 
@@ -442,24 +468,48 @@ export default function TVPage() {
         const { App } = AppModule;
         App.addListener("appStateChange", (state) => {
           if (state.isActive) {
+            console.log('[App Resume] App came back to foreground');
+            // Save any unsaved progress BEFORE re-fetching
+            saveTvProgress();
             const uid = auth.currentUser?.uid;
-            if (uid) getUserTvState(uid).then((s) => setTvUserState(s));
+            if (uid) {
+              getUserTvState(uid).then((s) => {
+                console.log('[App Resume] Fetched state from Firestore:', { index: s.currentIndex, seek: s.currentSeek });
+                // Only update if we don't have active playback (avoid overwriting in-progress video)
+                if (!currentVideo || !hasInteractedWithTv.current) {
+                  setTvUserState(s);
+                } else {
+                  console.log('[App Resume] Skipping state update - video is actively playing');
+                }
+              });
+            }
           }
         }).then((handler) => {
           if (canceled) handler.remove();
         });
       });
     return () => { canceled = true; };
-  }, []);
+  }, [saveTvProgress, currentVideo]);
 
   // ─── Tab visibility — re-fetch TV state when tab comes back into focus (web) ───
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
+        console.log('[Tab Visible] Tab became visible');
+        // Save any unsaved progress BEFORE re-fetching
+        saveTvProgress();
         const uid = auth.currentUser?.uid;
         if (uid) {
           // Re-fetch TV state from Firestore when tab becomes visible
-          getUserTvState(uid).then((s) => setTvUserState(s));
+          getUserTvState(uid).then((s) => {
+            console.log('[Tab Visible] Fetched state:', { index: s.currentIndex, seek: s.currentSeek });
+            // Only update if we don't have active playback
+            if (!currentVideo || !hasInteractedWithTv.current) {
+              setTvUserState(s);
+            } else {
+              console.log('[Tab Visible] Skipping state update - video is actively playing');
+            }
+          });
         }
       }
     };
@@ -467,7 +517,7 @@ export default function TVPage() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [saveTvProgress, currentVideo]);
 
   // ─── TV Heartbeat — marks this user as actively watching (for admin viewer count) ───
   useEffect(() => {
@@ -1659,6 +1709,7 @@ export default function TVPage() {
           position: relative; z-index: 1;
         }
         .tv-start-btn:active { transform: scale(0.97); }
+        .tv-start-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
         .tv-start-btn i { font-size: 13px; }
         .tv-start-hint { font-size: 10px; color: var(--text-tertiary); text-align: center; padding: 4px 16px 0; opacity: 0.7; }
 
@@ -2590,9 +2641,9 @@ export default function TVPage() {
                   </div>
                 )}
 
-                <button className="tv-start-btn" onClick={handleStartTv} title="Starts TV or skips to next if already playing">
+                <button className="tv-start-btn" onClick={handleStartTv} title={tvStartCountdown > 0 ? `Ready in ${tvStartCountdown}s` : "Starts TV or skips to next if already playing"} disabled={tvStartCountdown > 0}>
                   <i className="fas fa-play"></i>
-                  <span>Start TV</span>
+                  <span>{tvStartCountdown > 0 ? `Starting in ${tvStartCountdown}s` : 'Start TV'}</span>
                 </button>
                 <div className="tv-start-hint">Starts TV · Skips to next if already playing</div>
               </div>
