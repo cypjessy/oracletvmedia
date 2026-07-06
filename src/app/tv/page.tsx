@@ -1418,10 +1418,10 @@ export default function TVPage() {
         }
         .tv-top-header-actions { display: flex; gap: 4px; }
         .tv-top-header-btn {
-          width: 34px; height: 34px; border-radius: 50%;
+          width: 44px; height: 44px; border-radius: 50%;
           background: rgba(255,255,255,0.06);
           border: 1px solid rgba(255,255,255,0.06);
-          color: var(--text-secondary); font-size: 14px;
+          color: var(--text-secondary); font-size: 16px;
           display: flex; align-items: center; justify-content: center;
           cursor: pointer; flex-shrink: 0; transition: all 0.2s ease;
         }

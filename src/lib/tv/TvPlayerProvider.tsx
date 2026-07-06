@@ -47,9 +47,16 @@ export function TvPlayerProvider({ children }: { children: React.ReactNode }) {
 
   const registerTarget = useCallback((el: HTMLElement | null) => {
     setPortalTarget(el);
-  }, []);
+    // When a new target is registered and the player is already active,
+    // restore the latest seek so PlyrPlayer resumes at the correct position
+    if (el && videoId && latestSeekRef.current !== undefined) {
+      setSeek(latestSeekRef.current);
+    }
+  }, [videoId]);
 
   const [playerKey, setPlayerKey] = useState(0);
+  // Track the latest seek time so it's preserved when portal target changes between pages
+  const latestSeekRef = useRef<number | undefined>(undefined);
 
   const play = useCallback((id: string, seekTime?: number) => {
     setVideoId((prev) => {
@@ -58,6 +65,7 @@ export function TvPlayerProvider({ children }: { children: React.ReactNode }) {
       return id;
     });
     setSeek(seekTime);
+    if (seekTime !== undefined) latestSeekRef.current = seekTime;
     setVisible(true);
   }, []);
 
@@ -101,7 +109,10 @@ export function TvPlayerProvider({ children }: { children: React.ReactNode }) {
             videoId={videoId}
             initialSeek={seek}
             onEnded={() => callbacksRef.current.onEnded?.()}
-            onTimeUpdate={(t) => callbacksRef.current.onTimeUpdate?.(t)}
+            onTimeUpdate={(t) => {
+              latestSeekRef.current = t;
+              callbacksRef.current.onTimeUpdate?.(t);
+            }}
           />
         </div>,
         portalTarget

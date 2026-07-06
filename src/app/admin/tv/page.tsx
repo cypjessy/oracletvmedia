@@ -2,12 +2,14 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useFullscreenToggle } from "@/lib/tv/fullscreen";
 import {
   getChannel, getVideos, saveChannel, saveVideos, clearAllVideos,
   getPlaylists, addPlaylist, deletePlaylist,
   generateBroadcast, getTodayBroadcast,
   getGivingConfig, saveGivingConfig,
   replyToPrayer,
+  getUserTvState, updateUserTvProgress, autoInitUserPlaylist,
 } from "@/lib/youtube";
 import type { YouTubeChannel, YouTubeVideo, TVPlaylist, TVGivingConfig } from "@/lib/youtube";
 import {
@@ -26,6 +28,7 @@ import ToastBridge from "@/components/dashboard/ToastBridge";
 
 export default function AdminTVPage() {
   const router = useRouter();
+  const { toggleFullscreen } = useFullscreenToggle();
   const [channel, setChannel] = useState<YouTubeChannel | null>(null);
   const [videoCount, setVideoCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -60,8 +63,21 @@ export default function AdminTVPage() {
   const [plSaving, setPlSaving] = useState(false);
   const [plDeletingId, setPlDeletingId] = useState<string | null>(null);
   // ─── Admin TV player resume state (for embedded player) ───
-  const ADMIN_TV_SEEK_KEY = "admin_tv_resume_seek";
-  const ADMIN_TV_INDEX_KEY = "admin_tv_resume_index";
+  // Use UID-scoped localStorage keys for per-admin privacy (like member pages)
+  const tvUid = auth.currentUser?.uid;
+  const ADMIN_TV_SEEK_KEY = tvUid ? `admin_tv_resume_seek_${tvUid}` : "admin_tv_resume_seek";
+  const ADMIN_TV_INDEX_KEY = tvUid ? `admin_tv_resume_index_${tvUid}` : "admin_tv_resume_index";
+
+  // One-time migration: clean up old non-UID-scoped keys so admins don't share progress
+  useEffect(() => {
+    if (tvUid && typeof window !== "undefined") {
+      localStorage.removeItem("admin_tv_resume_seek");
+      localStorage.removeItem("admin_tv_resume_index");
+    }
+  }, []);
+
+  // Firestore-backed TV progress (persists across browser sessions like member dashboard)
+  const [tvFirestoreLoaded, setTvFirestoreLoaded] = useState(false);
 
   const [currentTvIndex, setCurrentTvIndex] = useState(
     () => typeof window !== "undefined" ? Number(localStorage.getItem(ADMIN_TV_INDEX_KEY)) || 0 : 0
@@ -83,7 +99,7 @@ export default function AdminTVPage() {
   const lastAdminTvSeekRef = useRef(0);
   const lastAdminTvIndexRef = useRef(0);
 
-  // Load current channel data
+  // Load current channel data + restore Firestore TV state
   useEffect(() => {
     let mounted = true;
     const load = async () => {
@@ -94,6 +110,29 @@ export default function AdminTVPage() {
         setVideoCount(videos.length);
         setAllVideos(videos);
         if (c?.channelId) setChannelIdInput(c.channelId);
+
+        // Restore TV progress from Firestore (like member dashboard)
+        const uid = auth.currentUser?.uid;
+        if (uid) {
+          const tvState = await getUserTvState(uid);
+          if (!mounted) return;
+          // Restore index if within range
+          if (tvState.currentIndex > 0 && tvState.currentIndex < videos.length) {
+            setCurrentTvIndex(tvState.currentIndex);
+          }
+          // Restore seek from Firestore (overrides localStorage for fresh session)
+          if (tvState.currentSeek > 0.1) {
+            if (typeof window !== "undefined") {
+              localStorage.setItem(ADMIN_TV_SEEK_KEY, String(tvState.currentSeek));
+            }
+            lastAdminTvSeekRef.current = tvState.currentSeek;
+          }
+          // Auto-init playlist if empty (fill with all synced videos)
+          if (tvState.playlist.length === 0 && videos.length > 0) {
+            await autoInitUserPlaylist(uid);
+          }
+        }
+        setTvFirestoreLoaded(true);
       } catch {} finally {
         if (mounted) setLoading(false);
       }
@@ -266,15 +305,19 @@ export default function AdminTVPage() {
     [allVideos]
   );
 
-  // Advance to next video in the admin embedded player
+  // Advance to next video in the admin embedded player (save to Firestore + localStorage)
   const advanceTvVideo = useCallback(() => {
-    setCurrentTvIndex((prev) => {
-      const next = prev + 1;
-      return next < allVideos.length ? next : 0;
-    });
-    // Reset localStorage cache for new video
+    const nextIndex = (lastAdminTvIndexRef.current + 1) % (allVideos.length || 1);
+    setCurrentTvIndex(nextIndex);
+    // Reset seek cache
     if (typeof window !== "undefined") {
       localStorage.setItem(ADMIN_TV_SEEK_KEY, "0");
+      localStorage.setItem(ADMIN_TV_INDEX_KEY, String(nextIndex));
+    }
+    // Save to Firestore for cross-session persistence
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      updateUserTvProgress(uid, nextIndex, 0);
     }
   }, [allVideos.length]);
 
@@ -317,11 +360,19 @@ export default function AdminTVPage() {
     });
   }, [advanceTvVideo, handleAdminTvTimeUpdate, adminTvPlayer]);
 
-  // Save current progress to localStorage (used by interval + cleanup)
+  // Save current progress to Firestore + localStorage (used by interval + cleanup)
   const saveAdminTvProgress = useCallback(() => {
+    const seek = lastAdminTvSeekRef.current;
+    const index = lastAdminTvIndexRef.current;
+    // Always persist to localStorage for instant cross-page resume
     if (typeof window !== "undefined") {
-      localStorage.setItem(ADMIN_TV_SEEK_KEY, String(lastAdminTvSeekRef.current));
-      localStorage.setItem(ADMIN_TV_INDEX_KEY, String(lastAdminTvIndexRef.current));
+      localStorage.setItem(ADMIN_TV_SEEK_KEY, String(seek));
+      localStorage.setItem(ADMIN_TV_INDEX_KEY, String(index));
+    }
+    // Persist to Firestore for cross-session resume
+    const uid = auth.currentUser?.uid;
+    if (uid && seek > 0) {
+      updateUserTvProgress(uid, index, seek);
     }
   }, []);
 
@@ -348,14 +399,25 @@ export default function AdminTVPage() {
     };
   }, [saveAdminTvProgress]);
 
-  // Tab visibility — restore seek when tab becomes visible (web)
+  // Tab visibility — restore TV state from Firestore when tab becomes visible (web)
   useEffect(() => {
-    const handleVisibilityChange = () => {
+    const handleVisibilityChange = async () => {
       if (document.visibilityState === "visible") {
-        // Re-read from localStorage in case another tab changed it
-        const storedSeek = typeof window !== "undefined" ? Number(localStorage.getItem(ADMIN_TV_SEEK_KEY)) || 0 : 0;
-        if (storedSeek > 1) {
-          lastAdminTvSeekRef.current = storedSeek;
+        const uid = auth.currentUser?.uid;
+        if (uid) {
+          // Re-fetch TV state from Firestore to pick up changes from other tabs/pages
+          try {
+            const state = await getUserTvState(uid);
+            if (state.currentIndex >= 0 && state.currentIndex < allVideos.length) {
+              setCurrentTvIndex(state.currentIndex);
+            }
+            if (state.currentSeek > 0.1) {
+              if (typeof window !== "undefined") {
+                localStorage.setItem(ADMIN_TV_SEEK_KEY, String(state.currentSeek));
+              }
+              lastAdminTvSeekRef.current = state.currentSeek;
+            }
+          } catch {}
         }
       }
     };
@@ -363,7 +425,7 @@ export default function AdminTVPage() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [allVideos.length]);
 
   // Generate today's broadcast
   const handleGenerateBroadcast = useCallback(async () => {
@@ -709,72 +771,7 @@ export default function AdminTVPage() {
   const renderChannelTab = () => (
     <>
       {/* ─── TV CARD (matches member dashboard `tv-hero`) ─── */}
-      {channel ? (          <div className="tv-top-wrap">
-          <div className="tv-top">
-            <div className="tv-station">
-              <i className="fas fa-tv"></i>
-              <span>Church TV</span>
-            </div>
-            <div className="tv-badges">
-              <div className={`tv-live-badge ${currentVideo ? "live" : "off"}`}>
-                <span className="tv-live-dot"></span>
-                {currentVideo ? "On Air" : "Off Air"}
-              </div>
-              <div className="tv-sub-badge">
-                <i className="fas fa-users"></i>
-                {channel?.subscriberCount || "—"}
-              </div>
-            </div>
-          </div>
-
-          {/* Player — rendered by global TvPlayerProvider */}
-          {currentVideo ? (
-            <div ref={tvPlayerTargetRef} className="tv-player-container">
-              <div className="tv-overlay">
-                <div className="tv-overlay-info">
-                  <div className="tv-overlay-now">
-                    <i className="fas fa-tv"></i>
-                    Now Playing
-                  </div>
-                  <div className="tv-overlay-title">{currentVideo.title}</div>
-                </div>
-                <a
-                  className="tv-expand-btn"
-                  href="/tv"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="Open full screen TV in new tab"
-                >
-                  <i className="fas fa-expand"></i>
-                </a>
-              </div>
-            </div>
-          ) : (
-            <div className="tv-no-video">
-              <i className="fas fa-video-slash"></i>
-              <span>TV is off air</span>
-            </div>
-          )}
-
-          {/* Channel info strip */}
-          <div className="tv-channel-strip">
-            <div className="tv-channel-avatar">
-              {channel.thumbnail ? (
-                <img src={channel.thumbnail} alt={channel.title} />
-              ) : (
-                <i className="fab fa-youtube"></i>
-              )}
-            </div>
-            <div className="tv-channel-info">
-              <div className="tv-channel-name">{channel.title}</div>
-              <div className="tv-channel-meta">{videoCount} videos</div>
-            </div>
-            <button className="tv-watch-btn" onClick={() => router.push("/tv")}>
-              <i className="fas fa-play"></i> Watch
-            </button>
-          </div>
-        </div>
-      ) : (
+      {!channel && (
         <div className="no-channel">
           <i className="fab fa-youtube"></i>
           <h3>No Channel Connected</h3>
@@ -1628,10 +1625,11 @@ export default function AdminTVPage() {
         }
         .tv-top-header-btn:active { background: rgba(255,255,255,0.12); transform: scale(0.9); }
 
-        /* --- TV WRAP (removed tv-hero card — video now goes edge-to-edge like member TV page) --- */
+        .feed-section { padding: 0 var(--section-px, 16px) 16px; }
+        .feed-section { --section-px: 16px; }
+
         .tv-top-wrap {
-          padding: 0;
-          margin: 0 -16px;
+          margin: 0 calc(-1 * var(--section-px, 16px));
         }
         .tv-top {
           display: flex; align-items: center; justify-content: space-between;
@@ -1686,11 +1684,11 @@ export default function AdminTVPage() {
         .tv-player-container iframe { width: 100% !important; height: 100% !important; }
         .tv-player-container .plyr__video-embed iframe { transform: scale(1.03); }
         @media (max-width: 480px) {
-          .tv-player-container { aspect-ratio: 4 / 3; }
           .tv-player-container .plyr__controls { padding: 6px 4px !important; }
           .tv-player-container .plyr__control { padding: 8px 6px !important; min-width: 36px; min-height: 36px; }
           .tv-player-container .plyr__control svg { width: 18px; height: 18px; }
           .tv-player-container .plyr__time { font-size: 11px; }
+          .tv-player-container { min-height: 240px; }
         }
         .tv-overlay {
           position: absolute;
@@ -1718,8 +1716,8 @@ export default function AdminTVPage() {
         }
         .tv-overlay-now i { font-size: 9px; }
         .tv-overlay-title {
-          font-size: 13px;
-          font-weight: 600;
+          font-size: 15px;
+          font-weight: 700;
           color: #fff;
           text-shadow: 0 1px 4px rgba(0,0,0,0.5);
           white-space: nowrap;
@@ -1727,11 +1725,11 @@ export default function AdminTVPage() {
           text-overflow: ellipsis;
         }
         .tv-expand-btn {
-          width: 32px; height: 32px; border-radius: 8px;
-          background: rgba(255,255,255,0.1);
-          border: 1px solid rgba(255,255,255,0.1);
-          color: rgba(255,255,255,0.8);
-          font-size: 13px;
+          width: 44px; height: 44px; border-radius: 12px;
+          background: rgba(255,255,255,0.12);
+          border: 1px solid rgba(255,255,255,0.12);
+          color: rgba(255,255,255,0.9);
+          font-size: 18px;
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -1747,17 +1745,25 @@ export default function AdminTVPage() {
           align-items: center;
           justify-content: center;
           gap: 8px;
-          padding: 20px;
+          padding: 32px;
+          border-radius: var(--radius-md);
           background: var(--surface-card);
+          border: 1px dashed var(--border);
           color: var(--text-tertiary);
           font-size: 13px;
+          margin-bottom: 10px;
+          z-index: 1;
+          position: relative;
         }
         .tv-no-video i { font-size: 28px; opacity: 0.4; }
         .tv-channel-strip {
-          display: flex; align-items: center; gap: 10px;
-          padding: 8px 10px;
+          display: flex; align-items: center; gap: 12px;
+          padding: 10px 12px;
           background: var(--surface);
-          position: relative; z-index: 1;
+          border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
+          position: relative;
+          z-index: 1;
         }
         .tv-channel-avatar {
           width: 36px; height: 36px; border-radius: 50%;
@@ -1771,11 +1777,19 @@ export default function AdminTVPage() {
         .tv-channel-name { font-size: 13px; font-weight: 700; }
         .tv-channel-meta { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
         .tv-watch-btn {
-          padding: 7px 14px; border-radius: 8px;
-          background: var(--primary); color: #fff;
-          border: none; font-size: 12px; font-weight: 700;
-          cursor: pointer; display: flex; align-items: center; gap: 5px;
-          flex-shrink: 0; transition: all 0.15s ease;
+          flex-shrink: 0;
+          padding: 7px 14px;
+          border-radius: 8px;
+          background: linear-gradient(135deg, #3B82F6, #6366F1);
+          border: none;
+          color: #fff;
+          font-size: 11px;
+          font-weight: 700;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          transition: all 0.2s;
         }
         .tv-watch-btn:active { transform: scale(0.95); }
 
@@ -2085,16 +2099,79 @@ export default function AdminTVPage() {
 
         {/* CONTENT */}
         <div className="content-scroll">
-          <div className="section">
+            {/* TV CARD — outside section wrapper for edge-to-edge */}
+            {!loading && activeAdminTab === "channel" && channel && (
+              <section className="feed-section">
+                <div className="tv-top-wrap">
+                  <div className="tv-top">
+                    <div className="tv-station">
+                      <i className="fas fa-tv"></i>
+                      <span>Church TV</span>
+                    </div>
+                    <div className="tv-badges">
+                      <div className={`tv-live-badge ${currentVideo ? "live" : "off"}`}>
+                        <span className="tv-live-dot"></span>
+                        {currentVideo ? "On Air" : "Off Air"}
+                      </div>
+                      <div className="tv-sub-badge">
+                        <i className="fas fa-users"></i>
+                        {channel?.subscriberCount || "—"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {currentVideo ? (
+                    <div ref={tvPlayerTargetRef} className="tv-player-container">
+                      <div className="tv-overlay">
+                        <div className="tv-overlay-info">
+                          <div className="tv-overlay-now">
+                            <i className="fas fa-tv"></i>
+                            Now Playing
+                          </div>
+                          <div className="tv-overlay-title">{currentVideo.title}</div>
+                        </div>
+                        <button className="tv-expand-btn" onClick={toggleFullscreen} title="Full screen">
+                          <i className="fas fa-expand"></i>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="tv-no-video">
+                      <i className="fas fa-video-slash"></i>
+                      <span>TV is off air</span>
+                    </div>
+                  )}
+
+                  <div className="tv-channel-strip">
+                    <div className="tv-channel-avatar">
+                      {channel.thumbnail ? (
+                        <img src={channel.thumbnail} alt={channel.title} />
+                      ) : (
+                        <i className="fab fa-youtube"></i>
+                      )}
+                    </div>
+                    <div className="tv-channel-info">
+                      <div className="tv-channel-name">{channel.title}</div>
+                      <div className="tv-channel-meta">{videoCount} videos</div>
+                    </div>
+                    <button className="tv-watch-btn" onClick={() => router.push("/tv")}>
+                      <i className="fas fa-expand"></i> Manage
+                    </button>
+                  </div>
+                </div>
+              </section>
+            )}
+
             {loading ? (
               <div className="loading-state">
                 <i className="fas fa-tv"></i>
                 <span>Loading TV settings...</span>
               </div>
             ) : (
-              renderAdminTabContent()
+              <div className="section">
+                {renderAdminTabContent()}
+              </div>
             )}
-          </div>
         </div>
 
         <AdminBottomNav />

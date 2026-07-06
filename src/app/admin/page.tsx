@@ -13,6 +13,7 @@ import AlbumArt from "@/components/shared/AlbumArt";
 import { useAudio } from "@/lib/audio/AudioContext";
 import { usePlayConfig } from "@/lib/playControls";
 import { useTvPlayer } from "@/lib/tv/TvPlayerProvider";
+import { useFullscreenToggle } from "@/lib/tv/fullscreen";
 import { getChannel, getVideos, getUserTvState, updateUserTvProgress, autoInitUserPlaylist } from "@/lib/youtube";
 import type { YouTubeChannel, YouTubeVideo, UserTvState } from "@/lib/youtube";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
@@ -98,6 +99,7 @@ interface ActivityItem {
 
 export default function AdminPage() {
   const router = useRouter();
+  const { toggleFullscreen } = useFullscreenToggle();
   const storeLogout = useAppStore((s) => s.logout);
   const storeChurchConfig = useAppStore((s) => s.churchConfig);
   const churchInfo = {
@@ -134,7 +136,6 @@ export default function AdminPage() {
   const [tvChannel, setTvChannel] = useState<YouTubeChannel | null>(null);
   const [tvVideos, setTvVideos] = useState<YouTubeVideo[]>([]);
   const [tvLoading, setTvLoading] = useState(true);
-  const tvPlayerTargetRef = useRef<HTMLDivElement>(null);
   const tvPlayer = useTvPlayer();
   const [tvUserState, setTvUserState] = useState<UserTvState | null>(null);
 
@@ -142,24 +143,19 @@ export default function AdminPage() {
     ? tvVideos.find((v) => v.id === tvUserState.playlist[tvUserState.currentIndex]) ?? null
     : null;
 
-  // Register portal target
-  useEffect(() => {
-    if (tvPlayerTargetRef.current) {
-      tvPlayer.registerTarget(tvPlayerTargetRef.current);
-    }
-    return () => {
-      tvPlayer.registerTarget(null);
-    };
-  }, [tvCurrentVideo, tvPlayer]);
+  // Register portal target via callback ref — fires on mount/unmount regardless
+  // of conditional rendering timing. Works with the async-loaded div.
+  const tvPlayerTargetRef = useCallback((el: HTMLDivElement | null) => {
+    tvPlayer.registerTarget(el);
+  }, [tvPlayer.registerTarget]);
 
-  // Call play() when video changes
+  // Auto-start TV only when no video is already playing (e.g., first visit).
+  // When switching from TV page, tvPlayer.currentVideoId is already set — no-op.
   useEffect(() => {
-    if (tvCurrentVideo) {
-      tvPlayer.play(tvCurrentVideo.id);
-    } else {
-      tvPlayer.hide();
+    if (tvCurrentVideo && !tvPlayer.currentVideoId) {
+      tvPlayer.play(tvCurrentVideo.id, tvUserState?.currentSeek || undefined);
     }
-  }, [tvCurrentVideo?.id, tvPlayer]);
+  }, [tvCurrentVideo?.id, tvPlayer.currentVideoId, tvPlayer, tvUserState?.currentSeek]);
 
   // Fetch TV channel and videos on mount
   useEffect(() => {
@@ -170,7 +166,7 @@ export default function AdminPage() {
       try {
         const [c, vids, state] = await Promise.all([
           getChannel().catch(() => null),
-          getVideos({ max: 50 }).catch<YouTubeVideo[]>(() => []),
+          getVideos({ max: 500, includeHidden: true }).catch<YouTubeVideo[]>(() => []),
           uid ? getUserTvState(uid) : Promise.resolve({ playlist: [], currentIndex: 0, currentSeek: 0, updatedAt: null }),
         ]);
         if (!mounted) return;
@@ -1397,6 +1393,7 @@ export default function AdminPage() {
           .tv-player-container .plyr__control { padding: 8px 6px !important; min-width: 36px; min-height: 36px; }
           .tv-player-container .plyr__control svg { width: 18px; height: 18px; }
           .tv-player-container .plyr__time { font-size: 11px; }
+          .tv-player-container { min-height: 240px; }
         }
 
         .tv-overlay {
@@ -1432,11 +1429,11 @@ export default function AdminPage() {
           text-overflow: ellipsis;
         }
         .tv-expand-btn {
-          width: 32px; height: 32px; border-radius: 8px;
-          background: rgba(255,255,255,0.1);
-          border: 1px solid rgba(255,255,255,0.1);
-          color: rgba(255,255,255,0.8);
-          font-size: 13px;
+          width: 44px; height: 44px; border-radius: 12px;
+          background: rgba(255,255,255,0.12);
+          border: 1px solid rgba(255,255,255,0.12);
+          color: rgba(255,255,255,0.9);
+          font-size: 18px;
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -1799,8 +1796,8 @@ export default function AdminPage() {
                       </div>
                       <div className="tv-overlay-title">{tvCurrentVideo.title}</div>
                     </div>
-                    <button className="tv-expand-btn" onClick={() => router.push("/admin/tv")} title="Manage TV">
-                      <i className="fas fa-cog"></i>
+                    <button className="tv-expand-btn" onClick={toggleFullscreen} title="Full screen">
+                      <i className="fas fa-expand"></i>
                     </button>
                   </div>
                 </div>
@@ -1825,7 +1822,7 @@ export default function AdminPage() {
                     <div className="tv-channel-meta">{tvVideos.length} videos</div>
                   </div>
                   <button className="tv-watch-btn" onClick={() => router.push("/admin/tv")}>
-                    <i className="fas fa-cog"></i> Manage
+                    <i className="fas fa-expand"></i> Manage
                   </button>
                 </div>
               )}

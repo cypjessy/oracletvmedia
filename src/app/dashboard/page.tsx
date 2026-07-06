@@ -17,6 +17,7 @@ import { getAllAlbumEntries } from "@/lib/albumEntries";
 import { useAudio } from "@/lib/audio/AudioContext";
 import { usePlayConfig } from "@/lib/playControls";
 import { useTvPlayer } from "@/lib/tv/TvPlayerProvider";
+import { useFullscreenToggle } from "@/lib/tv/fullscreen";
 import { getChannel, getVideos, getUserTvState, updateUserTvProgress, autoInitUserPlaylist } from "@/lib/youtube";
 import type { NowPlayingData, SongHistoryItem, Playlist } from "@/lib/azuracast";
 import type { Album } from "@/lib/albums";
@@ -423,6 +424,7 @@ export default function DashboardPage() {
   const lastTvIndexRef = useRef(0);
   const tvPlayerTargetRef = useRef<HTMLDivElement>(null);
   const tvPlayer = useTvPlayer();
+  const { toggleFullscreen } = useFullscreenToggle();
 
   // Derive current video from user's playlist
   const tvCurrentVideo = tvUserState && tvUserState.playlist.length > 0
@@ -830,7 +832,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="tv-overlay-title">{tvCurrentVideo.title}</div>
                 </div>
-                <button className="tv-expand-btn" onClick={() => router.push("/tv")} title="Watch in full screen">
+                <button className="tv-expand-btn" onClick={toggleFullscreen} title="Full screen">
                   <i className="fas fa-expand"></i>
                 </button>
               </div>
@@ -1799,6 +1801,7 @@ export default function DashboardPage() {
           .tv-player-container .plyr__control { padding: 8px 6px !important; min-width: 36px; min-height: 36px; }
           .tv-player-container .plyr__control svg { width: 18px; height: 18px; }
           .tv-player-container .plyr__time { font-size: 11px; }
+          .tv-player-container { min-height: 240px; }
         }
         .tv-overlay {
             position: absolute;
@@ -1835,11 +1838,11 @@ export default function DashboardPage() {
             text-overflow: ellipsis;
         }
         .tv-expand-btn {
-            width: 32px; height: 32px; border-radius: 8px;
-            background: rgba(255,255,255,0.1);
-            border: 1px solid rgba(255,255,255,0.1);
-            color: rgba(255,255,255,0.8);
-            font-size: 13px;
+            width: 44px; height: 44px; border-radius: 12px;
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: rgba(255,255,255,0.9);
+            font-size: 18px;
             cursor: pointer;
             display: flex;
             align-items: center;
