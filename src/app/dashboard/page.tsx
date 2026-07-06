@@ -13,6 +13,7 @@ import ToastBridge from "@/components/dashboard/ToastBridge";
 import EventCarousel from "@/components/dashboard/EventCarousel";
 import AlbumCarousel from "@/components/shared/AlbumCarousel";
 import { useImageLightbox } from "@/components/shared/ImageLightbox";
+import PremiumLoader from "@/components/shared/PremiumLoader";
 import { getNowPlaying, getSongHistory, getStationId, getPlaylists } from "@/lib/azuracast";
 import { getAlbums } from "@/lib/albums";
 import { getAllAlbumEntries } from "@/lib/albumEntries";
@@ -52,6 +53,25 @@ const memberName = "Derick";
 /* ==================================================================
    HELPERS
    ================================================================== */
+
+function getWeekSeed(): number {
+  const now = new Date();
+  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  const diff = now.getTime() - startOfYear.getTime();
+  const week = Math.ceil((diff / 86400000 + startOfYear.getDay() + 1) / 7);
+  return now.getFullYear() * 100 + week;
+}
+
+function seededShuffle<T>(arr: T[], seed: number): T[] {
+  const result = [...arr];
+  let s = seed;
+  for (let i = result.length - 1; i > 0; i--) {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    const j = s % (i + 1);
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
 
 function getGreeting(): { text: string; emoji: string } {
   const h = new Date().getHours();
@@ -402,55 +422,37 @@ export default function DashboardPage() {
   const [scheduleLoading, setScheduleLoading] = useState(true);
   const [contentReady, setContentReady] = useState(false);
 
+  // ─── Video Gallery ───
+  const [recentVideos, setRecentVideos] = useState<YouTubeVideo[]>([]);
+  const [weeklyVideos, setWeeklyVideos] = useState<YouTubeVideo[]>([]);
+  const [videoGalleryLoading, setVideoGalleryLoading] = useState(true);
+
   // ─── TV state (per-user personalized playlist) ───
-  const tvUid = auth.currentUser?.uid;
-  const TV_SEEK_KEY = tvUid ? `tv_resume_seek_${tvUid}` : "tv_resume_seek";
-  const TV_INDEX_KEY = tvUid ? `tv_resume_index_${tvUid}` : "tv_resume_index";
-
-  // One-time migration: clean up old non-UID-scoped keys
-  useEffect(() => {
-    if (tvUid && typeof window !== "undefined") {
-      localStorage.removeItem("tv_resume_seek");
-      localStorage.removeItem("tv_resume_index");
-    }
-  }, []);
-
-  // Read cached seek from localStorage (inside component — only runs client-side, avoids SSR mismatch)
-  const cachedSeek = typeof window !== "undefined" ? Number(localStorage.getItem(TV_SEEK_KEY)) || 0 : 0;
 
   const [tvChannel, setTvChannel] = useState<YouTubeChannel | null>(null);
   const [tvVideos, setTvVideos] = useState<YouTubeVideo[]>([]);
   const [tvUserState, setTvUserState] = useState<UserTvState | null>(null);
   const [tvLoading, setTvLoading] = useState(true);
+  const [showEndCard, setShowEndCard] = useState(false);
+  const [nextTvVideo, setNextTvVideo] = useState<YouTubeVideo | null>(null);
   const lastTvSeekRef = useRef(0);
   const lastTvIndexRef = useRef(0);
   const tvPlayerTargetRef = useRef<HTMLDivElement>(null);
   const tvPlayer = useTvPlayer();
   const { toggleFullscreen } = useFullscreenToggle();
+  const hasInteractedWithTv = useRef(false);
 
   // Derive current video from user's playlist
   const tvCurrentVideo = tvUserState && tvUserState.playlist.length > 0
     ? tvVideos.find((v) => v.id === tvUserState.playlist[tvUserState.currentIndex]) ?? null
     : null;
-  // Use localStorage cache for instant cross-page resume, fallback to Firestore
-  const tvInitialSeek = (() => {
-    if (tvUserState) {
-      // Prefer Firestore if it has a valid seek > 0.1 seconds
-      if (tvUserState.currentSeek > 0.1) return tvUserState.currentSeek;
-      // Otherwise use localStorage cache (freshly written by the other page)
-      return cachedSeek > 0.1 ? cachedSeek : undefined;
-    }
-    // Before Firestore loads, use cache immediately
-    return cachedSeek > 0.1 ? cachedSeek : undefined;
-  })();
+  // Resume from Firestore seek position (0 if none)
+  const tvInitialSeek = tvUserState?.currentSeek ?? undefined;
 
-  // Sync index ref when state changes + update localStorage for cross-page resume
+  // Sync index ref when state changes
   useEffect(() => {
     if (tvUserState) {
       lastTvIndexRef.current = tvUserState.currentIndex;
-      if (typeof window !== "undefined") {
-        localStorage.setItem(TV_INDEX_KEY, String(tvUserState.currentIndex));
-      }
     }
   }, [tvUserState?.currentIndex]);
 
@@ -622,29 +624,118 @@ export default function DashboardPage() {
     return () => { mounted = false; };
   }, []);
 
-  /* Advance TV video when it ends — save progress to Firestore + localStorage */
+  /* Fetch videos for gallery sections */
+  useEffect(() => {
+    let mounted = true;
+    const fetchVideos = async () => {
+      try {
+        const allVids = await getVideos({ max: 200, includeHidden: false });
+        if (!mounted) return;
+        // Recent: sort by publishedAt descending, take 15
+        const sorted = [...allVids].sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+        setRecentVideos(sorted.slice(0, 15));
+        // Weekly: deterministic shuffle by week number, take 15
+        const weekly = seededShuffle(sorted, getWeekSeed()).slice(0, 15);
+        setWeeklyVideos(weekly);
+      } catch (e) {
+        console.error("Failed to load video gallery:", e);
+      } finally {
+        if (mounted) setVideoGalleryLoading(false);
+      }
+    };
+    fetchVideos();
+    return () => { mounted = false; };
+  }, []);
+
+  /* Start TV — resume saved progress, or advance if already interacted */
+  const handleStartTv = useCallback(() => {
+    if (!tvUserState || tvUserState.playlist.length === 0) {
+      // No playlist — try to auto-populate
+      const uid = auth.currentUser?.uid;
+      if (uid && tvVideos.length > 0) {
+        import("@/lib/youtube").then((yt) => {
+          yt.autoInitUserPlaylist(uid).then((state) => {
+            setTvUserState(state);
+          });
+        });
+      } else {
+        window.dispatchEvent(new CustomEvent("show-toast", {
+          detail: { title: "No Videos", message: "No videos available to play. Sync videos from the admin panel.", type: "info", duration: 3000 }
+        }));
+      }
+      return;
+    }
+    const uid = auth.currentUser?.uid;
+    // First click after page load = resume saved progress, subsequent clicks = advance
+    if (tvCurrentVideo && hasInteractedWithTv.current) {
+      // User already pressed Start TV before — advance to next video
+      const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
+      const next = tvVideos.find((v) => v.id === tvUserState.playlist[nextIndex]) ?? null;
+      if (next) setNextTvVideo(next);
+      if (uid) updateUserTvProgress(uid, nextIndex, 0);
+      setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
+      return;
+    }
+    hasInteractedWithTv.current = true;
+    // Resume or start — check saved progress to decide
+    const savedIndex = tvUserState.currentIndex;
+    const savedSeek = tvUserState.currentSeek;
+    const savedVideo = tvVideos.find((v) => v.id === tvUserState.playlist[savedIndex]) ?? null;
+    const nearEnd = savedVideo && savedVideo.duration > 0 && savedSeek >= savedVideo.duration * 0.9;
+    if (nearEnd) {
+      // Near the end — advance to next video
+      const nextIndex = (savedIndex + 1) % tvUserState.playlist.length;
+      const next = tvVideos.find((v) => v.id === tvUserState.playlist[nextIndex]) ?? null;
+      if (next) setNextTvVideo(next);
+      if (uid) updateUserTvProgress(uid, nextIndex, 0);
+      setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
+    } else {
+      // Resume current video at saved progress (or start from index 0 if no progress)
+      const resumeIndex = savedSeek > 0 && savedVideo ? savedIndex : 0;
+      const resumeSeek = resumeIndex === savedIndex ? savedSeek : 0;
+      if (tvUserState.playlist.length > 1) {
+        const nextIdx = (resumeIndex + 1) % tvUserState.playlist.length;
+        const next = tvVideos.find((v) => v.id === tvUserState.playlist[nextIdx]) ?? null;
+        if (next) setNextTvVideo(next);
+      }
+      if (uid) updateUserTvProgress(uid, resumeIndex, resumeSeek);
+      setTvUserState((prev) => prev ? { ...prev, currentIndex: resumeIndex, currentSeek: resumeSeek } : prev);
+    }
+  }, [tvCurrentVideo, tvUserState, tvVideos, router]);
+
+  /* Advance TV video when it ends — show end card with next video ready */
   const advanceTvVideo = useCallback(() => {
+    if (!tvUserState || tvUserState.playlist.length === 0) return;
+    // Save progress immediately before showing end card
+    const uid = auth.currentUser?.uid;
+    if (uid && lastTvSeekRef.current > 0) {
+      updateUserTvProgress(uid, lastTvIndexRef.current, lastTvSeekRef.current);
+    }
+    // Show end card with the next video info
+    const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
+    const nextVideo = tvVideos.find((v) => v.id === tvUserState.playlist[nextIndex]) ?? null;
+    if (nextVideo) {
+      setNextTvVideo(nextVideo);
+      setShowEndCard(true);
+    }
+  }, [tvUserState, tvVideos]);
+
+  /* Called when user taps "Continue Watching" — advances and plays the next video */
+  const handleContinueWatching = useCallback(() => {
     if (!tvUserState || tvUserState.playlist.length === 0) return;
     const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
     const uid = auth.currentUser?.uid;
     if (uid) {
       updateUserTvProgress(uid, nextIndex, 0);
     }
-    // Reset localStorage cache for new video
-    if (typeof window !== "undefined") {
-      localStorage.setItem(TV_SEEK_KEY, "0");
-      localStorage.setItem(TV_INDEX_KEY, String(nextIndex));
-    }
+    setShowEndCard(false);
+    setNextTvVideo(null);
     setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
   }, [tvUserState]);
 
-  /* Track current time for periodic Firestore + localStorage saves */
+  /* Track current time for periodic Firestore saves */
   const handleTvTimeUpdate = useCallback((time: number) => {
     lastTvSeekRef.current = time;
-    // Write to localStorage instantly for cross-page resume
-    if (typeof window !== "undefined") {
-      localStorage.setItem(TV_SEEK_KEY, String(time));
-    }
   }, []);
 
   // Keep callbacks in sync with latest versions (defined after advanceTvVideo/handleTvTimeUpdate)
@@ -660,11 +751,6 @@ export default function DashboardPage() {
     const uid = auth.currentUser?.uid;
     if (uid && lastTvSeekRef.current > 0) {
       updateUserTvProgress(uid, lastTvIndexRef.current, lastTvSeekRef.current);
-    }
-    // Also persist to localStorage as fresh backup
-    if (typeof window !== "undefined") {
-      localStorage.setItem(TV_SEEK_KEY, String(lastTvSeekRef.current));
-      localStorage.setItem(TV_INDEX_KEY, String(lastTvIndexRef.current));
     }
   }, []);
 
@@ -826,18 +912,47 @@ export default function DashboardPage() {
           {/* Player — rendered by global TvPlayerProvider, overlays this target */}
           {tvCurrentVideo ? (
             <div ref={tvPlayerTargetRef} className="tv-player-container">
-              <div className="tv-overlay">
-                <div className="tv-overlay-info">
-                  <div className="tv-overlay-now">
-                    <i className="fas fa-tv"></i>
-                    Now Playing
+              {/* Normal overlay when playing */}
+              {!showEndCard && (
+                <div className="tv-overlay">
+                  <div className="tv-overlay-info">
+                    <div className="tv-overlay-now">
+                      <i className="fas fa-tv"></i>
+                      Now Playing
+                    </div>
+                    <div className="tv-overlay-title">{tvCurrentVideo.title}</div>
                   </div>
-                  <div className="tv-overlay-title">{tvCurrentVideo.title}</div>
+                  <button className="tv-expand-btn" onClick={toggleFullscreen} title="Full screen">
+                    <i className="fas fa-expand"></i>
+                  </button>
                 </div>
-                <button className="tv-expand-btn" onClick={toggleFullscreen} title="Full screen">
-                  <i className="fas fa-expand"></i>
-                </button>
-              </div>
+              )}
+
+              {/* End card — shown when video finishes */}
+              {showEndCard && nextTvVideo && (
+                <div className="tv-end-card">
+                  <div className="tv-end-card-bg"></div>
+                  <div className="tv-end-card-body">
+                    <div className="tv-end-card-label">
+                      <i className="fas fa-check-circle"></i> Finished Watching
+                    </div>
+                    <div className="tv-end-card-thumb">
+                      <img src={nextTvVideo.thumbnail || `https://i.ytimg.com/vi/${nextTvVideo.id}/default.jpg`} alt="" />
+                      <div className="tv-end-card-play-icon">
+                        <i className="fas fa-play"></i>
+                      </div>
+                    </div>
+                    <div className="tv-end-card-title">{nextTvVideo.title}</div>
+                    <div className="tv-end-card-sub">Up next in your playlist</div>
+                    <button className="tv-end-card-btn" onClick={handleContinueWatching}>
+                      <i className="fas fa-play"></i> Continue Watching TV
+                    </button>
+                    <button className="tv-end-card-skip" onClick={() => setShowEndCard(false)}>
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="tv-no-video">
@@ -850,10 +965,9 @@ export default function DashboardPage() {
           {tvChannel && (
             <div className="tv-channel-strip">
               <div className="tv-channel-avatar">
-                {tvChannel.thumbnail ? (
-                  <img src={tvChannel.thumbnail} alt="" />
-                ) : (
-                  <i className="fab fa-youtube"></i>
+                <i className="fab fa-youtube"></i>
+                {tvChannel.thumbnail && (
+                  <img src={tvChannel.thumbnail.replace(/^http:/, 'https:')} alt="" referrerPolicy="no-referrer" crossOrigin="anonymous" onError={(e) => { e.currentTarget.style.display = 'none'; }} className="tv-avatar-img" />
                 )}
               </div>
               <div className="tv-channel-info">
@@ -865,6 +979,13 @@ export default function DashboardPage() {
               </button>
             </div>
           )}
+
+          {/* Start TV button — always visible */}
+          <button className="tv-start-btn" onClick={handleStartTv} title="Starts TV or skips to next if already playing">
+            <i className="fas fa-play"></i>
+            <span>Start TV</span>
+          </button>
+          <div className="tv-start-hint">Starts TV · Skips to next if already playing</div>
 
           {/* Playlist info */}
           {tvUserState && tvUserState.playlist.length === 0 && (
@@ -942,7 +1063,7 @@ export default function DashboardPage() {
         </div>          </section>
 
           {/* UPCOMING EVENTS */}
-          <EventCarousel />
+          <EventCarousel redirectUrl="/gallery" />
 
           {/* PHOTO CAROUSEL */}
           <section className="feed-section">
@@ -996,22 +1117,50 @@ export default function DashboardPage() {
       </section>
       )}
 
-      {/* PHOTO GALLERY — rotating images from saved albums */}
-      {!galleryLoading && albums.length > 0 && (
-        <RotatingGallery
-          albums={albums}
-          entries={entries}
-          albumsLoading={galleryLoading}
-          galleryIndices={galleryIndices}
-          setGalleryIndices={setGalleryIndices}
-          onAlbumClick={(albumId, images) => {
-            if (images.length > 0) {
-              imageViewer.open(images, 0);
-            } else {
-              router.push("/gallery");
-            }
-          }}
-        />
+      {/* VIDEO GALLERY — recently added */}
+      {!videoGalleryLoading && recentVideos.length > 0 && (
+        <section className="feed-section">
+          <div className="section-header-inline">
+            <h2 className="section-title">Recently Added</h2>
+            <button className="section-link" onClick={() => router.push("/tv")}>View All <i className="fas fa-chevron-right"></i></button>
+          </div>
+          <div className="vg-scroll">
+            {recentVideos.map((v) => (
+              <div key={v.id} className="vg-card" onClick={() => router.push("/tv")}>
+                <div className="vg-thumb-wrap">
+                  <img src={v.thumbnail} alt={v.title} loading="lazy" />
+                  <span className="vg-duration">{Math.floor(v.duration / 60)}:{(v.duration % 60).toString().padStart(2, "0")}</span>
+                </div>
+                <div className="vg-info">
+                  <div className="vg-title">{v.title}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* VIDEO GALLERY — this week's playlist */}
+      {!videoGalleryLoading && weeklyVideos.length > 0 && (
+        <section className="feed-section">
+          <div className="section-header-inline">
+            <h2 className="section-title">This Week&apos;s Playlist</h2>
+            <button className="section-link" onClick={() => router.push("/tv")}>View All <i className="fas fa-chevron-right"></i></button>
+          </div>
+          <div className="vg-scroll">
+            {weeklyVideos.map((v) => (
+              <div key={v.id} className="vg-card" onClick={() => router.push("/tv")}>
+                <div className="vg-thumb-wrap">
+                  <img src={v.thumbnail} alt={v.title} loading="lazy" />
+                  <span className="vg-duration">{Math.floor(v.duration / 60)}:{(v.duration % 60).toString().padStart(2, "0")}</span>
+                </div>
+                <div className="vg-info">
+                  <div className="vg-title">{v.title}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* TODAY'S BROADCAST SCHEDULE */}
@@ -1051,34 +1200,7 @@ export default function DashboardPage() {
     <>
       {/* ===== INITIAL LOADING SKELETON (prevents ANR) ===== */}
       {!contentReady && (
-        <div style={{
-          height: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "var(--bg, #0F0F0F)",
-          color: "#fff",
-          fontFamily: "'Inter', sans-serif",
-          flexDirection: "column",
-          gap: 16,
-        }}>
-          <div className="dh-logo" style={{
-            width: 48, height: 48, borderRadius: "50%",
-            background: "linear-gradient(135deg, #E8A838, #D4762A)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 18, fontWeight: 800, color: "#fff",
-          }}>
-            <i className="fas fa-cross"></i>
-          </div>
-          <div style={{
-            width: 32, height: 32,
-            border: "3px solid #242424",
-            borderTopColor: "#E8A838",
-            borderRadius: "50%",
-            animation: "spin 0.8s linear infinite",
-          }} />
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        </div>
+        <PremiumLoader />
       )}
 
       {contentReady && <>
@@ -1197,7 +1319,8 @@ export default function DashboardPage() {
         @keyframes livePulse { 0%,100% { opacity:1;transform:scale(1); } 50% { opacity:0.5;transform:scale(1.3); } }
 
         /* ===== CONTENT SCROLL ===== */
-        .content-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 80px; }
+        .content-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0; }
+        .content-scroll > :last-child { margin-bottom: 72px; }
         .content-scroll::-webkit-scrollbar { display: none; }
 
         .feed-section { padding: 0 var(--section-px, 16px) 16px; }
@@ -1865,6 +1988,74 @@ export default function DashboardPage() {
             backdrop-filter: blur(4px);
         }
         .tv-expand-btn:active { background: rgba(255,255,255,0.2); transform: scale(0.9); }
+        .tv-end-card {
+          position: absolute; inset: 0; z-index: 20;
+          display: flex; align-items: center; justify-content: center;
+          animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .tv-end-card-bg {
+          position: absolute; inset: 0;
+          background: rgba(0,0,0,0.75);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+        }
+        .tv-end-card-body {
+          position: relative; z-index: 1;
+          display: flex; flex-direction: column; align-items: center;
+          gap: 10px; padding: 24px 20px; max-width: 320px;
+          text-align: center;
+        }
+        .tv-end-card-label {
+          font-size: 12px; font-weight: 700; color: var(--success);
+          display: flex; align-items: center; gap: 6px;
+        }
+        .tv-end-card-label i { font-size: 14px; }
+        .tv-end-card-thumb {
+          position: relative; width: 100%; aspect-ratio: 16/9;
+          max-width: 260px; border-radius: 10px; overflow: hidden;
+          background: var(--surface-elevated);
+          border: 1px solid rgba(255,255,255,0.08);
+        }
+        .tv-end-card-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .tv-end-card-play-icon {
+          position: absolute; inset: 0;
+          display: flex; align-items: center; justify-content: center;
+          background: rgba(0,0,0,0.15);
+        }
+        .tv-end-card-play-icon i {
+          width: 44px; height: 44px; border-radius: 50%;
+          background: rgba(255,255,255,0.15);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 18px; color: #fff;
+          backdrop-filter: blur(4px);
+        }
+        .tv-end-card-title {
+          font-size: 15px; font-weight: 700; color: #fff;
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+          overflow: hidden; line-height: 1.4;
+        }
+        .tv-end-card-sub {
+          font-size: 11px; color: var(--text-tertiary);
+          margin-top: -4px;
+        }
+        .tv-end-card-btn {
+          width: 100%; padding: 14px;
+          border-radius: 12px; font-size: 14px; font-weight: 700;
+          background: linear-gradient(135deg, #3B82F6, #6366F1);
+          border: none; color: #fff; cursor: pointer;
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          transition: all 0.2s ease;
+        }
+        .tv-end-card-btn:active { transform: scale(0.97); }
+        .tv-end-card-skip {
+          padding: 6px 16px; border-radius: 8px;
+          background: transparent; border: 1px solid rgba(255,255,255,0.1);
+          color: var(--text-tertiary); font-size: 12px; font-weight: 600;
+          cursor: pointer; transition: all 0.15s ease;
+        }
+        .tv-end-card-skip:active { background: rgba(255,255,255,0.05); }
+
         .tv-no-video {
             display: flex;
             flex-direction: column;
@@ -1927,8 +2118,11 @@ export default function DashboardPage() {
             background: var(--surface-elevated);
             display: flex; align-items: center; justify-content: center;
             font-size: 16px; color: var(--text-tertiary);
+            position: relative;
         }
+        .tv-channel-avatar i { font-size: 16px; color: #FF0000; }
         .tv-channel-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .tv-avatar-img { position: absolute; inset: 0; border-radius: 50%; }
         .tv-channel-info { flex: 1; min-width: 0; }
         .tv-channel-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .tv-channel-meta { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
@@ -1963,6 +2157,78 @@ export default function DashboardPage() {
             margin-top: 6px;
         }
         .tv-next-slot i { color: #3B82F6; font-size: 10px; }
+
+        .tv-start-btn {
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          width: 100%; padding: 14px;
+          margin: 8px 16px 0;
+          width: calc(100% - 32px);
+          border-radius: var(--radius-md);
+          background: linear-gradient(135deg, #3B82F6, #6366F1);
+          border: none; color: #fff;
+          font-size: 14px; font-weight: 700;
+          cursor: pointer; transition: all 0.2s ease;
+          position: relative; z-index: 1;
+        }
+        .tv-start-btn:active { transform: scale(0.97); }
+        .tv-start-btn i { font-size: 13px; }
+        .tv-start-hint { font-size: 10px; color: var(--text-tertiary); text-align: center; padding: 4px 16px 0; opacity: 0.7; }
+
+        /* ===== VIDEO GALLERY ===== */
+        .vg-scroll {
+          display: flex;
+          gap: 12px;
+          overflow-x: auto;
+          padding: 4px 20px 8px;
+          scroll-snap-type: x mandatory;
+          -webkit-overflow-scrolling: touch;
+        }
+        .vg-scroll::-webkit-scrollbar { display: none; }
+        .vg-card {
+          flex: 0 0 180px;
+          scroll-snap-align: start;
+          border-radius: var(--radius-sm);
+          overflow: hidden;
+          background: var(--surface);
+          cursor: pointer;
+          transition: transform 0.2s ease;
+        }
+        .vg-card:active { transform: scale(0.96); }
+        .vg-thumb-wrap {
+          position: relative;
+          aspect-ratio: 16 / 9;
+          background: #000;
+        }
+        .vg-thumb-wrap img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        .vg-duration {
+          position: absolute;
+          bottom: 6px;
+          right: 6px;
+          background: rgba(0,0,0,0.85);
+          color: #fff;
+          font-size: 11px;
+          font-weight: 600;
+          padding: 2px 6px;
+          border-radius: 4px;
+        }
+        .vg-info { padding: 10px 12px; }
+        .vg-title {
+          font-size: 13px;
+          font-weight: 600;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .vg-empty {
+          padding: 24px 20px;
+          text-align: center;
+          color: var(--text-tertiary);
+          font-size: 14px;
+        }
 
         /* ===== ONBOARDING ===== */
         .onboarding-overlay {
@@ -2277,8 +2543,6 @@ export default function DashboardPage() {
           )}
 
           {renderHomeTab()}
-
-          <div style={{ height: 40 }}></div>
         </div>
 
         <BottomNavBar activeTab="home" />

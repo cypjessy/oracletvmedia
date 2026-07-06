@@ -24,6 +24,8 @@ import {
 } from "firebase/firestore";
 import ToastBridge from "@/components/dashboard/ToastBridge";
 import BottomNavBar from "@/components/shared/BottomNavBar";
+import NativePiPOverlay from "@/components/tv/NativePiPOverlay";
+import PremiumLoader from "@/components/shared/PremiumLoader";
 
 /* ─── Helpers ──────────────────────────────────────────────── */
 
@@ -66,6 +68,30 @@ const TABS: { id: TabId; label: string; icon: string }[] = [
 
 /* ─── Component ────────────────────────────────────────────── */
 
+/** Bridge injected by MainActivity.onCreate() — provides PiP state tracking. */
+declare global {
+  interface Window {
+    AndroidPiP?: {
+      setVideoActive: (active: boolean) => void;
+      isVideoActive: () => boolean;
+    };
+  }
+}
+
+/** Signal the native Android PiP bridge when a video is actively playing.
+ *  When the user leaves the app, Android enters PiP mode automatically
+ *  (handled by MainActivity.onUserLeaveHint). When video stops or the
+ *  user navigates away, we disable PiP so the app exits normally. */
+function setPipActive(active: boolean) {
+  try {
+    if (typeof window.AndroidPiP !== "undefined" && window.AndroidPiP?.setVideoActive) {
+      window.AndroidPiP.setVideoActive(active);
+    }
+  } catch {
+    // Not running in Capacitor WebView — ignore
+  }
+}
+
 export default function TVPage() {
   const router = useRouter();
 
@@ -85,21 +111,7 @@ export default function TVPage() {
   const [tvUserState, setTvUserState] = useState<UserTvState | null>(null);
   const lastTvSeekRef = useRef(0);
   const lastTvIndexRef = useRef(0);
-
-  // localStorage keys for instant cross-page resume (scoped by user UID)
-  const tvUid = auth.currentUser?.uid;
-  const TV_SEEK_KEY = tvUid ? `tv_resume_seek_${tvUid}` : "tv_resume_seek";
-  const TV_INDEX_KEY = tvUid ? `tv_resume_index_${tvUid}` : "tv_resume_index";
-
-  // One-time migration: clean up old non-UID-scoped keys
-  useEffect(() => {
-    if (tvUid && typeof window !== "undefined") {
-      localStorage.removeItem("tv_resume_seek");
-      localStorage.removeItem("tv_resume_index");
-    }
-  }, []);
-
-  const cachedSeek = typeof window !== "undefined" ? Number(localStorage.getItem(TV_SEEK_KEY)) || 0 : 0;
+  const hasInteractedWithTv = useRef(false);
 
   const tvPlayerTargetRef = useRef<HTMLDivElement>(null);
   const tvPlayer = useTvPlayer();
@@ -108,12 +120,9 @@ export default function TVPage() {
   const currentVideo = tvUserState && tvUserState.playlist.length > 0
     ? videos.find((v) => v.id === tvUserState.playlist[tvUserState.currentIndex])
     : undefined;
-  const currentSeek = (() => {
-    // Prefer Firestore if it has a valid seek > 0.1 seconds
-    if (tvUserState && tvUserState.currentSeek > 0.1) return tvUserState.currentSeek;
-    // Otherwise use localStorage cache (freshly written by the other page)
-    return cachedSeek > 0.1 ? cachedSeek : undefined;
-  })();
+  const currentSeek = tvUserState && tvUserState.currentSeek > 0.1
+    ? tvUserState.currentSeek
+    : undefined;
 
   // ─── Tabs ───
   const [activeTab, setActiveTab] = useState<TabId>("notes");
@@ -147,6 +156,12 @@ export default function TVPage() {
   // ─── Preview mode toggle ───
   const [notesPreview, setNotesPreview] = useState(false);
 
+  // ─── Notes sub-tab ───
+  const [notesSubTab, setNotesSubTab] = useState<"notes" | "saved">("notes");
+
+  // ─── Selected note reader ───
+  const [selectedNote, setSelectedNote] = useState<TvNote | null>(null);
+
   // ─── Giving state ───
   const [giveMethods, setGiveMethods] = useState<PaymentMethod[]>([]);
   const [giveTxns, setGiveTxns] = useState<Transaction[]>([]);
@@ -167,13 +182,10 @@ export default function TVPage() {
     else setUserName("Guest");
   }, []);
 
-  // Sync index ref when state changes + update localStorage
+  // Sync index ref when state changes
   useEffect(() => {
     if (tvUserState) {
       lastTvIndexRef.current = tvUserState.currentIndex;
-      if (typeof window !== "undefined") {
-        localStorage.setItem(TV_INDEX_KEY, String(tvUserState.currentIndex));
-      }
     }
   }, [tvUserState?.currentIndex]);
 
@@ -193,6 +205,14 @@ export default function TVPage() {
       tvPlayer.play(currentVideo.id, currentSeek);
     }
   }, [currentVideo?.id, currentSeek, tvPlayer]);
+
+  // ─── PiP — notify native Android when video is playing so the
+  //      MainActivity.onUserLeaveHint enters PiP mode automatically.
+  //      Clears when video stops or user navigates away.
+  useEffect(() => {
+    setPipActive(!!currentVideo);
+    return () => setPipActive(false);
+  }, [!!currentVideo]);
 
   // ─── Initial load: fetch channel + user's TV state + only playlist videos ───
   useEffect(() => {
@@ -294,29 +314,78 @@ export default function TVPage() {
     setAllVideosLoading(false);
   }, [allVideosLastPos, allVideosLoading, allVideosHasMore]);
 
-  // ─── Advance to next video in user's playlist ───
+  // ─── End card state for "Continue Watching" prompt ───
+  const [showEndCard, setShowEndCard] = useState(false);
+  const [nextTvVideo, setNextTvVideo] = useState<YouTubeVideo | null>(null);
+
+  // ─── Start TV — resume saved progress, or advance if already interacted ───
+  const handleStartTv = useCallback(() => {
+    if (!tvUserState || tvUserState.playlist.length === 0) {
+      const uid = auth.currentUser?.uid;
+      if (uid && videos.length > 0) {
+        import("@/lib/youtube").then((yt) => {
+          yt.autoInitUserPlaylist(uid).then((state) => {
+            setTvUserState(state);
+          });
+        });
+      } else {
+        window.dispatchEvent(new CustomEvent("show-toast", {
+          detail: { title: "No Videos", message: "No videos available. Sync from the admin panel.", type: "info", duration: 3000 }
+        }));
+      }
+      return;
+    }
+    const uid = auth.currentUser?.uid;
+    if (currentVideo && hasInteractedWithTv.current) {
+      const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
+      if (uid) updateUserTvProgress(uid, nextIndex, 0);
+      setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
+      return;
+    }
+    hasInteractedWithTv.current = true;
+    const savedIndex = tvUserState.currentIndex;
+    const savedSeek = tvUserState.currentSeek;
+    const savedVideo = videos.find((v) => v.id === tvUserState.playlist[savedIndex]);
+    const nearEnd = savedVideo && savedVideo.duration > 0 && savedSeek >= savedVideo.duration * 0.9;
+    if (nearEnd) {
+      const nextIndex = (savedIndex + 1) % tvUserState.playlist.length;
+      if (uid) updateUserTvProgress(uid, nextIndex, 0);
+      setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
+    } else {
+      const resumeIndex = savedSeek > 0 && savedVideo ? savedIndex : 0;
+      const resumeSeek = resumeIndex === savedIndex ? savedSeek : 0;
+      if (uid) updateUserTvProgress(uid, resumeIndex, resumeSeek);
+      setTvUserState((prev) => prev ? { ...prev, currentIndex: resumeIndex, currentSeek: resumeSeek } : prev);
+    }
+  }, [currentVideo, tvUserState, videos]);
+
+  // ─── When video ends, show end card instead of auto-advancing ───
   const advanceToNext = useCallback(() => {
+    if (!tvUserState || tvUserState.playlist.length === 0) return;
+    const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
+    const next = videos.find((v) => v.id === tvUserState.playlist[nextIndex]) ?? null;
+    if (next) {
+      setNextTvVideo(next);
+      setShowEndCard(true);
+    }
+  }, [tvUserState, videos]);
+
+  // ─── Called when user taps "Continue Watching" ───
+  const handleContinueWatching = useCallback(() => {
     if (!tvUserState || tvUserState.playlist.length === 0) return;
     const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
     const uid = auth.currentUser?.uid;
     if (uid) {
       updateUserTvProgress(uid, nextIndex, 0);
     }
-    // Reset localStorage cache for new video
-    if (typeof window !== "undefined") {
-      localStorage.setItem(TV_SEEK_KEY, "0");
-      localStorage.setItem(TV_INDEX_KEY, String(nextIndex));
-    }
+    setShowEndCard(false);
+    setNextTvVideo(null);
     setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
   }, [tvUserState]);
 
-  // ─── Track current seek for periodic Firestore + localStorage saves ───
+  // ─── Track current seek for periodic Firestore saves ───
   const handleTvTimeUpdate = useCallback((time: number) => {
     lastTvSeekRef.current = time;
-    // Write to localStorage instantly for cross-page resume
-    if (typeof window !== "undefined") {
-      localStorage.setItem(TV_SEEK_KEY, String(time));
-    }
   }, []);
 
   // Keep callbacks in sync with latest versions (after advanceToNext/handleTvTimeUpdate)
@@ -327,16 +396,11 @@ export default function TVPage() {
     });
   }, [advanceToNext, handleTvTimeUpdate, tvPlayer]);
 
-  /* Save current progress to Firestore + localStorage (used by interval + cleanup) */
+  /* Save current progress to Firestore (used by interval + cleanup) */
   const saveTvProgress = useCallback(() => {
     const uid = auth.currentUser?.uid;
     if (uid && lastTvSeekRef.current > 0) {
       updateUserTvProgress(uid, lastTvIndexRef.current, lastTvSeekRef.current);
-    }
-    // Also persist to localStorage as fresh backup
-    if (typeof window !== "undefined") {
-      localStorage.setItem(TV_SEEK_KEY, String(lastTvSeekRef.current));
-      localStorage.setItem(TV_INDEX_KEY, String(lastTvIndexRef.current));
     }
   }, []);
 
@@ -414,6 +478,38 @@ export default function TVPage() {
     // Then every 30 seconds
     const interval = setInterval(() => updateTvHeartbeat(uid), 30000);
     return () => clearInterval(interval);
+  }, []);
+
+  // ─── Track whether the app is in the background (for PiP native player) ───
+  const [isInBackground, setIsInBackground] = useState(false);
+
+  useEffect(() => {
+    // Web: visibilitychange fires when tab/page is hidden
+    const handleVis = () => {
+      setIsInBackground(document.visibilityState === "hidden");
+    };
+    document.addEventListener("visibilitychange", handleVis);
+
+    // Capacitor: appStateChange fires on native app background/foreground
+    let cleanupApp: (() => void) | null = null;
+    import("@capacitor/core")
+      .then(({ Capacitor }) => {
+        if (!Capacitor.isNativePlatform()) return;
+        return import("@capacitor/app");
+      })
+      .then((AppModule) => {
+        if (!AppModule) return;
+        const { App } = AppModule;
+        App.addListener("appStateChange", (state) => {
+          setIsInBackground(!state.isActive);
+        }).then((h) => { cleanupApp = () => h.remove(); });
+      })
+      .catch(() => {});
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVis);
+      if (cleanupApp) cleanupApp();
+    };
   }, []);
 
   // ─── Orientation toggle ───
@@ -700,7 +796,7 @@ export default function TVPage() {
   }, [activeTab]);
 
   // ─── Insert formatting into notes ───
-  const insertFormatting = useCallback((before: string, after: string) => {
+  const insertFormatting = useCallback((before: string, after: string, cursorOffset?: number) => {
     const textarea = document.getElementById("tv-notes-textarea") as HTMLTextAreaElement | null;
     if (!textarea) return;
     const start = textarea.selectionStart;
@@ -709,15 +805,37 @@ export default function TVPage() {
     const newContent = noteContent.substring(0, start) + before + selected + after + noteContent.substring(end);
     setNoteContent(newContent);
     noteChangedRef.current = true;
-    // Restore selection after React re-render
+    const cursorPos = cursorOffset ?? (selected ? start + before.length + selected.length : start + before.length);
     requestAnimationFrame(() => {
       textarea.focus();
-      textarea.setSelectionRange(start + before.length, start + before.length + selected.length);
+      textarea.setSelectionRange(cursorPos, cursorPos);
     });
   }, [noteContent]);
 
-  const handleBold = useCallback(() => insertFormatting("**", "**"), [insertFormatting]);
-  const handleItalic = useCallback(() => insertFormatting("*", "*"), [insertFormatting]);
+  const handleBold = useCallback(() => {
+    const textarea = document.getElementById("tv-notes-textarea") as HTMLTextAreaElement | null;
+    const start = textarea?.selectionStart ?? 0;
+    const end = textarea?.selectionEnd ?? 0;
+    const selected = noteContent.substring(start, end);
+    if (selected) {
+      insertFormatting("**", "**");
+    } else {
+      insertFormatting("**", "**", start + 2);
+    }
+  }, [insertFormatting, noteContent]);
+
+  const handleItalic = useCallback(() => {
+    const textarea = document.getElementById("tv-notes-textarea") as HTMLTextAreaElement | null;
+    const start = textarea?.selectionStart ?? 0;
+    const end = textarea?.selectionEnd ?? 0;
+    const selected = noteContent.substring(start, end);
+    if (selected) {
+      insertFormatting("*", "*");
+    } else {
+      insertFormatting("*", "*", start + 1);
+    }
+  }, [insertFormatting, noteContent]);
+
   const handleHeading = useCallback(() => insertFormatting("\n## ", ""), [insertFormatting]);
   const handleBullet = useCallback(() => insertFormatting("\n- ", ""), [insertFormatting]);
   const handleNumbered = useCallback(() => insertFormatting("\n1. ", ""), [insertFormatting]);
@@ -728,9 +846,9 @@ export default function TVPage() {
     const end = textarea.selectionEnd;
     const selected = noteContent.substring(start, end);
     if (selected) {
-      insertFormatting("[", "](url)");
+      insertFormatting("[", "](url)", start + 1);
     } else {
-      insertFormatting("[link text]", "(url)");
+      insertFormatting("[link text]", "(url)", start + 1);
     }
   }, [insertFormatting, noteContent]);
 
@@ -959,170 +1077,229 @@ export default function TVPage() {
       case "notes":
         return (
           <div className="tv-tab-pane">
-            {/* Current video notes editor */}
-            {currentVideo ? (
+            {/* Sub-tab navigation */}
+            <div className="tv-notes-subtabs">
+              <button
+                className={`tv-notes-subtab ${notesSubTab === "notes" ? "active" : ""}`}
+                onClick={() => setNotesSubTab("notes")}
+              >
+                <i className="fas fa-pen"></i> Notes
+              </button>
+              <button
+                className={`tv-notes-subtab ${notesSubTab === "saved" ? "active" : ""}`}
+                onClick={() => setNotesSubTab("saved")}
+              >
+                <i className="fas fa-bookmark"></i> Saved Notes
+              </button>
+            </div>
+
+            {notesSubTab === "notes" ? (
               <>
-                <div className="tv-notes-current">
-                  <div className="tv-notes-current-label">Now Watching</div>
-                  <div className="tv-notes-current-title">{currentVideo.title}</div>
-                  {currentVideo.description && (
-                    <div className="tv-notes-current-desc">{currentVideo.description}</div>
-                  )}
-                  {tvUserState && (
-                    <div className="tv-notes-current-playlist">
-                      <i className="fas fa-list"></i> Video {tvUserState.currentIndex + 1} of {tvUserState.playlist.length}
+                {/* Current video notes editor */}
+                {currentVideo ? (
+                  <>
+                    <div className="tv-notes-current">
+                      <div className="tv-notes-current-label">Now Watching</div>
+                      <div className="tv-notes-current-title">{currentVideo.title}</div>
+                      {currentVideo.description && (
+                        <div className="tv-notes-current-desc">{currentVideo.description}</div>
+                      )}
+                      {tvUserState && (
+                        <div className="tv-notes-current-playlist">
+                          <i className="fas fa-list"></i> Video {tvUserState.currentIndex + 1} of {tvUserState.playlist.length}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
 
-                <div className="tv-notes-section-title">
-                  <i className="fas fa-pen"></i> Your Notes
-                  <div className="tv-notes-toolbar-right">
-                    {noteSaving && <span className="tv-notes-saving"><i className="fas fa-spinner fa-spin"></i></span>}
-                    <button
-                      className={`tv-notes-preview-btn ${notesPreview ? "active" : ""}`}
-                      onClick={() => setNotesPreview((p) => !p)}
-                      title={notesPreview ? "Edit" : "Preview"}
-                    >
-                      <i className={`fas fa-${notesPreview ? "edit" : "eye"}`}></i>
-                    </button>
-                  </div>
-                </div>
+                    <div className="tv-notes-section-title">
+                      <i className="fas fa-pen"></i> Your Notes
+                      <div className="tv-notes-toolbar-right">
+                        {noteSaving && <span className="tv-notes-saving"><i className="fas fa-spinner fa-spin"></i></span>}
+                        <button
+                          className="tv-notes-save-btn"
+                          onClick={async () => {
+                            if (!currentVideo || !auth.currentUser?.uid) return;
+                            const uid = auth.currentUser.uid;
+                            const vid = currentVideo.id;
+                            const title = currentVideo.title;
+                            setNoteSaving(true);
+                            try {
+                              await saveUserNote(uid, vid, title, noteContent);
+                              setNoteLastSaved(new Date());
+                              noteChangedRef.current = false;
+                            } catch {}
+                            setNoteSaving(false);
+                          }}
+                          title="Save Note"
+                        >
+                          <i className="fas fa-floppy-disk"></i> Save
+                        </button>
+                        <button
+                          className={`tv-notes-preview-btn ${notesPreview ? "active" : ""}`}
+                          onClick={() => setNotesPreview((p) => !p)}
+                          title={notesPreview ? "Edit" : "Preview"}
+                        >
+                          <i className={`fas fa-${notesPreview ? "edit" : "eye"}`}></i>
+                        </button>
+                      </div>
+                    </div>
 
-                {/* Formatting toolbar (edit mode only) */}
-                {!notesPreview && (
-                  <div className="tv-notes-toolbar">
-                    <button className="tv-notes-tb-btn" onClick={handleBold} title="Bold">
-                      <i className="fas fa-bold"></i>
-                    </button>
-                    <button className="tv-notes-tb-btn" onClick={handleItalic} title="Italic">
-                      <i className="fas fa-italic"></i>
-                    </button>
-                    <button className="tv-notes-tb-btn" onClick={handleHeading} title="Heading">
-                      <i className="fas fa-heading"></i>
-                    </button>
-                    <span className="tv-notes-tb-divider"></span>
-                    <button className="tv-notes-tb-btn" onClick={handleBullet} title="Bullet List">
-                      <i className="fas fa-list-ul"></i>
-                    </button>
-                    <button className="tv-notes-tb-btn" onClick={handleNumbered} title="Numbered List">
-                      <i className="fas fa-list-ol"></i>
-                    </button>
-                    <span className="tv-notes-tb-divider"></span>
-                    <button className="tv-notes-tb-btn" onClick={handleLink} title="Insert Link">
-                      <i className="fas fa-link"></i>
-                    </button>
-                  </div>
-                )}
+                    {/* Formatting toolbar (edit mode only) */}
+                    {!notesPreview && (
+                      <div className="tv-notes-toolbar">
+                        <button className="tv-notes-tb-btn" onClick={handleBold} title="Bold">
+                          <i className="fas fa-bold"></i>
+                        </button>
+                        <button className="tv-notes-tb-btn" onClick={handleItalic} title="Italic">
+                          <i className="fas fa-italic"></i>
+                        </button>
+                        <button className="tv-notes-tb-btn" onClick={handleHeading} title="Heading">
+                          <i className="fas fa-heading"></i>
+                        </button>
+                        <span className="tv-notes-tb-divider"></span>
+                        <button className="tv-notes-tb-btn" onClick={handleBullet} title="Bullet List">
+                          <i className="fas fa-list-ul"></i>
+                        </button>
+                        <button className="tv-notes-tb-btn" onClick={handleNumbered} title="Numbered List">
+                          <i className="fas fa-list-ol"></i>
+                        </button>
+                        <span className="tv-notes-tb-divider"></span>
+                        <button className="tv-notes-tb-btn" onClick={handleLink} title="Insert Link">
+                          <i className="fas fa-link"></i>
+                        </button>
+                      </div>
+                    )}
 
-                {/* Editor textarea or rendered preview */}
-                {notesPreview ? (
-                  <div
-                    className="tv-notes-preview"
-                    dangerouslySetInnerHTML={{
-                      __html: noteContent.trim()
-                        ? renderNoteContent(noteContent)
-                        : '<p style="color: var(--text-tertiary); font-style: italic;">No notes yet for this video.</p>',
-                    }}
-                  />
+                    {/* Editor textarea or rendered preview */}
+                    {notesPreview ? (
+                      <div
+                        className="tv-notes-preview"
+                        dangerouslySetInnerHTML={{
+                          __html: noteContent.trim()
+                            ? renderNoteContent(noteContent)
+                            : '<p style="color: var(--text-tertiary); font-style: italic;">No notes yet for this video.</p>',
+                        }}
+                      />
+                    ) : (
+                      <textarea
+                        id="tv-notes-textarea"
+                        className="tv-notes-textarea"
+                        placeholder="Write your sermon notes, thoughts, or key verses here...&#10;&#10;Use the toolbar above to format your notes, or type directly:&#10;• **bold** and *italic*&#10;• ## Headings&#10;• - Bullet lists&#10;• 1. Numbered lists&#10;• [links](url)"
+                        value={noteContent}
+                        onChange={(e) => handleNoteChange(e.target.value)}
+                        rows={8}
+                      />
+                    )}
+
+                    <div className="tv-notes-hint">
+                      {noteSaving ? (
+                        <><i className="fas fa-spinner fa-spin"></i> Saving...</>
+                      ) : noteLastSaved ? (
+                        <><i className="fas fa-check-circle" style={{ color: "var(--success)" }}></i> Saved {noteLastSaved.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</>
+                      ) : (
+                        <><i className="fas fa-save"></i> Notes are saved automatically</>
+                      )}
+                    </div>
+                  </>
                 ) : (
-                  <textarea
-                    id="tv-notes-textarea"
-                    className="tv-notes-textarea"
-                    placeholder="Write your sermon notes, thoughts, or key verses here...&#10;&#10;Use the toolbar above to format your notes, or type directly:&#10;• **bold** and *italic*&#10;• ## Headings&#10;• - Bullet lists&#10;• 1. Numbered lists&#10;• [links](url)"
-                    value={noteContent}
-                    onChange={(e) => handleNoteChange(e.target.value)}
-                    rows={8}
-                  />
+                  <div className="tv-tab-empty">
+                    <i className="fas fa-book-bible"></i>
+                    <span>No video playing. Notes will appear here when a video starts.</span>
+                  </div>
                 )}
-
-                <div className="tv-notes-hint">
-                  {noteSaving ? (
-                    <><i className="fas fa-spinner fa-spin"></i> Saving...</>
-                  ) : noteLastSaved ? (
-                    <><i className="fas fa-check-circle" style={{ color: "var(--success)" }}></i> Saved {noteLastSaved.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</>
-                  ) : (
-                    <><i className="fas fa-save"></i> Notes are saved automatically</>
-                  )}
-                </div>
               </>
             ) : (
-              <div className="tv-tab-empty">
-                <i className="fas fa-book-bible"></i>
-                <span>No video playing. Notes will appear here when a video starts.</span>
-              </div>
-            )}
-
-            {/* ─── All My Notes Library ─── */}
-            <div style={{ marginTop: 24 }}>
-              <div className="tv-notes-section-title">
-                <i className="fas fa-bookmark"></i> My Notes Library
-                <button
-                  className="tv-notes-refresh-btn"
-                  onClick={() => {
-                    if (!auth.currentUser?.uid) return;
-                    setAllNotesLoading(true);
-                    getAllUserNotes(auth.currentUser.uid).then(setAllNotes).catch(() => {}).finally(() => setAllNotesLoading(false));
-                  }}
-                  disabled={allNotesLoading}
-                >
-                  <i className={`fas fa-${allNotesLoading ? "spinner fa-spin" : "refresh"}`}></i>
-                </button>
-              </div>                    {allNotes.length === 0 ? (
-                <div className="tv-notes-empty">
-                  <i className="fas fa-book-open"></i>
-                  <span>
-                    {allNotesLoading ? "Loading your notes..." : "No saved notes yet. Start taking notes on a video!"}
-                  </span>
-                </div>
-              ) : (
-                <div className="tv-notes-list">
-                  {allNotes.map((n) => {
-                    const isCurrent = currentVideo?.id === n.videoId;
-                    return (
-                      <div key={n.videoId} className={`tv-notes-list-item ${isCurrent ? "active" : ""}`}>
-                        <div className="tv-notes-list-item-top">
-                          <div className="tv-notes-list-item-title">
-                            {n.videoTitle || "Untitled Video"}
+              <>
+                {/* ─── Saved Notes Library ─── */}
+                {selectedNote ? (
+                  <>
+                    <button className="tv-notes-back-btn" onClick={() => setSelectedNote(null)}>
+                      <i className="fas fa-arrow-left"></i> Back to Saved Notes
+                    </button>
+                    <div className="tv-notes-reader">
+                      <div className="tv-notes-reader-header">
+                        <div className="tv-notes-reader-title">{selectedNote.videoTitle || "Untitled Video"}</div>
+                        {selectedNote.updatedAt && (
+                          <div className="tv-notes-reader-date">
+                            {new Date(selectedNote.updatedAt as any).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
                           </div>
-                          {n.updatedAt && (
-                            <div className="tv-notes-list-item-date">
-                              {new Date(n.updatedAt as any).toLocaleDateString([], { month: "short", day: "numeric" })}
+                        )}
+                      </div>
+                      <div
+                        className="tv-notes-reader-content"
+                        dangerouslySetInnerHTML={{
+                          __html: selectedNote.content.trim()
+                            ? renderNoteContent(selectedNote.content)
+                            : '<p style="color: var(--text-tertiary); font-style: italic;">No content in this note.</p>',
+                        }}
+                      />
+                      <button
+                        className="tv-notes-reader-delete"
+                        onClick={async () => {
+                          if (!auth.currentUser?.uid) return;
+                          try {
+                            await deleteUserNote(auth.currentUser.uid, selectedNote.videoId);
+                            setAllNotes((prev) => prev.filter((x) => x.videoId !== selectedNote.videoId));
+                            setSelectedNote(null);
+                          } catch {}
+                        }}
+                      >
+                        <i className="fas fa-trash"></i> Delete Note
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                <div className="tv-notes-section-title">
+                  <i className="fas fa-bookmark"></i> My Notes Library
+                  <button
+                    className="tv-notes-refresh-btn"
+                    onClick={() => {
+                      if (!auth.currentUser?.uid) return;
+                      setAllNotesLoading(true);
+                      getAllUserNotes(auth.currentUser.uid).then(setAllNotes).catch(() => {}).finally(() => setAllNotesLoading(false));
+                    }}
+                    disabled={allNotesLoading}
+                  >
+                    <i className={`fas fa-${allNotesLoading ? "spinner fa-spin" : "refresh"}`}></i>
+                  </button>
+                </div>
+                {allNotes.length === 0 ? (
+                  <div className="tv-notes-empty">
+                    <i className="fas fa-book-open"></i>
+                    <span>
+                      {allNotesLoading ? "Loading your notes..." : "No saved notes yet. Start taking notes on a video!"}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="tv-notes-list">
+                    {allNotes.map((n) => {
+                      return (
+                        <div key={n.videoId} className="tv-notes-list-item" onClick={() => setSelectedNote(n)}>
+                          <div className="tv-notes-list-item-top">
+                            <div className="tv-notes-list-item-title">
+                              {n.videoTitle || "Untitled Video"}
+                            </div>
+                            {n.updatedAt && (
+                              <div className="tv-notes-list-item-date">
+                                {new Date(n.updatedAt as any).toLocaleDateString([], { month: "short", day: "numeric" })}
+                              </div>
+                            )}
+                          </div>
+                          {n.content && (
+                            <div className="tv-notes-list-item-preview">
+                              {n.content.substring(0, 120)}{n.content.length > 120 ? "..." : ""}
                             </div>
                           )}
                         </div>
-                        {n.content && (
-                          <div className="tv-notes-list-item-preview">
-                            {n.content.substring(0, 120)}{n.content.length > 120 ? "..." : ""}
-                          </div>
-                        )}
-                        <div className="tv-notes-list-item-actions">
-                          {!isCurrent && (
-                            <button
-                              className="tv-notes-list-delete"
-                              onClick={async () => {
-                                if (!auth.currentUser?.uid) return;
-                                try {
-                                  await deleteUserNote(auth.currentUser.uid, n.videoId);
-                                  setAllNotes((prev) => prev.filter((x) => x.videoId !== n.videoId));
-                                } catch {}
-                              }}
-                            >
-                              <i className="fas fa-trash"></i> Delete
-                            </button>
-                          )}
-                          {isCurrent && (
-                            <span className="tv-notes-list-current-badge">
-                              <i className="fas fa-play"></i> Now Playing
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                      );
+                    })}
+                  </div>
+                )}
+                </>
+                )}
+              </>
+            )}
           </div>
         );
 
@@ -1469,6 +1646,22 @@ export default function TVPage() {
         .tv-player-placeholder i { font-size: 36px; color: var(--primary); opacity: 0.5; }
         .tv-player-placeholder p { font-size: 13px; color: var(--text-tertiary); }
 
+        /* ─── START TV BUTTON ─── */
+        .tv-start-btn {
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          width: calc(100% - 32px); padding: 14px;
+          margin: 8px 16px 0;
+          border-radius: var(--radius-md);
+          background: linear-gradient(135deg, #3B82F6, #6366F1);
+          border: none; color: #fff;
+          font-size: 14px; font-weight: 700;
+          cursor: pointer; transition: all 0.2s ease;
+          position: relative; z-index: 1;
+        }
+        .tv-start-btn:active { transform: scale(0.97); }
+        .tv-start-btn i { font-size: 13px; }
+        .tv-start-hint { font-size: 10px; color: var(--text-tertiary); text-align: center; padding: 4px 16px 0; opacity: 0.7; }
+
         /* ─── BROADCAST / SHUFFLE OVERLAYS ─── */
         .tv-broadcast-badge {
           position: absolute; top: 48px; left: 50%; transform: translateX(-50%);
@@ -1672,6 +1865,38 @@ export default function TVPage() {
         .tv-prayer-reply-text { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
 
         /* ─── NOTES ─── */
+        .tv-notes-subtabs {
+          display: flex;
+          gap: 6px;
+          background: var(--surface);
+          border-radius: var(--radius-md);
+          padding: 4px;
+          margin-bottom: 16px;
+        }
+        .tv-notes-subtab {
+          flex: 1;
+          padding: 10px 12px;
+          border: none;
+          border-radius: 10px;
+          background: transparent;
+          color: var(--text-tertiary);
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.25s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+        }
+        .tv-notes-subtab.active {
+          background: var(--primary);
+          color: #fff;
+          box-shadow: 0 2px 8px rgba(232,168,56,0.3);
+        }
+        .tv-notes-subtab:not(.active):active {
+          background: var(--surface-hover);
+        }
         .tv-notes-current {
           padding: 14px;
           background: var(--surface-card);
@@ -1697,14 +1922,15 @@ export default function TVPage() {
           gap: 6px;
         }
         .tv-notes-saving { font-size: 12px; color: var(--text-tertiary); display: flex; align-items: center; gap: 4px; }
-        .tv-notes-preview-btn {
+        .tv-notes-preview-btn, .tv-notes-save-btn {
           padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
           background: var(--surface); border: 1px solid var(--border);
           color: var(--text-tertiary); cursor: pointer;
           display: flex; align-items: center; gap: 4px;
           transition: all 0.2s;
         }
-        .tv-notes-preview-btn:active { transform: scale(0.92); }
+        .tv-notes-preview-btn:active, .tv-notes-save-btn:active { transform: scale(0.92); }
+        .tv-notes-save-btn { background: rgba(232,168,56,0.1); border-color: rgba(232,168,56,0.2); color: var(--primary); }
         .tv-notes-preview-btn.active {
           background: rgba(232,168,56,0.1); border-color: rgba(232,168,56,0.2); color: var(--primary);
         }
@@ -1802,6 +2028,11 @@ export default function TVPage() {
           border: 1px solid var(--border);
           border-radius: var(--radius-md);
           transition: all 0.15s;
+          cursor: pointer;
+        }
+        .tv-notes-list-item:active {
+          background: var(--surface-elevated);
+          transform: scale(0.98);
         }
         .tv-notes-list-item.active {
           border-color: rgba(232,168,56,0.2);
@@ -1823,22 +2054,64 @@ export default function TVPage() {
           margin-top: 4px; line-height: 1.5;
           display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
         }
-        .tv-notes-list-item-actions {
-          margin-top: 8px;
-          display: flex; align-items: center; gap: 8px;
+        .tv-notes-list-item-preview {
+          display: flex; align-items: center; gap: 6px;
+          padding: 8px 14px; margin-bottom: 12px;
+          background: var(--surface); border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
+          color: var(--text-secondary); font-size: 13px; font-weight: 600;
+          cursor: pointer; transition: all 0.15s;
         }
-        .tv-notes-list-delete {
-          padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
-          background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.1);
-          color: #EF4444; cursor: pointer;
-          display: flex; align-items: center; gap: 4px;
+        .tv-notes-back-btn:active { background: var(--surface-elevated); transform: scale(0.97); }
+        .tv-notes-back-btn i { font-size: 12px; }
+
+        .tv-notes-reader {
+          background: var(--surface-card);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-lg);
+          overflow: hidden;
+        }
+        .tv-notes-reader-header {
+          padding: 16px 18px 12px;
+          border-bottom: 1px solid var(--border);
+        }
+        .tv-notes-reader-title {
+          font-size: 17px;
+          font-weight: 800;
+          line-height: 1.3;
+        }
+        .tv-notes-reader-date {
+          font-size: 11px;
+          color: var(--text-tertiary);
+          margin-top: 4px;
+        }
+        .tv-notes-reader-content {
+          padding: 18px;
+          font-size: 14px;
+          line-height: 1.8;
+          color: var(--text-primary);
+        }
+        .tv-notes-reader-content p { margin-bottom: 12px; }
+        .tv-notes-reader-content ul, .tv-notes-reader-content ol { margin: 8px 0 12px; padding-left: 20px; }
+        .tv-notes-reader-content li { margin-bottom: 4px; }
+        .tv-notes-reader-content h3, .tv-notes-reader-content h4 { margin: 16px 0 8px; }
+        .tv-notes-reader-delete {
+          width: 100%;
+          padding: 14px;
+          border: none;
+          border-top: 1px solid var(--border);
+          background: rgba(239,68,68,0.04);
+          color: var(--error);
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
           transition: all 0.15s;
         }
-        .tv-notes-list-delete:active { transform: scale(0.95); }
-        .tv-notes-list-current-badge {
-          font-size: 10px; font-weight: 700; color: var(--primary);
-          display: flex; align-items: center; gap: 4px;
-        }
+        .tv-notes-reader-delete:active { background: rgba(239,68,68,0.12); }
 
         /* ─── GIVE TAB ─── */
         .tv-give-tab { padding: 0 4px; }
@@ -2089,6 +2362,75 @@ export default function TVPage() {
 
         @keyframes livePulse { 0%,100% { opacity:1;transform:scale(1); } 50% { opacity:0.5;transform:scale(1.4); } }
 
+        /* ─── END CARD OVERLAY ─── */
+        .tv-end-card {
+          position: absolute; inset: 0; z-index: 20;
+          display: flex; align-items: center; justify-content: center;
+          animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .tv-end-card-bg {
+          position: absolute; inset: 0;
+          background: rgba(0,0,0,0.75);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+        }
+        .tv-end-card-body {
+          position: relative; z-index: 1;
+          display: flex; flex-direction: column; align-items: center;
+          gap: 10px; padding: 24px 20px; max-width: 320px;
+          text-align: center;
+        }
+        .tv-end-card-label {
+          font-size: 12px; font-weight: 700; color: var(--success);
+          display: flex; align-items: center; gap: 6px;
+        }
+        .tv-end-card-label i { font-size: 14px; }
+        .tv-end-card-thumb {
+          position: relative; width: 100%; aspect-ratio: 16/9;
+          max-width: 260px; border-radius: 10px; overflow: hidden;
+          background: var(--surface-elevated);
+          border: 1px solid rgba(255,255,255,0.08);
+        }
+        .tv-end-card-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .tv-end-card-play-icon {
+          position: absolute; inset: 0;
+          display: flex; align-items: center; justify-content: center;
+          background: rgba(0,0,0,0.15);
+        }
+        .tv-end-card-play-icon i {
+          width: 44px; height: 44px; border-radius: 50%;
+          background: rgba(255,255,255,0.15);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 18px; color: #fff;
+          backdrop-filter: blur(4px);
+        }
+        .tv-end-card-title {
+          font-size: 15px; font-weight: 700; color: #fff;
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+          overflow: hidden; line-height: 1.4;
+        }
+        .tv-end-card-sub {
+          font-size: 11px; color: var(--text-tertiary);
+          margin-top: -4px;
+        }
+        .tv-end-card-btn {
+          width: 100%; padding: 14px;
+          border-radius: 12px; font-size: 14px; font-weight: 700;
+          background: linear-gradient(135deg, #3B82F6, #6366F1);
+          border: none; color: #fff; cursor: pointer;
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          transition: all 0.2s ease;
+        }
+        .tv-end-card-btn:active { transform: scale(0.97); }
+        .tv-end-card-skip {
+          padding: 6px 16px; border-radius: 8px;
+          background: transparent; border: 1px solid rgba(255,255,255,0.1);
+          color: var(--text-tertiary); font-size: 12px; font-weight: 600;
+          cursor: pointer; transition: all 0.15s ease;
+        }
+        .tv-end-card-skip:active { background: rgba(255,255,255,0.05); }
+
         /* ─── BOTTOM NAV ─── */
         .bottom-nav {
             position: fixed;
@@ -2159,10 +2501,7 @@ export default function TVPage() {
       <div className="tv-page">
         {/* ─── PLAYER SECTION ─── */}
         {loading ? (
-          <div className="tv-loading-screen">
-            <div className="tv-loading-spinner"></div>
-            <p style={{ fontSize: 14, color: "var(--text-tertiary)" }}>Loading TV...</p>
-          </div>
+          <PremiumLoader />
         ) : (
           <>
             {/* ─── TOP HEADER BAR ─── */}
@@ -2194,15 +2533,53 @@ export default function TVPage() {
             <div className="tv-player-section">
               <div className="tv-player-outer">
                 {/* Player — rendered by global TvPlayerProvider */}
-                <div ref={tvPlayerTargetRef} className="tv-player-outer" style={{ aspectRatio: "16/9" }}>
+                <div ref={tvPlayerTargetRef} className="tv-player-outer" style={{ aspectRatio: "16/9", position: "relative" }}>
                   {currentVideo ? (
-                    <div className="tv-schedule-now" style={{ display: "none" }}></div>
+                    <>
+                      {/* Normal playing state — hidden placeholder just to keep ref alive */}
+                      <div style={{ display: "none" }}></div>
+
+                      {/* End card overlay — shown when video finishes */}
+                      {showEndCard && nextTvVideo && (
+                        <div className="tv-end-card">
+                          <div className="tv-end-card-bg"></div>
+                          <div className="tv-end-card-body">
+                            <div className="tv-end-card-label">
+                              <i className="fas fa-check-circle"></i> Finished Watching
+                            </div>
+                            <div className="tv-end-card-thumb">
+                              <img src={nextTvVideo.thumbnail || `https://i.ytimg.com/vi/${nextTvVideo.id}/default.jpg`} alt="" />
+                              <div className="tv-end-card-play-icon">
+                                <i className="fas fa-play"></i>
+                              </div>
+                            </div>
+                            <div className="tv-end-card-title">{nextTvVideo.title}</div>
+                            <div className="tv-end-card-sub">Up next in your playlist</div>
+                            <button className="tv-end-card-btn" onClick={handleContinueWatching}>
+                              <i className="fas fa-play"></i> Continue Watching TV
+                            </button>
+                            <button className="tv-end-card-skip" onClick={() => setShowEndCard(false)}>
+                              Dismiss
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <div className="tv-player-placeholder">
                       <i className="fas fa-tv"></i>
                       <p>No videos available</p>
                     </div>
                   )}
+
+                  {/* Native PiP overlay — activates when app goes to background
+                      so Android PiP captures the native SurfaceView instead of
+                      the YouTube iframe (which shows black in PiP). */}
+                  <NativePiPOverlay
+                    videoId={currentVideo?.id ?? null}
+                    seek={lastTvSeekRef.current || undefined}
+                    active={isInBackground && !!currentVideo}
+                  />
                 </div>
 
                 {/* Playlist badge */}
@@ -2212,6 +2589,12 @@ export default function TVPage() {
                     {tvUserState.currentIndex + 1} / {tvUserState.playlist.length}
                   </div>
                 )}
+
+                <button className="tv-start-btn" onClick={handleStartTv} title="Starts TV or skips to next if already playing">
+                  <i className="fas fa-play"></i>
+                  <span>Start TV</span>
+                </button>
+                <div className="tv-start-hint">Starts TV · Skips to next if already playing</div>
               </div>
 
               {/* ─── TAB BAR ─── */}

@@ -5,44 +5,23 @@ import { useRouter } from "next/navigation";
 import { useAudio } from "@/lib/audio/AudioContext";
 import BottomNavBar from "@/components/shared/BottomNavBar";
 import ToastBridge from "@/components/dashboard/ToastBridge";
-import { getNowPlaying, getSongHistory, getPlaylists, getStationFiles, getSettings, getStreamers, getApiBase, getStationId, getPublicPlayerUrl } from "@/lib/azuracast";
-import type { NowPlayingData, SongHistoryItem, Playlist, StationFile, StationSettings, Streamer } from "@/lib/azuracast";
+import { getNowPlaying, getSongHistory, getSettings, getStreamers, getApiBase, getStationId, getPublicPlayerUrl } from "@/lib/azuracast";
+import type { NowPlayingData, SongHistoryItem, StationSettings, Streamer } from "@/lib/azuracast";
 import { churchConfig } from "@/lib/churchConfig";
-import { db } from "@/lib/firebase";
-import { collection, addDoc, query, where, getDocs, orderBy, serverTimestamp, Timestamp, limit } from "firebase/firestore";
 
 export default function RadioPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("home");
 
   const [npData, setNpData] = useState<NowPlayingData | null>(null);
   const [songHistory, setSongHistory] = useState<SongHistoryItem[]>([]);
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
-  const [stationFiles, setStationFiles] = useState<StationFile[]>([]);
   const [settings, setSettings] = useState<StationSettings | null>(null);
   const [streamers, setStreamers] = useState<Streamer[]>([]);
   const [radioLoading, setRadioLoading] = useState(true);
-
-  // Song request state
-  const [requestSearch, setRequestSearch] = useState("");
-  const [requestedSongs, setRequestedSongs] = useState<Set<string>>(new Set());
-  const [lastRequestTime, setLastRequestTime] = useState<number | null>(null);
-  const [cooldownLeft, setCooldownLeft] = useState(0);
-  const [requestLoading, setRequestLoading] = useState(false);
-  const [currentTime, setCurrentTime] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setCurrentTime(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const [sessionId] = useState(() => `session_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
-
-
 
   const audio = useAudio();
   const listenUrl = npData?.station?.listenUrl || `${getApiBase()}/listen/${getStationId()}/radio.mp3`;
   const embedUrl = `${getPublicPlayerUrl()}/embed`;
   const stationName = settings?.name || "Kingdom Seekers Radio";
-  // YouTube live indicator removed
 
   // Push now-playing metadata to Android media notification (safe wrapped)
   useEffect(() => {
@@ -79,15 +58,11 @@ export default function RadioPage() {
   useEffect(() => {
     let mounted = true;
     const fetchMeta = async () => {
-      const [pl, files, s, str] = await Promise.all([
-        getPlaylists().catch(() => [] as Playlist[]),
-        getStationFiles().catch(() => [] as StationFile[]),
+      const [s, str] = await Promise.all([
         getSettings().catch(() => null as StationSettings | null),
         getStreamers().catch(() => [] as Streamer[]),
       ]);
       if (!mounted) return;
-      setPlaylists(pl);
-      setStationFiles(files);
       setSettings(s);
       setStreamers(str);
     };
@@ -95,100 +70,10 @@ export default function RadioPage() {
     return () => { mounted = false; };
   }, []);
 
-  // Request cooldown timer
-  useEffect(() => {
-    if (!lastRequestTime) return;
-    const elapsed = Math.floor((currentTime - lastRequestTime) / 1000);
-    const remaining = Math.max(0, 1800 - elapsed);
-    if (remaining <= 0) return;
-    setTimeout(() => setCooldownLeft(remaining), 0);
-    const interval = setInterval(() => {
-      const e = Math.floor((currentTime - lastRequestTime) / 1000);
-      setCooldownLeft(Math.max(0, 1800 - e));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [lastRequestTime]);
-
-  const handleRequest = async (fileId: string, songTitle: string, songArtist: string) => {
-    const now = currentTime;
-    if (lastRequestTime && (now - lastRequestTime) < 1800000) {
-      const mins = Math.ceil((1800000 - (now - lastRequestTime)) / 60000);
-      showToast("Cooldown Active", `Please wait ${mins} min before requesting again`, "warning", 3000);
-      return;
-    }
-    setRequestLoading(true);
-    try {
-      await addDoc(collection(db, "radio_requests"), {
-        sessionId,
-        songId: fileId,
-        songTitle,
-        songArtist,
-        stationId: Number(getStationId()),
-        stationName: stationName || "Radio",
-        requestedAt: serverTimestamp(),
-      });
-      setRequestedSongs(new Set(requestedSongs).add(fileId));
-      setLastRequestTime(now);
-      showToast("Request Submitted!", `"${songTitle}" has been sent to the DJ`, "success", 3000);
-    } catch (err) {
-      showToast("Request Failed", "Could not send request. Please try again.", "error", 3000);
-    }
-    setRequestLoading(false);
-  };
-
-  /* Load user's request history from Firestore on mount */
-  useEffect(() => {
-    let mounted = true;
-    const loadRequests = async () => {
-      try {
-        const q = query(
-          collection(db, "radio_requests"),
-          where("sessionId", "==", sessionId),
-          orderBy("requestedAt", "desc"),
-          limit(50)
-        );
-        const snap = await getDocs(q);
-        if (!mounted) return;
-        setRequestedSongs(new Set(snap.docs.map((d) => d.data().songId)));
-      } catch {}
-    };
-    loadRequests();
-    return () => { mounted = false; };
-  }, [sessionId]);
-
-  const handleCopyStream = async () => {
-    try {
-      const { Clipboard } = await import("@capacitor/clipboard");
-      await Clipboard.write({ string: embedUrl });
-    } catch {
-      navigator.clipboard.writeText(embedUrl).catch(() => {});
-    }
-    showToast("Copied!", "Stream URL copied to clipboard", "success", 2000);
-  };
-
-  const handleShare = async () => {
-    try {
-      const { Share } = await import("@capacitor/share");
-      await Share.share({ title: `${stationName} Radio`, text: `Tune in to ${stationName} Radio!`, url: embedUrl });
-    } catch {
-      if (navigator.share) {
-        navigator.share({ title: `${stationName} Radio`, text: `Tune in to ${stationName} Radio!`, url: embedUrl }).catch(() => {});
-      } else {
-        handleCopyStream();
-      }
-    }
-  };
-
   // ========== TOAST ==========
   function showToast(title: string, message: string, type: string, duration: number) {
     window.dispatchEvent(new CustomEvent("show-toast", { detail: { title, message, type, duration } }));
   }
-
-  const formatCooldown = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -201,40 +86,7 @@ export default function RadioPage() {
   const liveStreamerName = npData?.live?.streamerName;
   const currentListeners = npData?.listeners?.current ?? 0;
 
-  /* Filter requestable songs */
-  const filteredRequests = stationFiles.filter(
-    (s) => !requestSearch || s.title.toLowerCase().includes(requestSearch.toLowerCase()) || s.artist.toLowerCase().includes(requestSearch.toLowerCase())
-  );
-
   const activeStreamers = streamers.filter((s) => s.isLive);
-
-  /* ===== SCHEDULE TAB DERIVATION ===== */
-  const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  const getNextNDays = (n: number) => {
-    const today = new Date().getDay();
-    return Array.from({ length: n }, (_, i) => (today + i) % 7);
-  };
-  const scheduledPlaylists = playlists.filter((p) => p.type === "scheduled" && p.schedule);
-  const nextDays = getNextNDays(7);
-  const scheduleByDay = nextDays.map((dayIdx) => {
-    const dayName = DAY_NAMES[dayIdx];
-    const isToday = dayIdx === new Date().getDay();
-    const items = scheduledPlaylists
-      .filter((p) => p.schedule!.days.includes(dayIdx))
-      .map((p) => ({
-        name: p.name,
-        time: p.schedule!.startTime?.slice(0, 5) || "09:00",
-        type: (p.name.toLowerCase().includes("worship") ? "worship" : p.name.toLowerCase().includes("sermon") ? "sermon" : "praise") as "worship" | "sermon" | "praise",
-      }))
-      .sort((a, b) => a.time.localeCompare(b.time));
-    return { dayName, isToday, items };
-  }).filter((d) => d.items.length > 0);
-  const nextShow = scheduleByDay[0]?.items[0] || null;
-  const nextShowTime = nextShow ? `${scheduleByDay[0]?.dayName === "Sun" ? "Today" : scheduleByDay[0]?.dayName} at ${nextShow.time}` : "";
-  const now = new Date();
-  const nowH = now.getHours();
-  const nowM = now.getMinutes();
-  const nowStr = `${String(nowH).padStart(2, "0")}:${String(nowM).padStart(2, "0")}`;
 
   return (
     <>
@@ -276,26 +128,25 @@ export default function RadioPage() {
         .status-bar { height: env(safe-area-inset-top, 24px); min-height: 24px; background: var(--bg); flex-shrink: 0; }
 
         /* ===== PREMIUM HEADER ===== */
-        .header { padding: 12px 16px 10px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; background: var(--bg); border-bottom: 1px solid var(--border); }
-        .header-logo { width: 40px; height: 40px; background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: var(--shadow-soft); }
-        .header-logo i { font-size: 18px; color: #fff; }
+        .header { padding: 8px 16px 12px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; background: var(--bg); border-bottom: 1px solid var(--border); padding-top: calc(8px + env(safe-area-inset-top, 0px)); }
+        .header-back { width: 40px; height: 40px; border-radius: var(--radius-full); background: var(--surface); border: none; color: var(--text-primary); font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all 0.2s ease; }
+        .header-back:active { background: var(--surface-elevated); transform: scale(0.92); }
         .header-info { flex: 1; min-width: 0; }
-        .header-name { font-size: 16px; font-weight: 700; line-height: 1.2; letter-spacing: -0.2px; }
-        .header-dj { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; display: flex; align-items: center; gap: 5px; }
-        .header-dj .live-dot { width: 6px; height: 6px; border-radius: var(--radius-full); background: var(--error); animation: livePulse 1.5s ease-in-out infinite; }
+        .header-name { font-size: 17px; font-weight: 800; line-height: 1.2; letter-spacing: -0.3px; color: var(--primary); }
+        .header-dj { font-size: 12px; color: var(--text-secondary); margin-top: 3px; display: flex; align-items: center; gap: 6px; font-weight: 500; }
+        .header-dj i { font-size: 10px; color: var(--text-tertiary); }
+        .header-dj .live-dot { width: 6px; height: 6px; border-radius: var(--radius-full); background: var(--error); animation: livePulse 1.5s ease-in-out infinite; display: inline-block; }
         @keyframes livePulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.6); } }
-        .header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+        .header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
         .header-badge {
-          display: flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: 20px;
-          font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;
+          display: flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px;
+          font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px;
           transition: all 0.3s ease;
         }
         .header-badge.live { background: rgba(239,68,68,0.12); color: var(--error); border: 1px solid rgba(239,68,68,0.2); }
         .header-badge.off { background: var(--surface-elevated); color: var(--text-tertiary); border: 1px solid var(--border); }
-        .listener-count { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); font-weight: 600; white-space: nowrap; background: var(--surface-elevated); padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border); }
+        .listener-count { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); font-weight: 600; white-space: nowrap; background: var(--surface-elevated); padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border); }
         .listener-count i { font-size: 10px; color: var(--text-tertiary); }
-        .yt-live-indicator { display: flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; color: #FF0000; cursor: pointer; padding: 4px 10px; border-radius: 20px; background: rgba(255,0,0,0.08); border: 1px solid rgba(255,0,0,0.15); white-space: nowrap; transition: all 0.2s; }
-        .yt-live-indicator:active { transform: scale(0.95); background: rgba(255,0,0,0.15); }
 
         /* ===== CONTENT SCROLL ===== */
         .content-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; padding-bottom: 80px; }
@@ -436,196 +287,6 @@ export default function RadioPage() {
         .h-artist { font-size: 12px; color: var(--text-secondary); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .h-time { font-size: 11px; color: var(--text-tertiary); flex-shrink: 0; font-weight: 500; }
 
-        /* ===== TAB BAR (premium) ===== */
-        .radio-tabs {
-          display: flex; gap: 4px; padding: 8px 12px;
-          background: var(--bg); border-bottom: 1px solid var(--border); flex-shrink: 0;
-        }
-        .radio-tab {
-          flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
-          padding: 10px 4px 8px;
-          border-radius: var(--radius-md);
-          border: none; background: transparent;
-          color: var(--text-tertiary); font-size: 10px; font-weight: 600;
-          cursor: pointer; transition: all 0.25s cubic-bezier(0.4,0,0.2,1); position: relative;
-        }
-        .radio-tab i { font-size: 20px; transition: transform 0.2s ease; }
-        .radio-tab:active i { transform: scale(0.85); }
-        .radio-tab.active { color: var(--primary); background: var(--surface-elevated); }
-        .radio-tab.active::after {
-          content: ''; position: absolute; bottom: -8px; left: 20%; right: 20%;
-          height: 2.5px; border-radius: 2px;
-          background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end));
-        }
-
-        /* ===== SCHEDULE TAB (premium) ===== */
-        .sched-next {
-          background: linear-gradient(135deg, rgba(232,168,56,0.08), rgba(232,168,56,0.02));
-          border: 1px solid rgba(232,168,56,0.15);
-          border-radius: var(--radius-lg);
-          padding: 16px 18px;
-          display: flex; align-items: center; gap: 14px;
-        }
-        .sched-next-icon {
-          width: 44px; height: 44px; border-radius: var(--radius-md);
-          background: rgba(232,168,56,0.1);
-          display: flex; align-items: center; justify-content: center;
-          font-size: 20px; color: var(--primary); flex-shrink: 0;
-        }
-        .sched-next-info { flex: 1; }
-        .sched-next-label { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
-        .sched-next-name { font-size: 15px; font-weight: 700; margin-top: 3px; }
-        .sched-next-time { font-size: 13px; color: var(--primary); font-weight: 700; flex-shrink: 0; }
-
-        .sched-day-group { margin-bottom: 16px; }
-        .sched-day-header {
-          font-size: 12px; font-weight: 700; margin-bottom: 8px;
-          padding: 0 2px; display: flex; align-items: center; gap: 8px;
-          text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-tertiary);
-        }
-        .sched-day-header.today { color: var(--primary); }
-        .sched-day-header .day-line { flex: 1; height: 1px; background: var(--border); }
-
-        .sched-item {
-          display: flex; align-items: center; gap: 14px;
-          padding: 12px 14px;
-          background: var(--surface-card);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-md);
-          margin-bottom: 8px;
-          transition: all 0.2s ease; cursor: pointer;
-        }
-        .sched-item:active { background: var(--surface-elevated); transform: scale(0.98); }
-        .sched-item.active { border-color: rgba(34,197,94,0.3); }
-        .sched-time { font-size: 13px; font-weight: 700; color: var(--text-secondary); min-width: 52px; }
-        .sched-dot { width: 8px; height: 8px; border-radius: var(--radius-full); flex-shrink: 0; }
-        .sched-dot.worship { background: var(--primary); box-shadow: 0 0 8px rgba(232,168,56,0.4); }
-        .sched-dot.sermon { background: var(--info); box-shadow: 0 0 8px rgba(56,189,248,0.4); }
-        .sched-dot.praise { background: #8B5CF6; box-shadow: 0 0 8px rgba(139,92,246,0.4); }
-        .sched-info { flex: 1; min-width: 0; }
-        .sched-name { font-size: 14px; font-weight: 600; }
-        .sched-host { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
-        .sched-type-badge {
-          padding: 3px 10px; border-radius: 6px; font-size: 10px; font-weight: 700;
-          flex-shrink: 0; letter-spacing: 0.3px;
-        }
-        .sched-type-badge.worship { background: rgba(232,168,56,0.1); color: var(--primary); }
-        .sched-type-badge.sermon { background: rgba(56,189,248,0.1); color: var(--info); }
-        .sched-type-badge.praise { background: rgba(139,92,246,0.1); color: #8B5CF6; }
-        .sched-now { padding: 2px 8px; border-radius: 10px; font-size: 9px; font-weight: 800; background: rgba(74,222,128,0.12); color: var(--success); text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0; }
-        .sched-empty-state { text-align: center; padding: 40px 20px; }
-        .sched-empty-state i { font-size: 40px; color: var(--text-tertiary); margin-bottom: 12px; display: block; opacity: 0.5; }
-        .sched-empty-state h3 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
-        .sched-empty-state p { font-size: 14px; color: var(--text-secondary); }
-
-        /* ===== REQUESTS TAB (premium) ===== */
-        .req-search-wrap { position: relative; }
-        .req-search-wrap i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); font-size: 16px; pointer-events: none; z-index: 1; }
-        .req-search-wrap input {
-          width: 100%; padding: 14px 14px 14px 44px;
-          background: var(--surface-card); border: 1.5px solid var(--border);
-          border-radius: var(--radius-lg); color: var(--text-primary);
-          font-size: 14px; font-weight: 500; outline: none;
-        }
-        .req-search-wrap input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(232,168,56,0.08); }
-        .req-search-wrap input::placeholder { color: var(--text-tertiary); font-weight: 400; }
-
-        .req-cooldown {
-          padding: 12px 14px;
-          background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15);
-          border-radius: var(--radius-md);
-          display: flex; align-items: center; gap: 10px;
-          font-size: 13px; color: var(--warning);
-        }
-        .req-cooldown .req-cool-icon { font-size: 18px; color: var(--warning); flex-shrink: 0; }
-
-        .req-list { display: flex; flex-direction: column; gap: 8px; }
-        .req-card {
-          display: flex; align-items: center; gap: 14px;
-          padding: 12px 14px;
-          background: var(--surface-card); border: 1px solid var(--border);
-          border-radius: var(--radius-md);
-          transition: all 0.2s ease;
-        }
-        .req-card:active { background: var(--surface-elevated); }
-        .req-cover { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--border); }
-        .req-cover-fallback { width: 42px; height: 42px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: var(--surface-elevated); color: var(--text-tertiary); font-size: 16px; flex-shrink: 0; border: 1px solid var(--border); }
-        .req-info { flex: 1; min-width: 0; }
-        .req-title { font-size: 14px; font-weight: 600; }
-        .req-artist { font-size: 12px; color: var(--text-secondary); margin-top: 1px; }
-        .req-btn {
-          padding: 8px 18px; border-radius: 8px; font-size: 12px; font-weight: 700;
-          border: none; cursor: pointer; transition: all 0.2s ease; flex-shrink: 0;
-          display: flex; align-items: center; gap: 5px;
-        }
-        .req-btn:active { transform: scale(0.93); }
-        .req-btn.request { background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); color: #fff; box-shadow: var(--shadow-soft); }
-        .req-btn.done { background: var(--surface-elevated); color: var(--success); border: 1px solid rgba(74,222,128,0.2); cursor: default; }
-        .req-btn.cooldown { background: var(--surface-elevated); color: var(--text-tertiary); cursor: default; }
-        .req-empty-state { text-align: center; padding: 30px; color: var(--text-tertiary); font-size: 14px; }
-
-        .req-recent-list { display: flex; flex-direction: column; gap: 6px; }
-        .req-recent-item {
-          display: flex; align-items: center; gap: 12px;
-          padding: 10px 14px;
-          background: var(--surface-card); border: 1px solid var(--border);
-          border-radius: var(--radius-md); font-size: 13px;
-        }
-        .req-recent-avatar { width: 32px; height: 32px; border-radius: var(--radius-full); background: rgba(74,222,128,0.1); display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--success); flex-shrink: 0; }
-        .req-recent-info { flex: 1; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-        .req-recent-song { color: var(--primary); font-weight: 600; }
-        .req-recent-time { font-size: 11px; color: var(--text-tertiary); flex-shrink: 0; }
-
-        /* ===== ABOUT TAB (premium) ===== */
-        .about-wrap { padding: 24px; text-align: center; }
-        .about-logo-wrap {
-          width: 88px; height: 88px; margin: 0 auto 18px;
-          background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
-          border-radius: 24px;
-          display: flex; align-items: center; justify-content: center;
-          box-shadow: var(--shadow-soft), 0 0 60px rgba(232,168,56,0.1);
-        }
-        .about-logo-wrap i { font-size: 38px; color: #fff; }
-        .about-name { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 6px; }
-        .about-tagline { font-size: 14px; color: var(--text-secondary); max-width: 300px; margin: 0 auto 28px; line-height: 1.6; }
-
-        .about-stream-box {
-          display: flex; align-items: center; gap: 8px;
-          padding: 12px 14px; background: var(--surface-card);
-          border: 1px solid var(--border); border-radius: var(--radius-md);
-          margin-bottom: 20px;
-        }
-        .about-stream-text { flex: 1; font-size: 12px; color: var(--text-secondary); font-family: monospace; word-break: break-all; }
-        .about-copy-btn {
-          width: 36px; height: 36px; border-radius: 8px; background: var(--surface-elevated);
-          border: none; color: var(--text-secondary); font-size: 16px;
-          cursor: pointer; display: flex; align-items: center; justify-content: center;
-          flex-shrink: 0; transition: all 0.2s ease;
-        }
-        .about-copy-btn:active { background: var(--primary); color: #fff; }
-
-        .about-social-row { display: flex; gap: 10px; }
-        .about-social-btn {
-          flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
-          padding: 14px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600;
-          cursor: pointer; transition: all 0.2s ease;
-          border: 1.5px solid var(--border); background: var(--surface-card); color: var(--text-primary);
-        }
-        .about-social-btn:active { background: var(--surface-elevated); transform: scale(0.97); }
-
-        .about-actions-stack { display: flex; flex-direction: column; gap: 10px; }
-        .about-action-btn {
-          width: 100%; padding: 15px; border-radius: var(--radius-md);
-          font-size: 15px; font-weight: 700; cursor: pointer;
-          transition: all 0.2s ease;
-          display: flex; align-items: center; justify-content: center; gap: 8px;
-        }
-        .about-action-btn:active { transform: scale(0.97); }
-        .about-action-btn.share { background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); color: #fff; border: none; box-shadow: var(--shadow-soft); }
-        .about-action-btn.install { background: var(--surface-card); color: var(--text-primary); border: 1.5px solid var(--border); }
-        .about-footer { margin-top: 28px; font-size: 12px; color: var(--text-tertiary); }
-        .about-footer strong { color: var(--primary); }
-
         /* ===== BOTTOM NAV (shared component) ===== */
         .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(15,15,15,0.92); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border-top: 1px solid var(--border); padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px)); z-index: 1000; display: flex; justify-content: space-around; align-items: center; }
         @media (min-width: 480px) { .bottom-nav { max-width: 480px; margin: 0 auto; } }
@@ -661,48 +322,28 @@ export default function RadioPage() {
 
         {/* ===== PREMIUM HEADER ===== */}
         <header className="header">
-          <div className="header-logo"><i className="fas fa-church"></i></div>
+          <button className="header-back" onClick={() => window.history.back()}><i className="fas fa-arrow-left"></i></button>
           <div className="header-info">
-            <div className="header-name">{stationName}</div>
+            <div className="header-name">Kingdom Seekers Church</div>
             <div className="header-dj">
-              {isLive ? (
-                <><span className="live-dot"></span> Live{liveStreamerName ? ` with ${liveStreamerName}` : ""}</>
-              ) : radioLoading ? "Connecting..." : "Offline"}
+              <i className="fas fa-tower-cell"></i> {stationName}
             </div>
           </div>
           <div className="header-right">
             <div className={`header-badge ${isLive ? "live" : "off"}`}>
-              {isLive ? "On Air" : "Off Air"}
+              {isLive ? (
+                <><span className="live-dot"></span> Live</>
+              ) : "Off Air"}
             </div>
             <div className="listener-count">
               <i className="fas fa-headphones"></i> {currentListeners}
             </div>
-// YouTube live indicator removed
           </div>
         </header>
-
-        {/* ===== PREMIUM TAB BAR ===== */}
-        <nav className="radio-tabs">
-          <button className={`radio-tab ${activeTab === "home" ? "active" : ""}`} onClick={() => setActiveTab("home")}>
-            <i className="fas fa-house"></i>Home
-          </button>
-          <button className={`radio-tab ${activeTab === "schedule" ? "active" : ""}`} onClick={() => setActiveTab("schedule")}>
-            <i className="fas fa-calendar-days"></i>Schedule
-          </button>
-          <button className={`radio-tab ${activeTab === "requests" ? "active" : ""}`} onClick={() => setActiveTab("requests")}>
-            <i className="fas fa-hand"></i>Requests
-          </button>
-          <button className={`radio-tab ${activeTab === "about" ? "active" : ""}`} onClick={() => setActiveTab("about")}>
-            <i className="fas fa-circle-info"></i>About
-          </button>
-        </nav>
 
         {/* ===== MAIN CONTENT ===== */}
         <div className="content-scroll">
           <div className="content-inner">
-
-            {/* ===== TAB 1: HOME ===== */}
-            {activeTab === "home" && (
               <div className="section-spacer">
                 {/* Now Playing — premium hero card with volume controls */}
                 <div className="np-glass">
@@ -714,7 +355,7 @@ export default function RadioPage() {
                     )}
                     <div className="np-body">
                       <div className="np-title">{np?.song?.title || "Not Playing"}</div>
-                      <div className="np-artist">{np?.song?.artist || "Station is offline"}</div>
+                      <div className="np-artist">{np?.song?.artist || (audio.isPlaying ? "Now Playing" : "Station is offline")}</div>
                       {np && np.duration > 0 && (
                         <div className="np-progress">
                           <div className="np-progress-bar">
@@ -749,11 +390,6 @@ export default function RadioPage() {
                       />
                     </div>
                   </div>
-                  {/* AzuraCast Embed Player */}
-                  <div className="np-embed-wrap">
-                    <iframe src="https://azuracast.histoview.co.ke/public/turningpoint_church/embed?theme=dark" style={{ width: "100%", minHeight: 150, height: 150, border: "none", display: "block", borderRadius: 12 }}></iframe>
-                  </div>
-
                   {audio.isPlaying && (
                     <div className="np-bg-indicator">
                       <i className="fas fa-volume-high" style={{ color: "var(--primary)" }}></i>
@@ -812,191 +448,6 @@ export default function RadioPage() {
                   )}
                 </div>
               </div>
-            )}
-
-            {/* ===== TAB 2: SCHEDULE ===== */}
-            {activeTab === "schedule" && (
-              <div className="section-spacer">
-                {/* Next Show Card */}
-                {nextShow && (
-                  <div className="sched-next">
-                    <div className="sched-next-icon"><i className="fas fa-calendar"></i></div>
-                    <div className="sched-next-info">
-                      <div className="sched-next-label">Next Show</div>
-                      <div className="sched-next-name">{nextShow.name}</div>
-                    </div>
-                    <div className="sched-next-time">{nextShowTime}</div>
-                  </div>
-                )}
-
-                {/* Schedule By Day */}
-                {scheduleByDay.length === 0 ? (
-                  <div className="sched-empty-state">
-                    <i className="fas fa-calendar-xmark"></i>
-                    <h3>No Scheduled Broadcasts</h3>
-                    <p>Check back for upcoming shows</p>
-                  </div>
-                ) : (
-                  scheduleByDay.map((day, di) => (
-                    <div className="sched-day-group" key={di}>
-                      <div className={`sched-day-header${day.isToday ? " today" : ""}`}>
-                        <span className="day-line"></span>
-                        {day.isToday ? "Today" : day.dayName}
-                        <span className="day-line"></span>
-                      </div>
-                      {day.items.map((item, ii) => (
-                        <div className={`sched-item${nowStr >= item.time ? " active" : ""}`} key={ii}>
-                          <span className="sched-time">{item.time}</span>
-                          <div className={`sched-dot ${item.type}`}></div>
-                          <div className="sched-info">
-                            <div className="sched-name">{item.name}</div>
-                            <div className="sched-host">Kingdom Seekers Church</div>
-                          </div>
-                          <span className={`sched-type-badge ${item.type}`}>{item.type}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-
-            {/* ===== TAB 3: REQUESTS ===== */}
-            {activeTab === "requests" && (
-              <div className="section-spacer">
-                {/* Search */}
-                <div className="req-search-wrap">
-                  <i className="fas fa-search"></i>
-                  <input type="text" placeholder="Search song or artist..." value={requestSearch} onChange={(e) => setRequestSearch(e.target.value)} />
-                </div>
-
-                {/* Cooldown */}
-                {cooldownLeft > 0 && (
-                  <div className="req-cooldown">
-                    <i className="fas fa-hourglass-half req-cool-icon"></i>
-                    Next request in <strong>{formatCooldown(cooldownLeft)}</strong>
-                  </div>
-                )}
-
-                {/* Requestable Songs */}
-                {filteredRequests.length === 0 ? (
-                  <div className="req-empty-state">
-                    <i className="fas fa-music" style={{ fontSize: 32, display: "block", marginBottom: 12, color: "var(--text-tertiary)", opacity: 0.5 }}></i>
-                    {requestSearch ? `No songs found matching "${requestSearch}"` : "No songs available for request"}
-                  </div>
-                ) : (
-                  <div className="req-list">
-                    {filteredRequests.map((file) => {
-                      const alreadyRequested = requestedSongs.has(file.id);
-                      const onCooldown = lastRequestTime !== null && (currentTime - lastRequestTime) < 1800000 && !alreadyRequested;
-                      const isLoading = requestLoading;
-                      let btnClass = "request";
-                      let btnText = "Request";
-                      if (alreadyRequested) { btnClass = "done"; btnText = "Done!"; }
-                      else if (onCooldown) { btnClass = "cooldown"; btnText = "Wait"; }
-                      return (
-                        <div className="req-card" key={file.id}>
-                          {file.albumArt ? (
-                            <img className="req-cover" src={file.albumArt} alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                          ) : (
-                            <div className="req-cover-fallback"><i className="fas fa-music"></i></div>
-                          )}
-                          <div className="req-info">
-                            <div className="req-title">{file.title}</div>
-                            <div className="req-artist">{file.artist}</div>
-                          </div>
-                          <button className={`req-btn ${btnClass}`} onClick={() => !alreadyRequested && !onCooldown && !isLoading && handleRequest(file.id, file.title, file.artist)}>
-                            {isLoading ? <><i className="fas fa-spinner fa-spin"></i></> : null}
-                            {btnText}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Recent Requests from Firestore */}
-                {requestedSongs.size > 0 && (
-                  <div className="section-spacer-sm">
-                    <div className="section-hdr">
-                      <h3>Your Requests</h3>
-                      <span>{requestedSongs.size} requested</span>
-                    </div>
-                    <div className="req-recent-list">
-                      {Array.from(requestedSongs).slice(-10).reverse().map((id) => {
-                        const file = stationFiles.find((f) => f.id === id);
-                        return file ? (
-                          <div className="req-recent-item" key={id}>
-                            <div className="req-recent-avatar"><i className="fas fa-check"></i></div>
-                            <div className="req-recent-info">
-                              Requested <span className="req-recent-song">{file.title}</span>
-                            </div>
-                            <span className="req-recent-time">✓</span>
-                          </div>
-                        ) : null;
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ===== TAB 4: ABOUT ===== */}
-            {activeTab === "about" && (
-              <div className="about-wrap">
-                <div className="about-logo-wrap"><i className="fas fa-church"></i></div>
-                <div className="about-name">{stationName}</div>
-                <p className="about-tagline">{churchConfig.tagline}</p>
-
-                {/* Stream URL */}
-                <div className="about-stream-box">
-                  <span className="about-stream-text">{embedUrl}</span>
-                  <button className="about-copy-btn" onClick={handleCopyStream}>
-                    <i className="fas fa-copy"></i>
-                  </button>
-                </div>
-
-                {/* Contact Info from churchConfig */}
-                {(churchConfig.email || churchConfig.phone || churchConfig.address) && (
-                  <div className="about-stream-box" style={{ flexDirection: "column", alignItems: "flex-start", gap: 6, marginBottom: 16 }}>
-                    {churchConfig.email && <span style={{ fontSize: 13, color: "var(--text-secondary)" }}><i className="fas fa-envelope" style={{ width: 18, color: "var(--primary)" }}></i> {churchConfig.email}</span>}
-                    {churchConfig.phone && <span style={{ fontSize: 13, color: "var(--text-secondary)" }}><i className="fas fa-phone" style={{ width: 18, color: "var(--primary)" }}></i> {churchConfig.phone}</span>}
-                    {churchConfig.address && <span style={{ fontSize: 13, color: "var(--text-secondary)" }}><i className="fas fa-location-dot" style={{ width: 18, color: "var(--primary)" }}></i> {churchConfig.address}</span>}
-                  </div>
-                )}
-
-                {/* Social Links from churchConfig */}
-                <div className="about-social-row">
-                  {(churchConfig.social.facebook_url || true) && (
-                    <button className="about-social-btn" onClick={async () => { if (churchConfig.social.facebook_url) { try { const { Browser } = await import("@capacitor/browser"); await Browser.open({ url: churchConfig.social.facebook_url }); } catch { window.open(churchConfig.social.facebook_url, "_blank"); } } }}>
-                      <i className="fab fa-facebook" style={{ color: "#1877F2" }}></i>
-                    </button>
-                  )}
-                  {/* YouTube social button removed */}
-                  {(churchConfig.social.whatsapp_number || true) && (
-                    <button className="about-social-btn" onClick={async () => { if (churchConfig.social.whatsapp_number) { try { const { Browser } = await import("@capacitor/browser"); await Browser.open({ url: `https://wa.me/${churchConfig.social.whatsapp_number.replace(/[^0-9]/g, "")}` }); } catch { window.open(`https://wa.me/${churchConfig.social.whatsapp_number.replace(/[^0-9]/g, "")}`, "_blank"); } } }}>
-                      <i className="fab fa-whatsapp" style={{ color: "#25D366" }}></i>
-                    </button>
-                  )}
-                  {(churchConfig.social.instagram_url || true) && (
-                    <button className="about-social-btn" onClick={async () => { if (churchConfig.social.instagram_url) { try { const { Browser } = await import("@capacitor/browser"); await Browser.open({ url: churchConfig.social.instagram_url }); } catch { window.open(churchConfig.social.instagram_url, "_blank"); } } }}>
-                      <i className="fab fa-instagram" style={{ color: "#E4405F" }}></i>
-                    </button>
-                  )}
-                </div>
-
-                <div className="about-actions-stack">
-                  <button className="about-action-btn share" onClick={handleShare}>
-                    <i className="fas fa-share-nodes"></i> Share Station
-                  </button>
-                  {/* Browse Videos button removed */}
-                </div>
-
-                <div className="about-footer">
-                  Powered by <strong>Kingdom Seekers Church Nakuru</strong> · v1.0.0
-                </div>
-              </div>
-            )}
 
           </div>
           <div style={{ height: "16px" }}></div>

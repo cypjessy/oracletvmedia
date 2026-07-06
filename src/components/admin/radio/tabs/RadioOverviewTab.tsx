@@ -16,6 +16,8 @@ interface RadioOverviewTabProps {
   backendRunning: boolean;
   setIsPlaying: (v: boolean) => void;
   setAutoDJ: (v: boolean) => void;
+  streamUrl: string;
+  onTogglePlay: () => void;
   pcMode: "schedule" | "playlist" | "single";
   pcQueue: QueueItem[];
   pcPlaylists: Playlist[];
@@ -37,6 +39,7 @@ export function RadioOverviewTab(props: RadioOverviewTabProps) {
     overviewNP, overviewHistory, overviewLoading,
     autoDJ, isLive, isPlaying, listeners, backendRunning,
     setIsPlaying, setAutoDJ,
+    streamUrl, onTogglePlay,
     pcMode, pcQueue, pcPlaylists, pcFiles,
     pcActivePlaylist, pcActiveTrack, pcAutoDJ, pcActionLoading,
     setPcMode, setPcPlaylists, setPcActivePlaylist, setPcActiveTrack, setPcActionLoading,
@@ -272,8 +275,8 @@ export function RadioOverviewTab(props: RadioOverviewTabProps) {
           )}
         </div>
         <div className="now-playing-info">
-          <div className="now-playing-title">{backendRunning && np?.song.title ? np.song.title : "Station Offline"}</div>
-          <div className="now-playing-artist">{backendRunning && np?.song.artist ? np.song.artist : "Backend not running"}</div>
+          <div className="now-playing-title">{backendRunning && np?.song.title ? np.song.title : (backendRunning ? (isPlaying ? "Now Playing" : "Idle") : "Station Offline")}</div>
+          <div className="now-playing-artist">{backendRunning && np?.song.artist ? np.song.artist : (backendRunning ? (isPlaying ? "" : "Station is online") : "Backend not running")}</div>
           {backendRunning && np && (
             <div className="now-playing-progress">
               <div className="progress-bar">
@@ -288,16 +291,11 @@ export function RadioOverviewTab(props: RadioOverviewTabProps) {
         </div>
         <button
           className="mini-player-btn"
-          onClick={() => {
-            setIsPlaying(!isPlaying);
-            if (isPlaying) {
-              import("@capacitor/browser").then(({ Browser }) => Browser.open({ url: overviewNP?.station ? `${getApiBase()}/public/${overviewNP.station.shortName}` : "#" })).catch(() => window.open(overviewNP?.station ? `${getApiBase()}/public/${overviewNP.station.shortName}` : "#", "_blank"));
-            }
-          }}
-          title={backendRunning ? "" : "Station is offline"}
-          disabled={!backendRunning}
+          onClick={onTogglePlay}
+          title={backendRunning ? (isPlaying ? "Stop" : "Play") : "Backend offline"}
+          disabled={!backendRunning || !streamUrl}
         >
-          <i className={`fas ${isPlaying ? "fa-stop" : "fa-play"}`}></i>
+          <i className={`fas ${isPlaying ? "fa-pause" : "fa-play"}`}></i>
         </button>
       </div>
 
@@ -318,15 +316,7 @@ export function RadioOverviewTab(props: RadioOverviewTabProps) {
         </div>
       </div>
 
-      {/* AzuraCast Embed Player */}
-      <div className="section-block">
-        <div className="section-block-header">
-          <h3><i className="fas fa-tower-broadcast" style={{ marginRight: 6 }}></i>Live Player</h3>
-        </div>
-        <div style={{ borderRadius: "var(--radius-sm)", overflow: "hidden" }}>
-          <iframe src="https://azuracast.histoview.co.ke/public/turningpoint_church/embed?theme=dark" style={{ width: "100%", minHeight: 150, height: 150, border: "none", display: "block" }}></iframe>
-        </div>
-      </div>
+
 
       {/* Play Control */}
       <div className="section-block">

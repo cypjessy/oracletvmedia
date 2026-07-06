@@ -280,6 +280,11 @@ export default function AdminRadioPage() {
       backendRunning={backendRunning}
       setIsPlaying={setIsPlaying}
       setAutoDJ={setAutoDJ}
+      streamUrl={overviewNP?.station?.listenUrl || radioConfig.streamUrl}
+      onTogglePlay={() => {
+        const url = overviewNP?.station?.listenUrl || radioConfig.streamUrl;
+        if (url) audio.toggle(url, Number(radioConfig.stationId || getStationId()));
+      }}
       pcMode={pcMode}
       pcQueue={pcQueue}
       pcPlaylists={pcPlaylists}

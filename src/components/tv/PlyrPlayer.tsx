@@ -4,10 +4,15 @@ import { useEffect, useRef } from "react";
 import "plyr/dist/plyr.css";
 
 /**
- * Embedded YouTube player using core Plyr library.
- * Automatically plays and fires onEnded when the video finishes.
- * If initialSeek is provided, seeks to that position (seconds) before playback starts
- * by using muted autoplay + seek on ready + delayed unmute.
+ * Embedded YouTube / HTML5 player using core Plyr library.
+ *
+ * Key design: on video ID changes, the source is updated **in-place** via
+ * `player.source` instead of destroying and recreating the entire player.
+ * This avoids the black flash / black screen that occurred when the YouTube
+ * iframe was torn down and rebuilt from scratch on every video transition.
+ *
+ * For HTML5 provider changes, the player IS destroyed and recreated (since
+ * the underlying DOM element type changes: <div> vs <video>).
  */
 export default function PlyrPlayer({
   videoId,
@@ -31,17 +36,24 @@ export default function PlyrPlayer({
   onEndedRef.current = onEnded;
   const onTimeUpdateRef = useRef(onTimeUpdate);
   onTimeUpdateRef.current = onTimeUpdate;
-  // Ref for initialSeek so the ready handler always reads the latest value
-  // without needing initialSeek in the effect deps (which would remount the player).
   const initialSeekRef = useRef(initialSeek);
   initialSeekRef.current = initialSeek;
 
+  // Latest videoId ref so the source-update effect always reads the current value
+  const videoIdRef = useRef(videoId);
+  videoIdRef.current = videoId;
+
+  // ─── Effect 1: Create Plyr on mount (or when provider changes). ───
+  // Only re-runs when `provider` changes. Video transitions are handled
+  // by Effect 2 below, which updates the source in-place on the instance.
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !el.isConnected) return;
 
-    // Clean up old instance — wrap in try-catch to handle race conditions
-    // where React may have manipulated the DOM before this runs.
+    // TypeScript guard — already checked above but helps with closure types
+    const container: HTMLElement = el;
+
+    // Destroy any previous instance (e.g. after provider switch)
     if (plyrRef.current) {
       try { plyrRef.current.destroy(); } catch {}
       plyrRef.current = null;
@@ -49,88 +61,124 @@ export default function PlyrPlayer({
 
     let destroyed = false;
     let unmuteTimeout: ReturnType<typeof setTimeout> | undefined;
+    let retryTimeout: ReturnType<typeof setTimeout> | undefined;
 
-    import("plyr").then((PlyrModule) => {
-      if (destroyed || !el.isConnected) return;
-      const PlyrCtor = PlyrModule.default || PlyrModule;
+    function createPlayer(module: any, retry = false) {
+      if (destroyed || !container.isConnected) return;
+      const PlyrCtor = module.default || module;
 
-      const player = new PlyrCtor(el, {
-        autoplay: true,
-        muted: true,
-        controls: ["play-large","play","progress","current-time","mute","volume","fullscreen"],
-      });
+      try {
+        const player = new PlyrCtor(container, {
+          autoplay: true,
+          muted: true,
+          controls: ["play-large","play","progress","current-time","mute","volume","fullscreen"],
+        });
 
-      const endedHandler = () => onEndedRef.current();
-      player.on("ended", endedHandler);
+        const endedHandler = () => onEndedRef.current();
+        player.on("ended", endedHandler);
 
-      const timeHandler = (() => {
-        let last = -1;
-        return (e: CustomEvent) => {
-          const t = e.detail?.plyr?.currentTime;
-          if (typeof t === "number" && Math.abs(t - last) >= 0.5) {
-            last = t;
-            onTimeUpdateRef.current?.(t);
-          }
-        };
-      })();
-      player.on("timeupdate", timeHandler);
-
-      if (provider === "html5" && sourceUrl) {
-        try {
-          player.source = {
-            type: "video",
-            title: "Video",
-            sources: [{ src: sourceUrl, type: "video/mp4" }],
+        const timeHandler = (() => {
+          let last = -1;
+          return (e: CustomEvent) => {
+            const t = e.detail?.plyr?.currentTime;
+            if (typeof t === "number" && Math.abs(t - last) >= 0.5) {
+              last = t;
+              onTimeUpdateRef.current?.(t);
+            }
           };
-        } catch {}
-      }
+        })();
+        player.on("timeupdate", timeHandler);
 
-      // Only seek on 'ready' — YouTube iframe must be fully initialized
-      // before seeking is reliable. No seekedRef blocking, no retry timers.
-      player.on("ready", () => {
-        const seek = initialSeekRef.current;
-        if (seek !== undefined && seek > 0.1) {
-          try {
-            player.currentTime = seek;
-          } catch {}
-        }
-
-        try {
-          const playPromise = player.play();
-          if (playPromise && typeof playPromise.catch === "function") {
-            playPromise.catch(() => {});
+        // On ready: apply seek and unmute
+        const readyHandler = () => {
+          const seek = initialSeekRef.current;
+          if (seek !== undefined && seek > 0.1) {
+            try { player.currentTime = seek; } catch {}
           }
-        } catch {}
 
-        unmuteTimeout = setTimeout(() => {
           try {
-            (player as any).muted = false;
             const playPromise = player.play();
             if (playPromise && typeof playPromise.catch === "function") {
               playPromise.catch(() => {});
             }
           } catch {}
-        }, 1000);
-      });
 
-      plyrRef.current = player;
+          unmuteTimeout = setTimeout(() => {
+            try {
+              (player as any).muted = false;
+              const playPromise = player.play();
+              if (playPromise && typeof playPromise.catch === "function") {
+                playPromise.catch(() => {});
+              }
+            } catch {}
+          }, 1000);
+        };
+        player.on("ready", readyHandler);
 
-      if (destroyed || !el.isConnected) {
-        if (unmuteTimeout) clearTimeout(unmuteTimeout);
-        try { player.destroy(); } catch {}
-        plyrRef.current = null;
+        plyrRef.current = player;
+
+        if (destroyed || !container.isConnected) {
+          if (unmuteTimeout) clearTimeout(unmuteTimeout);
+          try { player.destroy(); } catch {}
+          plyrRef.current = null;
+        }
+      } catch (err) {
+        // Plyr failed to initialize — retry once
+        if (!retry && !destroyed) {
+          retryTimeout = setTimeout(() => createPlayer(module, true), 200);
+        }
       }
+    }
+
+    import("plyr").then((PlyrModule) => {
+      if (destroyed || !container.isConnected) return;
+      createPlayer(PlyrModule, false);
     });
 
     return () => {
       destroyed = true;
       if (unmuteTimeout) clearTimeout(unmuteTimeout);
+      if (retryTimeout) clearTimeout(retryTimeout);
       if (plyrRef.current) {
         try { plyrRef.current.destroy(); } catch {}
         plyrRef.current = null;
       }
     };
-  }, [videoId, sourceUrl, provider]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider]); // Only re-run when provider type changes
+
+  // ─── Effect 2: Update video source in-place when videoId changes. ───
+  // This keeps the Plyr instance alive and avoids destroying/recreating
+  // the YouTube iframe, which causes the black screen.
+  useEffect(() => {
+    if (!plyrRef.current || !videoId) return;
+
+    if (provider === "youtube") {
+      // Switch YouTube video in-place — no destroy needed
+      try {
+        plyrRef.current.source = {
+          type: "video",
+          sources: [
+            {
+              src: `https://www.youtube.com/watch?v=${videoId}`,
+              provider: "youtube",
+            },
+          ],
+        };
+
+        // Apply seek after source change — use ref so it's always current
+        const seek = initialSeekRef.current;
+        if (seek !== undefined && seek > 0.1) {
+          const seekTimer = setTimeout(() => {
+            try {
+              if (plyrRef.current) plyrRef.current.currentTime = seek;
+            } catch {}
+          }, 500);
+          return () => clearTimeout(seekTimer);
+        }
+      } catch {}
+    }
+  }, [videoId, provider]);
 
   return provider === "html5" ? (
     <video

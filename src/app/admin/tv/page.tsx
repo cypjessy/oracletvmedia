@@ -25,6 +25,7 @@ import { churchConfig } from "@/lib/churchConfig";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import { useTvPlayer } from "@/lib/tv/TvPlayerProvider";
 import ToastBridge from "@/components/dashboard/ToastBridge";
+import PremiumLoader from "@/components/shared/PremiumLoader";
 
 export default function AdminTVPage() {
   const router = useRouter();
@@ -98,6 +99,7 @@ export default function AdminTVPage() {
   const cachedAdminSeek = typeof window !== "undefined" ? Number(localStorage.getItem(ADMIN_TV_SEEK_KEY)) || 0 : 0;
   const lastAdminTvSeekRef = useRef(0);
   const lastAdminTvIndexRef = useRef(0);
+  const hasInteractedWithTv = useRef(false);
 
   // Load current channel data + restore Firestore TV state
   useEffect(() => {
@@ -322,6 +324,27 @@ export default function AdminTVPage() {
   }, [allVideos.length]);
 
   const currentVideo = allVideos.length > 0 ? allVideos[currentTvIndex >= allVideos.length ? 0 : currentTvIndex] : null;
+
+  // Start TV — resume saved progress, or advance if already interacted
+  const handleStartTv = useCallback(() => {
+    if (allVideos.length === 0) {
+      window.dispatchEvent(new CustomEvent("show-toast", {
+        detail: { title: "No Videos", message: "No videos available. Sync a YouTube channel first.", type: "info", duration: 3000 }
+      }));
+      return;
+    }
+    if (currentVideo && hasInteractedWithTv.current) {
+      const nextIndex = (currentTvIndex + 1) % allVideos.length;
+      setCurrentTvIndex(nextIndex);
+      if (auth.currentUser?.uid) updateUserTvProgress(auth.currentUser.uid, nextIndex, 0);
+      return;
+    }
+    hasInteractedWithTv.current = true;
+    if (!currentVideo) {
+      const resumeIndex = currentTvIndex < allVideos.length ? currentTvIndex : 0;
+      setCurrentTvIndex(resumeIndex);
+    }
+  }, [currentVideo, currentTvIndex, allVideos.length]);
 
   // Sync index ref when currentTvIndex changes + update localStorage
   useEffect(() => {
@@ -1756,6 +1779,20 @@ export default function AdminTVPage() {
           position: relative;
         }
         .tv-no-video i { font-size: 28px; opacity: 0.4; }
+        .tv-start-btn {
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          width: calc(100% - 32px); padding: 14px;
+          margin: 8px 16px 0;
+          border-radius: var(--radius-md);
+          background: linear-gradient(135deg, #3B82F6, #6366F1);
+          border: none; color: #fff;
+          font-size: 14px; font-weight: 700;
+          cursor: pointer; transition: all 0.2s ease;
+          position: relative; z-index: 1;
+        }
+        .tv-start-btn:active { transform: scale(0.97); }
+        .tv-start-btn i { font-size: 13px; }
+        .tv-start-hint { font-size: 10px; color: var(--text-tertiary); text-align: center; padding: 4px 16px 0; opacity: 0.7; }
         .tv-channel-strip {
           display: flex; align-items: center; gap: 12px;
           padding: 10px 12px;
@@ -1770,9 +1807,11 @@ export default function AdminTVPage() {
           overflow: hidden; flex-shrink: 0;
           background: var(--surface-elevated);
           display: flex; align-items: center; justify-content: center;
+          position: relative;
         }
         .tv-channel-avatar img { width: 100%; height: 100%; object-fit: cover; }
         .tv-channel-avatar i { font-size: 16px; color: #FF0000; }
+        .tv-avatar-img { position: absolute; inset: 0; border-radius: 50%; }
         .tv-channel-info { flex: 1; min-width: 0; }
         .tv-channel-name { font-size: 13px; font-weight: 700; }
         .tv-channel-meta { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
@@ -2144,10 +2183,9 @@ export default function AdminTVPage() {
 
                   <div className="tv-channel-strip">
                     <div className="tv-channel-avatar">
-                      {channel.thumbnail ? (
-                        <img src={channel.thumbnail} alt={channel.title} />
-                      ) : (
-                        <i className="fab fa-youtube"></i>
+                      <i className="fab fa-youtube"></i>
+                      {channel.thumbnail && (
+                        <img src={channel.thumbnail.replace(/^http:/, 'https:')} alt={channel.title} referrerPolicy="no-referrer" crossOrigin="anonymous" onError={(e) => { e.currentTarget.style.display = 'none'; }} className="tv-avatar-img" />
                       )}
                     </div>
                     <div className="tv-channel-info">
@@ -2158,15 +2196,18 @@ export default function AdminTVPage() {
                       <i className="fas fa-expand"></i> Manage
                     </button>
                   </div>
+
+                  <button className="tv-start-btn" onClick={handleStartTv} title="Starts TV or skips to next if already playing">
+                    <i className="fas fa-play"></i>
+                    <span>Start TV</span>
+                  </button>
+                  <div className="tv-start-hint">Starts TV · Skips to next if already playing</div>
                 </div>
               </section>
             )}
 
             {loading ? (
-              <div className="loading-state">
-                <i className="fas fa-tv"></i>
-                <span>Loading TV settings...</span>
-              </div>
+              <PremiumLoader />
             ) : (
               <div className="section">
                 {renderAdminTabContent()}

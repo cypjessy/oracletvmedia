@@ -1,18 +1,22 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { getEvents } from "@/lib/churchAiData";
 import type { EventItem } from "@/lib/churchAdminData";
 
 /**
  * Auto-advancing event carousel that fetches real events from Firestore.
- * Shows event images as background with info overlay, or text-only fallback.
+ * Premium redesign with larger cards, glass-morphism effects, and rich imagery.
+ * @param redirectUrl - Where to navigate when a card is clicked (default: "/gallery")
  */
-export default function EventCarousel() {
+export default function EventCarousel({ redirectUrl = "/gallery" }: { redirectUrl?: string }) {
+  const router = useRouter();
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [noTransition, setNoTransition] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Fetch events from Firestore on mount
@@ -22,7 +26,6 @@ export default function EventCarousel() {
       try {
         const data = await getEvents();
         if (mounted) {
-          // Sort by date ascending (soonest first)
           const sorted = data.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           setEvents(sorted);
         }
@@ -36,7 +39,7 @@ export default function EventCarousel() {
     return () => { mounted = false; };
   }, []);
 
-  // Auto-advance every 4 seconds (unless paused or only 1 event)
+  // Auto-advance every 4 seconds — infinite loop via cloned cards
   useEffect(() => {
     if (events.length <= 1 || paused) {
       if (intervalRef.current) {
@@ -46,7 +49,16 @@ export default function EventCarousel() {
       return;
     }
     intervalRef.current = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % events.length);
+      setCurrentIndex((prev) => {
+        const next = prev + 1;
+        if (next >= events.length) {
+          // Teleport back to 0 without transition (infinite loop illusion)
+          setNoTransition(true);
+          requestAnimationFrame(() => requestAnimationFrame(() => setNoTransition(false)));
+          return 0;
+        }
+        return next;
+      });
     }, 4000);
     return () => {
       if (intervalRef.current) {
@@ -60,6 +72,10 @@ export default function EventCarousel() {
     setCurrentIndex(index);
   }, []);
 
+  // Display events doubled for infinite loop illusion
+  const displayEvents = events.length > 1 ? [...events, ...events] : events;
+  const safeIndex = currentIndex < events.length ? currentIndex : 0;
+
   const formatEventDate = (dateStr: string) => {
     const d = new Date(dateStr);
     const day = d.getDate();
@@ -70,80 +86,98 @@ export default function EventCarousel() {
 
   if (loading) {
     return (
-      <section className="feed-section ev-section">
-        <div className="ev-header">
-          <h2 className="ev-title"><i className="fas fa-calendar-alt"></i> Upcoming Events</h2>
+      <section className="feed-section ec-section">
+        <div className="ec-header">
+          <h2 className="ec-title"><i className="fas fa-calendar-alt"></i> Upcoming Events</h2>
         </div>
-        <div className="ev-skeleton">
-          <div className="ev-skeleton-card"></div>
-          <div className="ev-skeleton-card"></div>
-          <div className="ev-skeleton-card"></div>
+        <div className="ec-skeleton">
+          <div className="ec-skel-card"></div>
+          <div className="ec-skel-card"></div>
+          <div className="ec-skel-card"></div>
         </div>
-        <style>{`.ev-skeleton { display: flex; gap: 10px; overflow: hidden; }
-        .ev-skeleton-card { width: 240px; height: 180px; border-radius: 16px; background: var(--surface-elevated); flex-shrink: 0; animation: skeletonPulse 1.5s ease-in-out infinite; }
-        @keyframes skeletonPulse { 0%,100% { opacity:0.5; } 50% { opacity:0.3; } }`}</style>
+        <style>{`.ec-skeleton { display: flex; gap: 14px; overflow: hidden; }
+        .ec-skel-card { width: 320px; height: 220px; border-radius: 20px; background: var(--surface-elevated); flex-shrink: 0; animation: ecPulse 1.5s ease-in-out infinite; }
+        @keyframes ecPulse { 0%,100% { opacity:0.5; } 50% { opacity:0.3; } }`}</style>
       </section>
     );
   }
 
   if (events.length === 0) return null;
 
-  const current = events[currentIndex] || events[0];
+  const current = events[safeIndex] || events[0];
 
   return (
-    <section className="feed-section ev-section">
-      <div className="ev-header">
-        <h2 className="ev-title"><i className="fas fa-calendar-alt"></i> Upcoming Events</h2>
-        <button className="ev-see-all" onClick={() => window.dispatchEvent(new CustomEvent("show-toast", { detail: { title: "Events", message: "Opening events page...", type: "info", duration: 1500 } }))}>
+    <section className="feed-section ec-section">
+      <div className="ec-header">
+        <h2 className="ec-title"><i className="fas fa-calendar-alt"></i> Upcoming Events</h2>
+        <button className="ec-see-all" onClick={() => window.dispatchEvent(new CustomEvent("show-toast", { detail: { title: "Events", message: "Opening events page...", type: "info", duration: 1500 } }))}>
           See All <i className="fas fa-chevron-right"></i>
         </button>
       </div>
 
       <div
-        className="ev-carousel"
+        className="ec-carousel"
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
         onTouchStart={() => setPaused(true)}
         onTouchEnd={() => setTimeout(() => setPaused(false), 3000)}
       >
-        <div className="ev-track" style={{ transform: `translateX(-${currentIndex * 260}px)` }}>
-          {events.map((ev, i) => {
+        <div className="ec-track" style={{ transform: `translateX(-${currentIndex * 350}px)`, transition: noTransition ? 'none' : undefined }}>
+          {displayEvents.map((ev, i) => {
             const d = formatEventDate(ev.date);
+            const hasImage = !!ev.imageUrl;
             return (
-              <div key={ev.id} className={`ev-card ${i === currentIndex ? "active" : ""}`}>
-                {/* Background image when available */}
-                {ev.imageUrl && (
-                  <>
-                    <div className="ev-card-bg" style={{ backgroundImage: `url(${ev.imageUrl})` }} />
-                    <div className="ev-card-overlay" />
-                  </>
-                )}
-                <div className="ev-card-top">
-                  <div className="ev-date-badge">
-                    <span className="ev-date-day">{d.day}</span>
-                    <span className="ev-date-month">{d.month}</span>
-                  </div>
-                  <div className="ev-card-icon">
-                    <i className="fas fa-calendar-check"></i>
-                  </div>
-                </div>
-                <div className="ev-card-body">
-                  <h3 className="ev-card-title">{ev.name}</h3>
-                  <div className="ev-card-detail">
-                    <i className="fas fa-clock"></i> {d.time}
-                  </div>
-                  {ev.location && (
-                    <div className="ev-card-detail">
-                      <i className="fas fa-location-dot"></i> {ev.location}
+              <div
+                key={`${ev.id}-${i >= events.length ? 'dup' : 'orig'}`}
+                className={`ec-card ${i === currentIndex ? "active" : ""} ${hasImage ? "has-img" : ""}`}
+                onClick={() => router.push(redirectUrl)}
+              >
+                {/* Glass top accent line */}
+                <div className="ec-accent"></div>
+
+                {/* Image section */}
+                <div className="ec-img-wrap">
+                  {hasImage ? (
+                    <>
+                      <div className="ec-img-bg" style={{ backgroundImage: `url(${ev.imageUrl})` }} />
+                      <div className="ec-img-overlay" />
+                    </>
+                  ) : (
+                    <div className="ec-img-placeholder">
+                      <i className="fas fa-calendar-alt"></i>
                     </div>
                   )}
-                  {ev.desc && (
-                    <div className="ev-card-desc">{ev.desc}</div>
+                  {/* Date badge floating on image */}
+                  <div className="ec-date-badge">
+                    <span className="ec-date-day">{d.day}</span>
+                    <span className="ec-date-month">{d.month}</span>
+                  </div>
+                  {/* Fee badge */}
+                  {ev.isPaid && ev.fee > 0 && (
+                    <div className="ec-fee-badge">Ksh {ev.fee}</div>
                   )}
                 </div>
-                {ev.isPaid && ev.fee > 0 && (
-                  <div className="ev-card-fee">Ksh {ev.fee}</div>
-                )}
+
+                {/* Content */}
+                <div className="ec-body">
+                  <h3 className="ec-name">{ev.name}</h3>
+                  <div className="ec-meta-row">
+                    <span className="ec-meta">
+                      <i className="fas fa-clock"></i> {d.time}
+                    </span>
+                    {ev.location && (
+                      <span className="ec-meta">
+                        <i className="fas fa-location-dot"></i> {ev.location}
+                      </span>
+                    )}
+                  </div>
+                  {ev.desc && (
+                    <div className="ec-desc">{ev.desc}</div>
+                  )}
+                </div>
+
+                {/* Hover glow */}
+                <div className="ec-glow"></div>
               </div>
             );
           })}
@@ -152,11 +186,11 @@ export default function EventCarousel() {
 
       {/* Dots */}
       {events.length > 1 && (
-        <div className="ev-dots">
+        <div className="ec-dots">
           {events.map((_, i) => (
             <button
               key={i}
-              className={`ev-dot ${i === currentIndex ? "active" : ""}`}
+              className={`ec-dot ${i === safeIndex ? "active" : ""}`}
               onClick={() => goTo(i)}
               aria-label={`Go to event ${i + 1}`}
             />
@@ -165,179 +199,200 @@ export default function EventCarousel() {
       )}
 
       <style>{`
-        .ev-section { margin-top: 2px; }
-        .ev-header {
+        .ec-section { margin-top: 2px; }
+        .ec-header {
           display: flex; align-items: center; justify-content: space-between;
           margin-bottom: 12px;
         }
-        .ev-title {
+        .ec-title {
           font-size: 15px; font-weight: 700;
           display: flex; align-items: center; gap: 8px;
         }
-        .ev-title i { color: var(--primary); font-size: 14px; }
-        .ev-see-all {
+        .ec-title i { color: var(--primary); font-size: 14px; }
+        .ec-see-all {
           font-size: 12px; color: var(--primary); font-weight: 600;
           background: none; border: none; cursor: pointer;
           display: flex; align-items: center; gap: 4px;
           padding: 4px 8px; border-radius: 8px;
           transition: all 0.15s ease;
         }
-        .ev-see-all:active { background: rgba(232,168,56,0.1); }
+        .ec-see-all:active { background: rgba(232,168,56,0.1); }
 
-        .ev-carousel {
+        .ec-carousel {
           overflow: hidden;
           border-radius: var(--radius-lg);
           position: relative;
         }
-        .ev-track {
-          display: flex; gap: 12px;
+        .ec-track {
+          display: flex; gap: 14px;
           transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-          padding: 2px 0;
+          padding: 4px 0;
         }
-        .ev-card {
-          min-width: 248px;
+        .ec-card {
+          min-width: 336px;
           background: var(--surface-card);
           border: 1px solid var(--border);
-          border-radius: var(--radius-lg);
-          padding: 14px;
+          border-radius: 20px;
           position: relative;
           overflow: hidden;
-          transition: all 0.3s ease;
+          transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
           flex-shrink: 0;
+          cursor: pointer;
         }
-        .ev-card.active {
+        .ec-card:active { transform: scale(0.96); }
+        .ec-card.active {
           border-color: rgba(232,168,56,0.25);
-          box-shadow: 0 4px 20px rgba(232,168,56,0.06);
+          box-shadow: 0 8px 32px rgba(232,168,56,0.08), 0 0 0 1px rgba(232,168,56,0.05);
         }
-        .ev-card:active { transform: scale(0.97); }
-        .ev-card::before {
-          content: '';
+        .ec-card.has-img.active {
+          box-shadow: 0 8px 40px rgba(232,168,56,0.12);
+        }
+
+        /* Top accent glow bar */
+        .ec-accent {
           position: absolute; top: 0; left: 0; right: 0; height: 3px;
           background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end));
           opacity: 0;
           transition: opacity 0.3s;
-          z-index: 3;
+          z-index: 5;
         }
-        .ev-card.active::before { opacity: 1; }
+        .ec-card.active .ec-accent { opacity: 1; }
 
-        /* Background image for events that have one */
-        .ev-card-bg {
+        /* Image section */
+        .ec-img-wrap {
+          position: relative;
+          width: 100%;
+          height: 160px;
+          overflow: hidden;
+          background: var(--surface-elevated);
+        }
+        .ec-img-bg {
           position: absolute; inset: 0;
           background-size: cover;
           background-position: center;
+          transition: transform 0.6s ease;
           z-index: 0;
         }
-        .ev-card-overlay {
+        .ec-card:hover .ec-img-bg { transform: scale(1.08); }
+        .ec-img-overlay {
           position: absolute; inset: 0;
-          background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0.2) 100%);
+          background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 50%);
           z-index: 1;
         }
+        .ec-img-placeholder {
+          position: absolute; inset: 0;
+          display: flex; align-items: center; justify-content: center;
+          background: linear-gradient(135deg, rgba(232,168,56,0.05), rgba(212,118,42,0.02));
+          color: var(--text-tertiary);
+          font-size: 48px;
+          z-index: 0;
+        }
 
-        /* Ensure content sits above background */
-        .ev-card-top, .ev-card-body, .ev-card-fee {
+        /* Date badge floating on image */
+        .ec-date-badge {
+          position: absolute;
+          top: 12px; left: 12px;
+          z-index: 3;
+          display: flex; flex-direction: column; align-items: center;
+          background: rgba(0,0,0,0.55);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 12px;
+          padding: 6px 12px;
+          min-width: 50px;
+        }
+        .ec-date-day {
+          font-size: 20px; font-weight: 800; line-height: 1.2;
+          color: #fff;
+        }
+        .ec-date-month {
+          font-size: 9px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.5px; color: rgba(255,255,255,0.7);
+        }
+        .ec-card:not(.has-img) .ec-date-day { color: var(--primary); }
+        .ec-card:not(.has-img) .ec-date-month { color: var(--text-secondary); }
+        .ec-card:not(.has-img) .ec-date-badge {
+          background: rgba(232,168,56,0.08);
+          border: 1px solid rgba(232,168,56,0.15);
+          backdrop-filter: none;
+        }
+
+        /* Fee badge */
+        .ec-fee-badge {
+          position: absolute; top: 12px; right: 12px;
+          z-index: 3;
+          font-size: 11px; font-weight: 700; color: #fff;
+          background: rgba(232,168,56,0.85);
+          backdrop-filter: blur(4px);
+          padding: 4px 10px; border-radius: 8px;
+        }
+
+        /* Body */
+        .ec-body {
+          padding: 14px 16px 16px;
           position: relative;
           z-index: 2;
         }
-
-        .ev-card-top {
-          display: flex; align-items: flex-start; justify-content: space-between;
-          margin-bottom: 10px;
-        }
-        .ev-date-badge {
-          display: flex; flex-direction: column; align-items: center;
-          background: rgba(232,168,56,0.08);
-          border: 1px solid rgba(232,168,56,0.15);
-          border-radius: 10px;
-          padding: 4px 10px;
-          min-width: 44px;
-        }
-        /* White text on image cards */
-        .ev-card .ev-card-bg ~ .ev-card-top .ev-date-badge {
-          background: rgba(0,0,0,0.5);
-          border-color: rgba(255,255,255,0.15);
-        }
-        .ev-card .ev-card-bg ~ .ev-card-top .ev-date-badge .ev-date-month {
-          color: rgba(255,255,255,0.7);
-        }
-        .ev-date-day {
-          font-size: 18px; font-weight: 800; line-height: 1.2;
-        }
-        .ev-date-month {
-          font-size: 9px; font-weight: 700; text-transform: uppercase;
-          letter-spacing: 0.5px; color: var(--text-secondary);
-        }
-        .ev-card-icon {
-          width: 32px; height: 32px; border-radius: 8px;
-          background: rgba(232,168,56,0.1);
-          display: flex; align-items: center; justify-content: center;
-          color: var(--primary); font-size: 14px;
-          flex-shrink: 0;
-        }
-        .ev-card .ev-card-bg ~ .ev-card-top .ev-card-icon {
-          background: rgba(232,168,56,0.3);
-        }
-
-        .ev-card-body { }
-        .ev-card-title {
-          font-size: 14px; font-weight: 700;
-          margin-bottom: 6px;
+        .ec-name {
+          font-size: 16px; font-weight: 700;
+          margin-bottom: 8px;
           display: -webkit-box;
           -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
           overflow: hidden;
+          line-height: 1.3;
         }
-        .ev-card .ev-card-bg ~ .ev-card-body .ev-card-title {
-          color: #fff;
+        .ec-card.has-img .ec-name { color: var(--text-primary); }
+        .ec-meta-row {
+          display: flex; flex-wrap: wrap; gap: 10px;
+          margin-bottom: 6px;
         }
-        .ev-card-detail {
+        .ec-meta {
           font-size: 12px; color: var(--text-secondary);
-          display: flex; align-items: center; gap: 5px;
-          margin-top: 3px;
+          display: flex; align-items: center; gap: 4px;
         }
-        .ev-card .ev-card-bg ~ .ev-card-body .ev-card-detail {
-          color: rgba(255,255,255,0.8);
-        }
-        .ev-card-detail i { font-size: 10px; color: var(--text-tertiary); width: 14px; text-align: center; }
-        .ev-card .ev-card-bg ~ .ev-card-body .ev-card-detail i {
-          color: rgba(255,255,255,0.6);
-        }
-        .ev-card-desc {
-          font-size: 11px; color: var(--text-tertiary);
+        .ec-meta i { font-size: 10px; color: var(--text-tertiary); width: 14px; text-align: center; }
+        .ec-desc {
+          font-size: 12px; color: var(--text-tertiary);
           margin-top: 6px;
           display: -webkit-box;
           -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
           overflow: hidden;
-        }
-        .ev-card .ev-card-bg ~ .ev-card-body .ev-card-desc {
-          color: rgba(255,255,255,0.6);
-        }
-        .ev-card-fee {
-          position: absolute; top: 10px; right: 10px;
-          font-size: 10px; font-weight: 700; color: var(--primary);
-          background: rgba(232,168,56,0.1);
-          padding: 2px 8px; border-radius: 6px;
-        }
-        .ev-card .ev-card-bg ~ .ev-card-fee {
-          background: rgba(232,168,56,0.3);
-          z-index: 2;
+          line-height: 1.4;
         }
 
-        .ev-dots {
-          display: flex; align-items: center; justify-content: center;
-          gap: 6px; margin-top: 10px;
+        /* Hover glow */
+        .ec-glow {
+          position: absolute;
+          top: -50%; right: -30%;
+          width: 200px; height: 200px;
+          background: radial-gradient(circle, rgba(232,168,56,0.06) 0%, transparent 70%);
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity 0.5s ease;
+          z-index: 1;
         }
-        .ev-dot {
+        .ec-card.active .ec-glow { opacity: 1; }
+
+        /* Dots */
+        .ec-dots {
+          display: flex; align-items: center; justify-content: center;
+          gap: 6px; margin-top: 12px;
+        }
+        .ec-dot {
           width: 6px; height: 6px; border-radius: 50%;
           background: var(--border);
           border: none; cursor: pointer; padding: 0;
           transition: all 0.3s ease;
         }
-        .ev-dot.active {
-          width: 20px; border-radius: 4px;
+        .ec-dot.active {
+          width: 24px; border-radius: 4px;
           background: var(--primary);
+          box-shadow: 0 0 8px rgba(232,168,56,0.3);
         }
-        .ev-dot:active { transform: scale(0.8); }
+        .ec-dot:active { transform: scale(0.8); }
       `}</style>
     </section>
   );

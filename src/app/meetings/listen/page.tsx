@@ -6,8 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import ToastBridge from "@/components/dashboard/ToastBridge";
 import BottomNavBar from "@/components/shared/BottomNavBar";
 import { useAppStore } from "@/lib/useAppStore";
-import { getMeeting, generateLiveKitToken } from "@/lib/meetings";
-import type { Meeting } from "@/lib/meetings";
+import { getMeeting, generateLiveKitToken, getAgenda } from "@/lib/meetings";
+import type { Meeting, AgendaItem } from "@/lib/meetings";
 import { Room, RoomEvent, Track } from "livekit-client";
 
 export default function MemberListenPage() {
@@ -27,6 +27,9 @@ export default function MemberListenPage() {
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [showInfo, setShowInfo] = useState(false);
+  const [autoAgenda, setAutoAgenda] = useState<{ meetingTitle: string; items: AgendaItem[] } | null>(null);
+  const [agendaLoading, setAgendaLoading] = useState(false);
+  const autoAgendaShownRef = useRef(false);
   const roomRef = useRef<Room | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isMutedRef = useRef(true);
@@ -201,15 +204,49 @@ export default function MemberListenPage() {
     return `${m}:${String(s).padStart(2, "0")}`;
   };
 
+  // Auto-show agenda when connected to a live meeting (first time only)
+  useEffect(() => {
+    if (connected && meetingId && !autoAgendaShownRef.current) {
+      autoAgendaShownRef.current = true;
+      // Small delay so the UI finishes rendering
+      const timer = setTimeout(async () => {
+        setAgendaLoading(true);
+        try {
+          const items = await getAgenda(meetingId);
+          if (items.length > 0 && meeting) {
+            setAutoAgenda({ meetingTitle: meeting.title, items });
+          }
+        } catch {}
+        setAgendaLoading(false);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [connected, meetingId, meeting?.title]);
+
+  // Log attendance join when connected
+  useEffect(() => {
+    if (connected && meetingId && user?.uid) {
+      import("@/lib/meetings").then(({ logAttendanceJoin }) => {
+        logAttendanceJoin(meetingId, user.uid!, displayName).catch(() => {});
+      }).catch(() => {});
+    }
+  }, [connected]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (roomRef.current) {
+        // Log attendance leave
+        if (meetingId && user?.uid) {
+          import("@/lib/meetings").then(({ logAttendanceLeave }) => {
+            logAttendanceLeave(meetingId, user.uid!).catch(() => {});
+          }).catch(() => {});
+        }
         roomRef.current.disconnect();
       }
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, []);
+  }, [meetingId, user?.uid]);
 
   // Loading screen
   if (loading) {
@@ -1115,6 +1152,136 @@ export default function MemberListenPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* AUTO AGENDA MODAL */}
+      {autoAgenda && (
+        <>
+          <div className="form-overlay" onClick={() => setAutoAgenda(null)}></div>
+          <div className="agenda-sheet" style={{ zIndex: 10001 }}>
+            <div className="agenda-item-num-circle" style={{ width: 32, height: 32, margin: "12px auto 0", fontSize: 14, borderColor: "var(--info)", color: "var(--info)", background: "rgba(56,189,248,0.1)" }}>
+              <i className="fas fa-list-check" style={{ fontSize: 14 }}></i>
+            </div>
+            <div className="agenda-sheet-header" style={{ paddingTop: 8 }}>
+              <div className="agenda-sheet-title">{autoAgenda.meetingTitle}</div>
+              <div className="agenda-sheet-sub">Meeting Agenda</div>
+            </div>
+            <div className="agenda-sheet-body">
+              <div className="agenda-summary">
+                <span>{autoAgenda.items.length} item{autoAgenda.items.length !== 1 ? "s" : ""}</span>
+                <span>
+                  <i className="fas fa-clock"></i>{' '}
+                  {autoAgenda.items.reduce((sum, i) => sum + i.duration, 0)} min total
+                </span>
+                <span>
+                  {autoAgenda.items.filter((i) => i.isCompleted).length} completed
+                </span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {autoAgenda.items.map((item, idx) => (
+                  <div key={item.id || idx} style={{
+                    display: "flex", gap: 12, minHeight: 50, paddingBottom: 4,
+                    opacity: item.isCompleted ? 0.5 : 1,
+                  }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 28, flexShrink: 0 }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: "50%",
+                        border: `2px solid ${item.isCompleted ? "var(--success)" : "var(--primary)"}`,
+                        background: item.isCompleted ? "var(--success)" : "rgba(232,168,56,0.08)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 12, fontWeight: 800, color: item.isCompleted ? "#fff" : "var(--primary)",
+                        flexShrink: 0,
+                      }}>
+                        {item.isCompleted ? <i className="fas fa-check" style={{ fontSize: 11 }}></i> : idx + 1}
+                      </div>
+                      {idx < autoAgenda.items.length - 1 && (
+                        <div style={{
+                          width: 2, flex: 1, minHeight: 20,
+                          background: "rgba(232,168,56,0.12)",
+                        }}></div>
+                      )}
+                    </div>
+                    <div style={{ flex: 1, paddingBottom: 16 }}>
+                      <div style={{
+                        fontSize: 14, fontWeight: 600, paddingTop: 4,
+                        textDecoration: item.isCompleted ? "line-through" : "none",
+                      }}>
+                        {item.title}
+                      </div>
+                      <div style={{ display: "flex", gap: 12, marginTop: 4, fontSize: 12, color: "var(--text-tertiary)" }}>
+                        <span><i className="fas fa-clock" style={{ fontSize: 10, marginRight: 2 }}></i> {item.duration} min</span>
+                        {item.assigneeName && (
+                          <span><i className="fas fa-user" style={{ fontSize: 10, marginRight: 2 }}></i> {item.assigneeName}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="agenda-sheet-footer">
+              <button className="agenda-close-btn" onClick={() => setAutoAgenda(null)}>
+                <i className="fas fa-check"></i> Got it
+              </button>
+            </div>
+          </div>
+
+          <style>{`
+            .form-overlay {
+              position: fixed; inset: 0; background: rgba(0,0,0,0.88);
+              z-index: 10000;
+            }
+            .agenda-sheet {
+              position: fixed; bottom: 0; left: 0; right: 0; z-index: 10001;
+              background: var(--surface); border-radius: 28px 28px 0 0;
+              max-width: 480px; margin: 0 auto;
+              animation: slideUp 0.35s cubic-bezier(0.32,0.72,0,1);
+              max-height: 80vh; display: flex; flex-direction: column;
+            }
+            @keyframes slideUp {
+              from { transform: translateY(100%); }
+              to { transform: translateY(0); }
+            }
+            .agenda-sheet-header {
+              padding: 8px 24px 12px; text-align: center;
+              border-bottom: 1px solid var(--border);
+            }
+            .agenda-sheet-title {
+              font-size: 18px; font-weight: 700;
+            }
+            .agenda-sheet-sub {
+              font-size: 12px; color: var(--text-tertiary);
+              margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px;
+            }
+            .agenda-sheet-body {
+              flex: 1; overflow-y: auto; padding: 16px 24px 8px;
+            }
+            .agenda-sheet-body::-webkit-scrollbar { display: none; }
+            .agenda-sheet-footer {
+              padding: 12px 24px 24px;
+              border-top: 1px solid var(--border);
+            }
+            .agenda-close-btn {
+              width: 100%; padding: 12px;
+              border-radius: var(--radius-md);
+              border: 1px solid var(--border);
+              background: linear-gradient(135deg, var(--gradient-blue), #2563EB);
+              color: #fff;
+              font-size: 14px; font-weight: 700;
+              cursor: pointer; transition: all 0.2s ease;
+              display: flex; align-items: center; justify-content: center; gap: 6px;
+            }
+            .agenda-close-btn:active { transform: scale(0.97); }
+            .agenda-summary {
+              display: flex; gap: 16px; justify-content: center;
+              padding: 10px 16px; margin-bottom: 12px;
+              background: var(--surface-elevated); border-radius: var(--radius-md);
+              font-size: 12px; color: var(--text-secondary); font-weight: 600;
+            }
+            .agenda-summary i { font-size: 11px; color: var(--primary); }
+          `}</style>
+        </>
       )}
     </>
   );

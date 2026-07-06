@@ -5,15 +5,22 @@ import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import ToastBridge from "@/components/dashboard/ToastBridge";
 import { hapticSuccess } from "@/lib/haptics";
 import AllMembersList from "@/components/admin/AllMembersList";
-import { getUsersPage } from "@/lib/users";
+import { getUsersPage, updateUserRole, getUserByEmail } from "@/lib/users";
 import type { UserProfile } from "@/lib/users";
 import type { DocumentSnapshot } from "firebase/firestore";
 
+type Tab = "admin" | "member";
+
 export default function AdminMembersPage() {
+  const [activeTab, setActiveTab] = useState<Tab>("admin");
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [roleActionLoading, setRoleActionLoading] = useState(false);
+  const [showAddAdmin, setShowAddAdmin] = useState(false);
+  const [addAdminEmail, setAddAdminEmail] = useState("");
+  const [addAdminLoading, setAddAdminLoading] = useState(false);
 
   const showToast = (title: string, message: string, type: string, duration: number) => {
     window.dispatchEvent(new CustomEvent("show-toast", { detail: { title, message, type, duration } }));
@@ -22,7 +29,8 @@ export default function AdminMembersPage() {
   const loadPage = useCallback(async (cursor?: DocumentSnapshot | null) => {
     try {
       setLoading(true);
-      const { users: newUsers, lastDoc: newLastDoc } = await getUsersPage(20, cursor || undefined);
+      const role = activeTab === "admin" ? "admin" : "member";
+      const { users: newUsers, lastDoc: newLastDoc } = await getUsersPage(20, cursor || undefined, role);
       setUsers((prev) => cursor ? [...prev, ...newUsers] : newUsers);
       setLastDoc(newLastDoc);
     } catch (e) {
@@ -31,12 +39,57 @@ export default function AdminMembersPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeTab]);
 
-  useEffect(() => { setTimeout(() => loadPage(), 0); }, [loadPage]);
+  useEffect(() => { setUsers([]); setLastDoc(null); setTimeout(() => loadPage(), 0); }, [loadPage]);
 
   const loadMore = async () => {
     if (lastDoc) await loadPage(lastDoc);
+  };
+
+  const handleRoleChange = async (user: UserProfile, newRole: string) => {
+    setRoleActionLoading(true);
+    try {
+      await updateUserRole(user.uid, newRole);
+      hapticSuccess();
+      showToast("Success", `${user.display_name} is now ${newRole === "admin" ? "an Admin" : "a Member"}`, "success", 2500);
+      setSelectedUser((prev) => prev?.uid === user.uid ? { ...prev, role: newRole } : prev);
+      setUsers((prev) => prev.map((u) => u.uid === user.uid ? { ...u, role: newRole } : u));
+    } catch (e) {
+      console.error("Failed to update role:", e);
+      showToast("Error", "Failed to update role", "error", 3000);
+    } finally {
+      setRoleActionLoading(false);
+    }
+  };
+
+  const handleAddAdmin = async () => {
+    if (!addAdminEmail.trim()) return;
+    setAddAdminLoading(true);
+    try {
+      const user = await getUserByEmail(addAdminEmail.trim());
+      if (!user) {
+        showToast("Error", "No user found with that email", "error", 3000);
+        return;
+      }
+      if (user.role === "admin") {
+        showToast("Notice", `${user.display_name} is already an admin`, "info", 2500);
+        return;
+      }
+      await updateUserRole(user.uid, "admin");
+      hapticSuccess();
+      showToast("Success", `${user.display_name} is now an Admin`, "success", 2500);
+      setAddAdminEmail("");
+      setShowAddAdmin(false);
+      if (activeTab === "admin") {
+        setUsers((prev) => [{ ...user, role: "admin" }, ...prev]);
+      }
+    } catch (e) {
+      console.error("Failed to add admin:", e);
+      showToast("Error", "Failed to add admin", "error", 3000);
+    } finally {
+      setAddAdminLoading(false);
+    }
   };
 
   return (
@@ -502,6 +555,55 @@ export default function AdminMembersPage() {
             font-weight: 600;
         }
 
+        .tab-btn {
+          flex: 1;
+          padding: 10px 16px;
+          border: none;
+          border-radius: 12px;
+          background: transparent;
+          color: var(--text-tertiary);
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.25s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+        }
+        .tab-btn.active {
+          background: var(--primary);
+          color: #fff;
+          box-shadow: 0 2px 8px rgba(232,168,56,0.3);
+        }
+        .tab-btn:not(.active):active {
+          background: var(--surface-hover);
+        }
+        .promote-btn {
+          width: 100%;
+          padding: 14px;
+          border: none;
+          border-radius: var(--radius-md);
+          font-size: 15px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
+        .promote-btn.admin {
+          background: rgba(232,168,56,0.12);
+          color: var(--primary);
+        }
+        .promote-btn.member {
+          background: rgba(239,68,68,0.12);
+          color: var(--error);
+        }
+        .promote-btn:active { transform: scale(0.97); opacity: 0.8; }
+        .promote-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+
         .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(15,15,15,0.92); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border-top: 1px solid var(--border); padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px)); z-index: 1000; display: flex; justify-content: space-around; align-items: center; }
         @media (min-width: 480px) { .bottom-nav { max-width: 480px; margin: 0 auto; } }
         .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 12px; background: none; border: none; color: var(--text-tertiary); cursor: pointer; transition: all 0.2s ease; position: relative; }
@@ -521,14 +623,28 @@ export default function AdminMembersPage() {
           <button className="header-back" onClick={() => window.history.back()}><i className="fas fa-arrow-left"></i></button>
           <h1 className="header-title">Members</h1>
           <div className="header-actions">
-            <span className="section-count">{users.length} loaded</span>
+            <button className="header-btn" onClick={() => setShowAddAdmin(true)} title="Add Admin">
+              <i className="fas fa-user-plus"></i>
+            </button>
           </div>
         </header>
 
-        <div className="search-filter">
-          <div className="search-input-wrapper">
-            <i className="fas fa-magnifying-glass"></i>
-            <input type="text" placeholder="Filter by name or email..." id="searchInput" />
+        <div className="tabs" style={{ padding: "0 20px 12px", flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: "6px", background: "var(--surface)", borderRadius: "var(--radius-md)", padding: "4px" }}>
+            <button
+              className={`tab-btn ${activeTab === "admin" ? "active" : ""}`}
+              onClick={() => setActiveTab("admin")}
+            >
+              <i className="fas fa-shield-alt" style={{ fontSize: 12 }}></i>
+              {" "}Admins
+            </button>
+            <button
+              className={`tab-btn ${activeTab === "member" ? "active" : ""}`}
+              onClick={() => setActiveTab("member")}
+            >
+              <i className="fas fa-users" style={{ fontSize: 12 }}></i>
+              {" "}Members
+            </button>
           </div>
         </div>
 
@@ -539,6 +655,7 @@ export default function AdminMembersPage() {
             hasMore={!!lastDoc}
             onLoadMore={loadMore}
             onSelectUser={setSelectedUser}
+            title={activeTab === "admin" ? "Admins" : "Members"}
           />
           <div style={{ height: 100 }}></div>
         </div>
@@ -612,9 +729,71 @@ export default function AdminMembersPage() {
                     </div>
                   </div>
                 </div>
+                <div className="detail-section">
+                  <div className="detail-section-title">Role</div>
+                  <button
+                    className={`promote-btn ${selectedUser.role === "admin" ? "member" : "admin"}`}
+                    onClick={() => handleRoleChange(
+                      selectedUser,
+                      selectedUser.role === "admin" ? "member" : "admin"
+                    )}
+                    disabled={roleActionLoading}
+                  >
+                    {roleActionLoading ? (
+                      <i className="fas fa-spinner fa-spin"></i>
+                    ) : selectedUser.role === "admin" ? (
+                      <><i className="fas fa-user-minus"></i> Remove Admin</>
+                    ) : (
+                      <><i className="fas fa-user-shield"></i> Make Admin</>
+                    )}
+                  </button>
+                </div>
               </div>
             </>
           )}
+        </div>
+      </div>
+      {/* Add Admin Modal */}
+      <div
+        className={`detail-modal-overlay ${showAddAdmin ? "active" : ""}`}
+        onClick={() => { if (!addAdminLoading) { setShowAddAdmin(false); setAddAdminEmail(""); } }}
+      >
+        <div className="detail-modal-sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="detail-modal-handle"></div>
+          <div className="detail-header">
+            <div className="detail-avatar" style={{ background: "linear-gradient(135deg, var(--gradient-start), var(--gradient-end))" }}>
+              <i className="fas fa-user-shield" style={{ fontSize: 32 }}></i>
+            </div>
+            <div className="detail-name">Add Admin</div>
+            <div className="detail-email">Enter the email of the user to promote</div>
+          </div>
+          <div className="detail-body">
+            <div className="detail-section">
+              <div className="detail-section-title">Email</div>
+              <div className="search-input-wrapper" style={{ marginBottom: 16 }}>
+                <i className="fas fa-envelope"></i>
+                <input
+                  type="email"
+                  placeholder="user@example.com"
+                  value={addAdminEmail}
+                  onChange={(e) => setAddAdminEmail(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <button
+                className="promote-btn admin"
+                onClick={handleAddAdmin}
+                disabled={addAdminLoading || !addAdminEmail.trim()}
+                style={{ width: "100%" }}
+              >
+                {addAdminLoading ? (
+                  <i className="fas fa-spinner fa-spin"></i>
+                ) : (
+                  <><i className="fas fa-user-shield"></i> Promote to Admin</>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </>

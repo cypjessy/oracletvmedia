@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useRef, useState, useCallback, useEffect } from "react";
+import { createContext, useContext, useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import PlyrPlayer from "@/components/tv/PlyrPlayer";
 
@@ -41,18 +41,22 @@ export function TvPlayerProvider({ children }: { children: React.ReactNode }) {
   const [seek, setSeek] = useState<number | undefined>(undefined);
   const [visible, setVisible] = useState(false);
   const callbacksRef = useRef<TvPlayerCallbacks>({});
+  const videoIdRef = useRef<string | null>(null);
+  // Keep ref in sync with state so stable callbacks can read the latest videoId
+  videoIdRef.current = videoId;
 
   // Portal target — the DOM element to render the player into
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
+  // Stable registerTarget — no dependencies on state that changes during video transitions
   const registerTarget = useCallback((el: HTMLElement | null) => {
     setPortalTarget(el);
-    // When a new target is registered and the player is already active,
-    // restore the latest seek so PlyrPlayer resumes at the correct position
-    if (el && videoId && latestSeekRef.current !== undefined) {
+    // Restore seek on page navigation — only when a target is provided
+    // (null = cleanup, skip restore). Uses ref so we don't need videoId in deps.
+    if (el && videoIdRef.current && latestSeekRef.current !== undefined) {
       setSeek(latestSeekRef.current);
     }
-  }, [videoId]);
+  }, []);
 
   const [playerKey, setPlayerKey] = useState(0);
   // Track the latest seek time so it's preserved when portal target changes between pages
@@ -60,7 +64,7 @@ export function TvPlayerProvider({ children }: { children: React.ReactNode }) {
 
   const play = useCallback((id: string, seekTime?: number) => {
     setVideoId((prev) => {
-      // If switching to a different video, force a fresh Plyr instance
+      // Force a fresh Plyr instance on every play() call (avoids stale iframe issues)
       if (prev !== id) setPlayerKey((k) => k + 1);
       return id;
     });
@@ -90,10 +94,20 @@ export function TvPlayerProvider({ children }: { children: React.ReactNode }) {
     return () => observer.disconnect();
   }, [portalTarget]);
 
+  // Memoize the context value so it doesn't change on every render.
+  // Only the functions are stable — state-derived values (visible, currentVideoId)
+  // are included in the memo so consumers only re-render when they actually change.
+  const ctx = useMemo<TvPlayerContextValue>(() => ({
+    registerTarget,
+    play,
+    hide,
+    setCallbacks,
+    visible,
+    currentVideoId: videoId,
+  }), [registerTarget, play, hide, setCallbacks, visible, videoId]);
+
   return (
-    <TvPlayerContext.Provider
-      value={{ registerTarget, play, hide, setCallbacks, visible, currentVideoId: videoId }}
-    >
+    <TvPlayerContext.Provider value={ctx}>
       {/* Portal — renders PlyrPlayer into the page's target element (natural document flow) */}
       {visible && videoId && portalTarget && createPortal(
         <div

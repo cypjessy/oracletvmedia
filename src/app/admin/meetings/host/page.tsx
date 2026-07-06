@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import ToastBridge from "@/components/dashboard/ToastBridge";
 import { useAppStore } from "@/lib/useAppStore";
-import { getMeeting, updateMeeting, generateLiveKitToken, muteParticipant } from "@/lib/meetings";
-import type { Meeting } from "@/lib/meetings";
+import { getMeeting, updateMeeting, generateLiveKitToken, muteParticipant, getAgenda, toggleAgendaItem, getMinutes, saveMinutes, getActionItems, createActionItem, completeActionItem } from "@/lib/meetings";
+import type { Meeting, AgendaItem, ActionItem } from "@/lib/meetings";
 import { Room, RoomEvent, Track } from "livekit-client";
 
 export default function AdminMeetingHostPage() {
@@ -27,6 +27,17 @@ export default function AdminMeetingHostPage() {
   const [muteloading, setMuteloading] = useState<Set<string>>(new Set());
   const [micEnabled, setMicEnabled] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [agendaItems, setAgendaItems] = useState<AgendaItem[]>([]);
+  const [showAgenda, setShowAgenda] = useState(false);
+  const [actionItems, setActionItems] = useState<ActionItem[]>([]);
+  const [showActions, setShowActions] = useState(false);
+  const [minutesContent, setMinutesContent] = useState("");
+  const [showMinutes, setShowMinutes] = useState(false);
+  const [minutesLastSaved, setMinutesLastSaved] = useState<string | null>(null);
+  const [newActionTitle, setNewActionTitle] = useState("");
+  const [newActionAssignee, setNewActionAssignee] = useState("");
+  const [newActionPriority, setNewActionPriority] = useState<"low" | "medium" | "high">("medium");
+  const minutesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const roomRef = useRef<Room | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const meetingRef = useRef<Meeting | null>(null);
@@ -49,6 +60,20 @@ export default function AdminMeetingHostPage() {
             connectToRoom(m);
           } else {
             setLoading(false);
+          }
+          // Load agenda
+          if (m.id) {
+            getAgenda(m.id).then(setAgendaItems).catch(() => {});
+          }
+          // Load minutes
+          if (m.id) {
+            getMinutes(m.id).then((mins) => {
+              if (mins) setMinutesContent(mins.content);
+            }).catch(() => {});
+          }
+          // Load action items
+          if (m.id) {
+            getActionItems(m.id).then(setActionItems).catch(() => {});
           }
         } else {
           showToast("Error", "Meeting not found", "error", 3000);
@@ -284,15 +309,30 @@ export default function AdminMeetingHostPage() {
     return `${m}:${String(s).padStart(2, "0")}`;
   };
 
+  // Log attendance join when connected
+  useEffect(() => {
+    if (connected && meetingId && user?.uid) {
+      import("@/lib/meetings").then(({ logAttendanceJoin }) => {
+        logAttendanceJoin(meetingId, user.uid!, identity).catch(() => {});
+      }).catch(() => {});
+    }
+  }, [connected]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (roomRef.current) {
+        // Log attendance leave
+        if (meetingId && user?.uid) {
+          import("@/lib/meetings").then(({ logAttendanceLeave }) => {
+            logAttendanceLeave(meetingId, user.uid!).catch(() => {});
+          }).catch(() => {});
+        }
         roomRef.current.disconnect();
       }
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, []);
+  }, [meetingId, user?.uid]);
 
   // Loading screen
   if (loading) {
@@ -892,6 +932,124 @@ export default function AdminMeetingHostPage() {
           transform: scale(0.95);
         }
 
+        /* Agenda Panel */
+        .agenda-panel {
+          width: 100%;
+          max-width: 400px;
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 16px;
+          overflow: hidden;
+          backdrop-filter: blur(10px);
+        }
+
+        .agenda-panel-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 10px 14px;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .agenda-panel-title {
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--text-tertiary);
+          text-transform: uppercase;
+          letter-spacing: 0.8px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .agenda-panel-title i {
+          font-size: 11px;
+          color: var(--primary);
+        }
+
+        .agenda-panel-count {
+          font-size: 11px;
+          font-weight: 600;
+          color: var(--primary);
+          background: rgba(232,168,56,0.1);
+          padding: 2px 8px;
+          border-radius: 6px;
+        }
+
+        .agenda-panel-list {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .agenda-tracker-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 14px;
+          border-bottom: 1px solid var(--border);
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .agenda-tracker-item:last-child {
+          border-bottom: none;
+        }
+
+        .agenda-tracker-item:active {
+          background: var(--surface-hover);
+        }
+
+        .agenda-tracker-item.done {
+          opacity: 0.5;
+        }
+
+        .agenda-tracker-check {
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          border: 2px solid var(--text-tertiary);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: all 0.2s ease;
+          font-size: 10px;
+        }
+
+        .agenda-tracker-check.checked {
+          background: var(--success);
+          border-color: var(--success);
+          color: #fff;
+        }
+
+        .agenda-tracker-info {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .agenda-tracker-title {
+          font-size: 13px;
+          font-weight: 600;
+        }
+
+        .agenda-tracker-item.done .agenda-tracker-title {
+          text-decoration: line-through;
+        }
+
+        .agenda-tracker-meta {
+          display: flex;
+          gap: 8px;
+          margin-top: 2px;
+          font-size: 11px;
+          color: var(--text-tertiary);
+        }
+
+        .agenda-tracker-meta i {
+          font-size: 10px;
+          margin-right: 3px;
+          color: var(--primary);
+        }
+
         /* Responsive */
         @media (max-width: 480px) {
           .top-bar { padding: 12px 16px; }
@@ -962,9 +1120,53 @@ export default function AdminMeetingHostPage() {
                 </div>
               )}
             </div>
-            <button className="top-end-btn" onClick={endCall}>
-              <i className="fas fa-phone-slash"></i> End
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {agendaItems.length > 0 && (
+                <button
+                  onClick={() => setShowAgenda(!showAgenda)}
+                  style={{
+                    width: 36, height: 36, borderRadius: "50%", border: showAgenda ? "1px solid rgba(232,168,56,0.3)" : "1px solid var(--border)",
+                    background: showAgenda ? "rgba(232,168,56,0.1)" : "var(--surface)",
+                    color: showAgenda ? "var(--primary)" : "var(--text-secondary)",
+                    fontSize: 13, cursor: "pointer", display: "flex",
+                    alignItems: "center", justifyContent: "center",
+                    transition: "all 0.2s ease",
+                  }}
+                  title="Meeting Agenda"
+                >
+                  <i className="fas fa-list-check"></i>
+                </button>
+              )}
+              <button
+                onClick={() => setShowActions(!showActions)}
+                style={{
+                  width: 36, height: 36, borderRadius: "50%",
+                  border: showActions ? "1px solid rgba(74,222,128,0.3)" : "1px solid var(--border)",
+                  background: showActions ? "rgba(74,222,128,0.1)" : "var(--surface)",
+                  color: showActions ? "var(--success)" : "var(--text-secondary)",
+                  fontSize: 13, cursor: "pointer", display: "flex",
+                  alignItems: "center", justifyContent: "center",
+                  transition: "all 0.2s ease", position: "relative",
+                }}
+                title="Action Items"
+              >
+                <i className="fas fa-check-double"></i>
+                {actionItems.filter((a) => a.status !== "completed").length > 0 && (
+                  <span style={{
+                    position: "absolute", top: -3, right: -3,
+                    width: 16, height: 16, borderRadius: "50%",
+                    background: "var(--error)",
+                    fontSize: 9, fontWeight: 700, color: "#fff",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    {actionItems.filter((a) => a.status !== "completed").length}
+                  </span>
+                )}
+              </button>
+              <button className="top-end-btn" onClick={endCall}>
+                <i className="fas fa-phone-slash"></i> End
+              </button>
+            </div>
           </div>
 
           {/* MAIN AREA */}
@@ -973,6 +1175,198 @@ export default function AdminMeetingHostPage() {
               <h1>{meeting.title}</h1>
               <p>{meeting.description || "Broadcasting live to members"}</p>
             </div>
+
+            {/* AGENDA PANEL */}
+            {showAgenda && agendaItems.length > 0 && (
+              <div className="agenda-panel">
+                <div className="agenda-panel-header">
+                  <span className="agenda-panel-title"><i className="fas fa-list-check"></i> Agenda</span>
+                  <span className="agenda-panel-count">{agendaItems.filter((a) => a.isCompleted).length}/{agendaItems.length}</span>
+                </div>
+                <div className="agenda-panel-list">
+                  {agendaItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`agenda-tracker-item ${item.isCompleted ? "done" : ""}`}
+                      onClick={async () => {
+                        if (!item.id) return;
+                        await toggleAgendaItem(meetingId, item.id);
+                        setAgendaItems((prev) =>
+                          prev.map((a) => a.id === item.id ? { ...a, isCompleted: !a.isCompleted } : a)
+                        );
+                      }}
+                    >
+                      <div className={`agenda-tracker-check ${item.isCompleted ? "checked" : ""}`}>
+                        {item.isCompleted ? <i className="fas fa-check"></i> : null}
+                      </div>
+                      <div className="agenda-tracker-info">
+                        <div className="agenda-tracker-title">{item.title}</div>
+                        <div className="agenda-tracker-meta">
+                          <span><i className="fas fa-clock"></i> {item.duration}m</span>
+                          {item.assigneeName && <span><i className="fas fa-user"></i> {item.assigneeName}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ACTION ITEMS PANEL */}
+            {showActions && (
+              <div className="agenda-panel">
+                <div className="agenda-panel-header">
+                  <span className="agenda-panel-title"><i className="fas fa-check-double"></i> Action Items</span>
+                  <span className="agenda-panel-count">
+                    {actionItems.filter((a) => a.status !== "completed").length} open
+                  </span>
+                </div>
+                <div className="agenda-panel-list">
+                  {/* New action item form inline */}
+                  <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <input
+                        type="text"
+                        value={newActionTitle}
+                        onChange={(e) => setNewActionTitle(e.target.value)}
+                        placeholder="Add action item..."
+                        onKeyDown={async (e) => {
+                          if (e.key === "Enter" && newActionTitle.trim()) {
+                            await createActionItem(meetingId, {
+                              title: newActionTitle.trim(),
+                              assigneeName: newActionAssignee.trim() || undefined,
+                              priority: newActionPriority,
+                              status: "open",
+                              createdBy: userDoc?.uid || identity,
+                              createdByName: userDoc?.display_name || identity,
+                            });
+                            const updated = await getActionItems(meetingId);
+                            setActionItems(updated);
+                            setNewActionTitle("");
+                            setNewActionAssignee("");
+                          }
+                        }}
+                        style={{
+                          flex: 1, padding: "8px 10px", background: "rgba(255,255,255,0.06)",
+                          border: "1px solid var(--border)", borderRadius: 8,
+                          color: "#fff", fontSize: 13, outline: "none",
+                        }}
+                      />
+                      <select
+                        value={newActionPriority}
+                        onChange={(e) => setNewActionPriority(e.target.value as any)}
+                        style={{
+                          padding: "8px 6px", background: "rgba(255,255,255,0.06)",
+                          border: "1px solid var(--border)", borderRadius: 8,
+                          color: "var(--text-secondary)", fontSize: 11, fontWeight: 600,
+                          outline: "none", cursor: "pointer",
+                        }}
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Med</option>
+                        <option value="high">High</option>
+                      </select>
+                      <button
+                        onClick={async () => {
+                          if (!newActionTitle.trim()) return;
+                          await createActionItem(meetingId, {
+                            title: newActionTitle.trim(),
+                            assigneeName: newActionAssignee.trim() || undefined,
+                            priority: newActionPriority,
+                            status: "open",
+                            createdBy: userDoc?.uid || identity,
+                            createdByName: userDoc?.display_name || identity,
+                          });
+                          const updated = await getActionItems(meetingId);
+                          setActionItems(updated);
+                          setNewActionTitle("");
+                          setNewActionAssignee("");
+                        }}
+                        disabled={!newActionTitle.trim()}
+                        style={{
+                          padding: "8px 12px", borderRadius: 8, border: "none",
+                          background: "linear-gradient(135deg, var(--gradient-blue), #2563EB)",
+                          color: "#fff", fontSize: 13, fontWeight: 600,
+                          cursor: "pointer", opacity: !newActionTitle.trim() ? 0.5 : 1,
+                        }}
+                      >
+                        <i className="fas fa-plus"></i>
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={newActionAssignee}
+                      onChange={(e) => setNewActionAssignee(e.target.value)}
+                      placeholder="Assignee (optional)"
+                      style={{
+                        width: "100%", marginTop: 6, padding: "6px 10px",
+                        background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)",
+                        borderRadius: 8, color: "var(--text-secondary)", fontSize: 12,
+                        outline: "none",
+                      }}
+                    />
+                  </div>
+                  {actionItems.length === 0 ? (
+                    <div style={{ padding: "20px", textAlign: "center", color: "var(--text-tertiary)", fontSize: 12 }}>
+                      No action items yet
+                    </div>
+                  ) : (
+                    actionItems.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={async () => {
+                          if (!item.id) return;
+                          await completeActionItem(meetingId, item.id);
+                          setActionItems((prev) =>
+                            prev.map((a) => a.id === item.id ? { ...a, status: "completed" as const } : a)
+                          );
+                        }}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 10,
+                          padding: "10px 14px", borderBottom: "1px solid var(--border)",
+                          cursor: "pointer", transition: "all 0.2s ease",
+                          opacity: item.status === "completed" ? 0.5 : 1,
+                        }}
+                      >
+                        <div style={{
+                          width: 22, height: 22, borderRadius: "50%",
+                          border: `2px solid ${item.status === "completed" ? "var(--success)" : "var(--text-tertiary)"}`,
+                          background: item.status === "completed" ? "var(--success)" : "transparent",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          flexShrink: 0, fontSize: 10, color: "#fff",
+                        }}>
+                          {item.status === "completed" && <i className="fas fa-check"></i>}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            fontSize: 13, fontWeight: 600,
+                            textDecoration: item.status === "completed" ? "line-through" : "none",
+                          }}>
+                            {item.title}
+                          </div>
+                          <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2, display: "flex", gap: 6 }}>
+                            {item.assigneeName && (
+                              <span><i className="fas fa-user"></i> {item.assigneeName}</span>
+                            )}
+                            <span style={{
+                              padding: "1px 6px", borderRadius: 4, fontSize: 9, fontWeight: 700,
+                              background: item.priority === "high" ? "rgba(255,107,107,0.15)"
+                                : item.priority === "medium" ? "rgba(232,168,56,0.12)"
+                                : "rgba(255,255,255,0.06)",
+                              color: item.priority === "high" ? "#FF6B6B"
+                                : item.priority === "medium" ? "var(--primary)"
+                                : "var(--text-tertiary)",
+                            }}>
+                              {item.priority}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="participants-section">
               <div className="participants-header">

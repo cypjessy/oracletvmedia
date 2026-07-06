@@ -9,6 +9,7 @@ interface Props {
   hasMore: boolean;
   onLoadMore: () => void;
   onSelectUser: (user: UserProfile) => void;
+  title?: string;
 }
 
 const AVATAR_COLORS = [
@@ -42,7 +43,7 @@ function formatTime(t: number | Timestamp | undefined): string {
   return `Last seen ${Math.floor(diff / 86400000)}d ago`;
 }
 
-export default function AllMembersList({ users, loading, hasMore, onLoadMore, onSelectUser }: Props) {
+export default function AllMembersList({ users, loading, hasMore, onLoadMore, onSelectUser, title }: Props) {
   const roleBadge = (role: string) => {
     const cls = role === "admin" ? "admin" : role === "member" ? "member" : "member";
     return <span className={`member-role ${cls}`}>{role.charAt(0).toUpperCase() + role.slice(1)}</span>;
@@ -51,7 +52,7 @@ export default function AllMembersList({ users, loading, hasMore, onLoadMore, on
   return (
     <>
       <div className="section-header">
-        <h2 className="section-title">All Members</h2>
+        <h2 className="section-title">{title || "All Members"}</h2>
         <span className="section-count">{users.length} loaded</span>
       </div>
 

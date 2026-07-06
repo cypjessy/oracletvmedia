@@ -216,6 +216,32 @@ service cloud.firestore {
     match /meetings/{meetingId} {
       allow read: if isAuth();
       allow create, update, delete: if isAdmin();
+
+      // RSVP subcollection — members can create/update their own, admins can read all
+      match /rsvps/{userId} {
+        allow read: if isAuth();
+        allow create, update: if isAuth() && request.auth.uid == userId;
+        allow delete: if isAdmin();
+      }
+
+      // Attendance subcollection — auto-logged on join
+      match /attendance/{userId} {
+        allow read: if isAuth();
+        allow create, update: if isAuth() && request.auth.uid == userId;
+        allow delete: if isAdmin();
+      }
+
+      // Agenda subcollection — admins CRUD, members can read
+      match /agenda/{itemId} {
+        allow read: if isAuth();
+        allow create, update, delete: if isAdmin();
+      }
+
+      // Action Items subcollection — admins CRUD, members can read
+      match /actionItems/{itemId} {
+        allow read: if isAuth();
+        allow create, update, delete: if isAdmin();
+      }
     }
 
     // Payment methods — admins CRUD, members can read enabled ones

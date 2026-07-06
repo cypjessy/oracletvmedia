@@ -1079,6 +1079,143 @@ export default function AdminContentPage() {
         }
         .load-more-btn:active { background: var(--surface-elevated); }
 
+        /* ========== PREMIUM EVENT CARDS ========== */
+        .event-pcard {
+          display: flex; gap: 14px; padding: 16px;
+          background: var(--surface-card);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-lg);
+          margin-bottom: 12px;
+          position: relative;
+          overflow: hidden;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          align-items: stretch;
+        }
+        .event-pcard:active { transform: scale(0.97); }
+        .event-pcard::before {
+          content: '';
+          position: absolute; top: 0; left: 0; right: 0; height: 3px;
+          background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end));
+          opacity: 0;
+          transition: opacity 0.3s;
+          z-index: 2;
+        }
+        .event-pcard:hover::before { opacity: 1; }
+        .event-pcard-glow {
+          position: absolute; top: -50%; right: -20%;
+          width: 160px; height: 160px;
+          background: radial-gradient(circle, rgba(232,168,56,0.06) 0%, transparent 70%);
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity 0.4s;
+          z-index: 0;
+        }
+        .event-pcard:hover .event-pcard-glow { opacity: 1; }
+
+        .event-pcard-img-wrap {
+          width: 72px; min-height: 72px;
+          border-radius: var(--radius-sm);
+          overflow: hidden;
+          flex-shrink: 0;
+          border: 1px solid var(--border);
+          position: relative;
+          z-index: 1;
+        }
+        .event-pcard-img-wrap img {
+          width: 100%; height: 100%;
+          object-fit: cover;
+          transition: transform 0.4s ease;
+        }
+        .event-pcard:hover .event-pcard-img-wrap img { transform: scale(1.08); }
+        .event-pcard-date-badge {
+          width: 72px; height: 72px;
+          border-radius: var(--radius-sm);
+          flex-shrink: 0;
+          position: relative;
+          z-index: 1;
+          background: rgba(232,168,56,0.06);
+          border: 1px solid rgba(232,168,56,0.15);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 2px;
+        }
+        .event-pcard-date-day {
+          font-size: 22px; font-weight: 800; line-height: 1;
+          color: var(--primary);
+        }
+        .event-pcard-date-month {
+          font-size: 10px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.5px; color: var(--text-secondary);
+        }
+
+        .event-pcard-body {
+          flex: 1; min-width: 0;
+          display: flex; flex-direction: column;
+          justify-content: center;
+          position: relative; z-index: 1;
+          gap: 3px;
+        }
+        .event-pcard-name {
+          font-size: 15px; font-weight: 700;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          line-height: 1.3;
+        }
+        .event-pcard-meta-row {
+          display: flex; flex-wrap: wrap; gap: 8px;
+          margin-top: 2px;
+        }
+        .event-pcard-meta {
+          font-size: 12px; color: var(--text-secondary);
+          display: flex; align-items: center; gap: 4px;
+        }
+        .event-pcard-meta i {
+          font-size: 10px; color: var(--text-tertiary);
+          width: 14px; text-align: center;
+        }
+        .event-pcard-fee {
+          display: inline-flex; align-items: center;
+          margin-top: 4px;
+          font-size: 11px; font-weight: 700;
+          color: var(--primary);
+          background: rgba(232,168,56,0.08);
+          padding: 2px 10px; border-radius: 6px;
+          width: fit-content;
+        }
+
+        .event-pcard-actions {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          align-items: flex-end;
+          justify-content: center;
+          position: relative; z-index: 1;
+          flex-shrink: 0;
+        }
+        .event-pcard-action-btn {
+          width: 34px; height: 34px;
+          border-radius: var(--radius-full);
+          background: var(--surface);
+          border: 1px solid var(--border);
+          color: var(--text-tertiary);
+          font-size: 13px;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+        .event-pcard-action-btn:active {
+          background: var(--surface-elevated);
+          transform: scale(0.88);
+        }
+        .event-pcard-action-btn.edit:active { color: var(--primary); border-color: rgba(232,168,56,0.3); }
+        .event-pcard-action-btn.delete:active { color: var(--error); border-color: rgba(239,68,68,0.3); }
+
         /* ========== IMAGE VIEWER ========== */
         .iv-overlay {
           position: fixed; inset: 0; background: rgba(0,0,0,0.96); z-index: 10000;
@@ -1151,6 +1288,7 @@ export default function AdminContentPage() {
         .skel { background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 50%, var(--surface) 75%); background-size: 200% 100%; animation: sk-shimmer 1.4s ease-in-out infinite; border-radius: 8px; }
         @keyframes sk-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
         .skel-line { height: 13px; margin-bottom: 7px; width: 100%; }
+        .skel-line.w70 { width: 70%; }
         .skel-line.w60 { width: 60%; }
         .skel-line.w40 { width: 40%; }
         .skel-card { height: 110px; width: 100%; border-radius: var(--radius-md); }
@@ -1434,11 +1572,12 @@ export default function AdminContentPage() {
               <div className="events-list" style={{ padding: "0 16px" }}>
                 {loadingEvents ? (
                   [1,2,3].map((i) => (
-                    <div className="event-card" key={i} style={{ display: "flex", gap: 12, padding: 14, background: "var(--surface-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", marginBottom: 10 }}>
-                      <div className="skel" style={{ width: 48, height: 48, borderRadius: 10, flexShrink: 0 }} />
+                    <div className="event-pcard" key={i} style={{ padding: 14, alignItems: "center", gap: 14 }}>
+                      <div className="skel" style={{ width: 72, height: 72, borderRadius: 10, flexShrink: 0 }} />
                       <div style={{ flex: 1 }}>
-                        <div className="skel skel-line w60" />
-                        <div className="skel skel-line w40" />
+                        <div className="skel skel-line w70" />
+                        <div className="skel skel-line w50" />
+                        <div className="skel skel-line w40" style={{ marginBottom: 0 }} />
                       </div>
                     </div>
                   ))
@@ -1455,75 +1594,39 @@ export default function AdminContentPage() {
                     const month = d.toLocaleString("en-US", { month: "short" });
                     const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
                     return (
-                      <div className="event-item" key={ev.id} style={{
-                        display: "flex", gap: 12, padding: 14,
-                        background: "var(--surface-card)",
-                        border: "1px solid var(--border)",
-                        borderRadius: "var(--radius-md)",
-                        marginBottom: 10,
-                        position: "relative",
-                        overflow: "hidden",
-                        transition: "all 0.2s",
-                      }}>
+                      <div className="event-pcard" key={ev.id}>
+                        <div className="event-pcard-glow"></div>
                         {ev.imageUrl ? (
-                          <div style={{
-                            width: 56, height: 56, borderRadius: 10, flexShrink: 0,
-                            overflow: "hidden",
-                            border: "1px solid var(--border)",
-                          }}>
-                            <img src={ev.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          <div className="event-pcard-img-wrap">
+                            <img src={ev.imageUrl} alt="" />
                           </div>
                         ) : (
-                          <div style={{
-                            width: 48, height: 48, borderRadius: 10, flexShrink: 0,
-                            background: "rgba(232,168,56,0.08)",
-                            border: "1px solid rgba(232,168,56,0.15)",
-                            display: "flex", flexDirection: "column",
-                            alignItems: "center", justifyContent: "center",
-                          }}>
-                            <span style={{ fontSize: 16, fontWeight: 800, lineHeight: 1.2 }}>{day}</span>
-                            <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)" }}>{month}</span>
+                          <div className="event-pcard-date-badge">
+                            <span className="event-pcard-date-day">{day}</span>
+                            <span className="event-pcard-date-month">{month}</span>
                           </div>
                         )}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{ev.name}</div>
-                          <div style={{ fontSize: 12, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
-                            <i className="fas fa-clock" style={{ fontSize: 10, color: "var(--text-tertiary)" }}></i>
-                            {time}
+                        <div className="event-pcard-body">
+                          <div className="event-pcard-name">{ev.name}</div>
+                          <div className="event-pcard-meta-row">
+                            <span className="event-pcard-meta">
+                              <i className="fas fa-clock"></i> {time}
+                            </span>
+                            {ev.location && (
+                              <span className="event-pcard-meta">
+                                <i className="fas fa-location-dot"></i> {ev.location}
+                              </span>
+                            )}
                           </div>
-                          {ev.location && (
-                            <div style={{ fontSize: 12, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4 }}>
-                              <i className="fas fa-location-dot" style={{ fontSize: 10, color: "var(--text-tertiary)" }}></i>
-                              {ev.location}
-                            </div>
-                          )}
                           {ev.isPaid && ev.fee > 0 && (
-                            <div style={{
-                              marginTop: 4, fontSize: 11, fontWeight: 700,
-                              color: "var(--primary)",
-                              background: "rgba(232,168,56,0.08)",
-                              padding: "2px 8px", borderRadius: 6,
-                              display: "inline-block",
-                            }}>
-                              Ksh {ev.fee}
-                            </div>
+                            <div className="event-pcard-fee">Ksh {ev.fee}</div>
                           )}
                         </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end", justifyContent: "center" }}>
-                          <button style={{
-                            width: 32, height: 32, borderRadius: "var(--radius-full)",
-                            background: "none", border: "none", color: "var(--text-tertiary)",
-                            fontSize: 14, cursor: "pointer", display: "flex",
-                            alignItems: "center", justifyContent: "center",
-                          }} onClick={() => openEventModal(ev)}>
+                        <div className="event-pcard-actions">
+                          <button className="event-pcard-action-btn edit" onClick={() => openEventModal(ev)}>
                             <i className="fas fa-pen"></i>
                           </button>
-                          <button style={{
-                            width: 32, height: 32, borderRadius: "var(--radius-full)",
-                            background: "none", border: "none", color: "var(--text-tertiary)",
-                            fontSize: 14, cursor: "pointer", display: "flex",
-                            alignItems: "center", justifyContent: "center",
-                          }} onClick={() => { setDeleteTargetId(String(ev.id)); setDeleteTargets({ type: "events", count: 1 }); setShowDeleteConfirm(true); }}>
+                          <button className="event-pcard-action-btn delete" onClick={() => { setDeleteTargetId(String(ev.id)); setDeleteTargets({ type: "events", count: 1 }); setShowDeleteConfirm(true); }}>
                             <i className="fas fa-trash"></i>
                           </button>
                         </div>

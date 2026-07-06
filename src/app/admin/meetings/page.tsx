@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import ToastBridge from "@/components/dashboard/ToastBridge";
 import { useAppStore } from "@/lib/useAppStore";
-import { getMeetings, createMeeting, updateMeeting, deleteMeeting, generateRoomName } from "@/lib/meetings";
-import type { Meeting } from "@/lib/meetings";
+import { getMeetings, createMeeting, updateMeeting, deleteMeeting, generateRoomName, getRSVPSummary, getAttendance, getAgenda, addAgendaItem, updateAgendaItem, deleteAgendaItem, getActionItems, createActionItem, completeActionItem, reopenActionItem } from "@/lib/meetings";
+import type { Meeting, AttendanceEntry, AgendaItem, ActionItem } from "@/lib/meetings";
 import { hapticSuccess } from "@/lib/haptics";
 
 const statusOptions = [
@@ -24,8 +24,27 @@ export default function AdminMeetingsPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-
   const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [rsvpSummaries, setRsvpSummaries] = useState<Record<string, { yes: number; no: number; maybe: number }>>({});
+  const [expandedMeeting, setExpandedMeeting] = useState<string | null>(null);
+  const [attendances, setAttendances] = useState<Record<string, AttendanceEntry[]>>({});
+  const [attendanceLoading, setAttendanceLoading] = useState<Set<string>>(new Set());
+
+  // Action items state
+  const [actionItems, setActionItems] = useState<Record<string, ActionItem[]>>({});
+  const [actionItemsLoading, setActionItemsLoading] = useState<Set<string>>(new Set());
+  const [expandedActions, setExpandedActions] = useState<string | null>(null);
+  const [showNewActionForm, setShowNewActionForm] = useState(false);
+  const [newActionTitle, setNewActionTitle] = useState("");
+  const [newActionAssignee, setNewActionAssignee] = useState("");
+  const [newActionDue, setNewActionDue] = useState("");
+  const [newActionPriority, setNewActionPriority] = useState<"low" | "medium" | "high">("medium");
+
+  // Agenda builder state
+  const [agendaItems, setAgendaItems] = useState<Omit<AgendaItem, "id" | "meetingId">[]>([]);
+  const [newAgendaTitle, setNewAgendaTitle] = useState("");
+  const [newAgendaDuration, setNewAgendaDuration] = useState(5);
+  const [newAgendaAssignee, setNewAgendaAssignee] = useState("");
 
   const defaultDate = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
@@ -56,6 +75,18 @@ export default function AdminMeetingsPage() {
 
   useEffect(() => { setTimeout(() => loadMeetings(), 0); }, [loadMeetings]);
 
+  // Load RSVP summaries once meetings are loaded
+  useEffect(() => {
+    if (meetings.length === 0) return;
+    meetings.forEach(async (m) => {
+      if (!m.id) return;
+      try {
+        const summary = await getRSVPSummary(m.id);
+        setRsvpSummaries((prev) => ({ ...prev, [m.id!]: summary }));
+      } catch {}
+    });
+  }, [meetings.length]);
+
   const resetForm = () => {
     setForm({
       title: "",
@@ -68,9 +99,13 @@ export default function AdminMeetingsPage() {
     });
     setEditId(null);
     setShowCreate(false);
+    setAgendaItems([]);
+    setNewAgendaTitle("");
+    setNewAgendaDuration(5);
+    setNewAgendaAssignee("");
   };
 
-  const openEdit = (m: Meeting) => {
+  const openEdit = async (m: Meeting) => {
     setForm({
       title: m.title,
       description: m.description,
@@ -82,6 +117,58 @@ export default function AdminMeetingsPage() {
     });
     setEditId(m.id || null);
     setShowCreate(true);
+    // Load existing agenda
+    if (m.id) {
+      try {
+        const items = await getAgenda(m.id);
+        setAgendaItems(items.map((i) => ({
+          title: i.title,
+          description: i.description,
+          duration: i.duration,
+          assigneeName: i.assigneeName,
+          sortOrder: i.sortOrder,
+          isCompleted: i.isCompleted,
+        })));
+      } catch {
+        setAgendaItems([]);
+      }
+    }
+  };
+
+  const addNewAgendaItem = () => {
+    if (!newAgendaTitle.trim()) return;
+    const maxOrder = agendaItems.reduce((max, item) => Math.max(max, item.sortOrder), 0);
+    setAgendaItems((prev) => [
+      ...prev,
+      {
+        title: newAgendaTitle.trim(),
+        description: "",
+        duration: newAgendaDuration,
+        assigneeName: newAgendaAssignee.trim() || undefined,
+        sortOrder: maxOrder + 1,
+        isCompleted: false,
+      },
+    ]);
+    setNewAgendaTitle("");
+    setNewAgendaDuration(5);
+    setNewAgendaAssignee("");
+  };
+
+  const moveAgendaItem = (index: number, direction: "up" | "down") => {
+    if (direction === "up" && index === 0) return;
+    if (direction === "down" && index === agendaItems.length - 1) return;
+    const items = [...agendaItems];
+    const swapIndex = direction === "up" ? index - 1 : index + 1;
+    const temp = items[index].sortOrder;
+    items[index] = { ...items[index], sortOrder: items[swapIndex].sortOrder };
+    items[swapIndex] = { ...items[swapIndex], sortOrder: temp };
+    // Sort by sortOrder
+    items.sort((a, b) => a.sortOrder - b.sortOrder);
+    setAgendaItems(items);
+  };
+
+  const removeAgendaItem = (index: number) => {
+    setAgendaItems((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSave = async () => {
@@ -106,6 +193,10 @@ export default function AdminMeetingsPage() {
           maxParticipants: form.maxParticipants,
           status: form.status,
         });
+        // Sync agenda items (delete all, re-add)
+        const existing = await getAgenda(editId);
+        await Promise.all(existing.map((i) => deleteAgendaItem(editId, i.id!)));
+        await Promise.all(agendaItems.map((item) => addAgendaItem(editId, item)));
         showToast("Updated", `"${form.title}" saved`, "success", 2500);
       } else {
         const newId = await createMeeting({
@@ -122,6 +213,8 @@ export default function AdminMeetingsPage() {
         });
         // Update room name with real ID
         await updateMeeting(newId, { roomName: generateRoomName(newId) });
+        // Save agenda items
+        await Promise.all(agendaItems.map((item) => addAgendaItem(newId, item)));
         showToast("Created", `"${form.title}" meeting created`, "success", 2500);
       }
       await hapticSuccess();
@@ -197,6 +290,95 @@ export default function AdminMeetingsPage() {
 
   const isToday = (date: string) => date === new Date().toISOString().slice(0, 10);
 
+  // Compute attendance counts from loaded attendances
+  const attendanceCounts: Record<string, number> = {};
+  Object.entries(attendances).forEach(([id, list]) => {
+    attendanceCounts[id] = list.length;
+  });
+
+  const toggleActionItems = async (m: Meeting) => {
+    if (!m.id) return;
+    if (expandedActions === m.id) {
+      setExpandedActions(null);
+      return;
+    }
+    setExpandedActions(m.id);
+    if (!actionItems[m.id]) {
+      setActionItemsLoading((prev) => new Set(prev).add(m.id!));
+      try {
+        const data = await getActionItems(m.id);
+        setActionItems((prev) => ({ ...prev, [m.id!]: data }));
+      } catch {}
+      setActionItemsLoading((prev) => { const next = new Set(prev); next.delete(m.id!); return next; });
+    }
+  };
+
+  const handleCreateAction = async (meetingId: string) => {
+    if (!newActionTitle.trim()) return;
+    try {
+      await createActionItem(meetingId, {
+        title: newActionTitle.trim(),
+        description: "",
+        assigneeName: newActionAssignee.trim() || undefined,
+        dueDate: newActionDue || undefined,
+        priority: newActionPriority,
+        status: "open",
+        createdBy: userDoc?.uid || "admin",
+        createdByName: userDoc?.display_name || "Admin",
+      });
+      // Reload action items
+      const data = await getActionItems(meetingId);
+      setActionItems((prev) => ({ ...prev, [meetingId]: data }));
+      setNewActionTitle("");
+      setNewActionAssignee("");
+      setNewActionDue("");
+      setNewActionPriority("medium");
+      setShowNewActionForm(false);
+      showToast("Created", "Action item added", "success", 2500);
+    } catch (e) {
+      showToast("Error", "Failed to create action item", "error", 3000);
+    }
+  };
+
+  const handleToggleActionItem = async (meetingId: string, item: ActionItem) => {
+    if (!item.id) return;
+    try {
+      if (item.status === "completed") {
+        await reopenActionItem(meetingId, item.id);
+      } else {
+        await completeActionItem(meetingId, item.id);
+      }
+      // Update local state
+      setActionItems((prev) => {
+        const items = prev[meetingId]?.map((a) =>
+          a.id === item.id
+            ? { ...a, status: a.status === "completed" ? ("open" as const) : ("completed" as const) }
+            : a
+        ) || [];
+        return { ...prev, [meetingId]: items };
+      });
+    } catch (e) {
+      showToast("Error", "Failed to update action item", "error", 3000);
+    }
+  };
+
+  const toggleAttendance = async (m: Meeting) => {
+    if (!m.id) return;
+    if (expandedMeeting === m.id) {
+      setExpandedMeeting(null);
+      return;
+    }
+    setExpandedMeeting(m.id);
+    if (!attendances[m.id]) {
+      setAttendanceLoading((prev) => new Set(prev).add(m.id!));
+      try {
+        const data = await getAttendance(m.id);
+        setAttendances((prev) => ({ ...prev, [m.id!]: data }));
+      } catch {}
+      setAttendanceLoading((prev) => { const next = new Set(prev); next.delete(m.id!); return next; });
+    }
+  };
+
   // Separate meetings into upcoming and past
   const today = new Date().toISOString().slice(0, 10);
   const upcoming = meetings.filter((m) => m.date >= today && m.status !== "ended");
@@ -268,6 +450,23 @@ export default function AdminMeetingsPage() {
 
         @keyframes livePulse { 0%,100% { opacity:1;transform:scale(1); } 50% { opacity:0.4;transform:scale(1.5); } }
 
+        /* RSVP Chip */
+        .meta-chip.rsvp-chip { background: rgba(74,222,128,0.08); color: var(--success); }
+        .meta-chip.rsvp-chip i { color: var(--success); }
+        .status-btn.info-small { margin-left: auto; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; border: none; cursor: pointer; transition: all 0.15s ease; background: var(--surface-elevated); color: var(--text-secondary); }
+        .status-btn.info-small:active { transform: scale(0.95); }
+
+        /* Attendance Section */
+        .attendance-section { border-top: 1px solid var(--border); padding: 10px 16px 14px; }
+        .attendance-header { font-size: 11px; font-weight: 700; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+        .attendance-header i { font-size: 12px; color: var(--primary); }
+        .attendance-list { display: flex; flex-direction: column; gap: 6px; }
+        .attendance-item { display: flex; align-items: center; gap: 10px; padding: 6px 8px; background: var(--surface); border-radius: 8px; }
+        .attendance-avatar { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, var(--gradient-blue), #2563EB); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0; }
+        .attendance-info { flex: 1; min-width: 0; }
+        .attendance-name { font-size: 13px; font-weight: 600; }
+        .attendance-time { font-size: 11px; color: var(--text-tertiary); }
+
         .empty-state { display: flex; flex-direction: column; align-items: center; padding: 60px 20px; text-align: center; gap: 10px; }
         .empty-state i { font-size: 40px; color: var(--text-tertiary); opacity: 0.3; }
         .empty-state h3 { font-size: 18px; font-weight: 700; }
@@ -305,6 +504,33 @@ export default function AdminMeetingsPage() {
         .join-btn.status { background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); color: #fff; }
         .join-btn.status:disabled { opacity: 0.5; cursor: not-allowed; }
         .join-btn.status i { font-size: 10px; }
+
+        /* Agenda Builder */
+        .form-section { margin: 16px 0; padding-top: 12px; border-top: 1px solid var(--border); }
+        .form-section-title { font-size: 12px; font-weight: 700; color: var(--primary); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .form-section-title i { font-size: 12px; }
+        .agenda-item-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--surface-card); border-radius: var(--radius-sm); margin-bottom: 6px; border: 1px solid var(--border); }
+        .agenda-item-order { display: flex; flex-direction: column; align-items: center; gap: 1px; flex-shrink: 0; }
+        .agenda-move-btn { width: 20px; height: 20px; border: none; background: none; color: var(--text-tertiary); cursor: pointer; font-size: 9px; display: flex; align-items: center; justify-content: center; padding: 0; }
+        .agenda-move-btn:active { color: var(--primary); }
+        .agenda-move-btn:disabled { opacity: 0.2; }
+        .agenda-item-num { font-size: 10px; font-weight: 700; color: var(--text-tertiary); }
+        .agenda-item-info { flex: 1; min-width: 0; }
+        .agenda-item-title { font-size: 13px; font-weight: 600; }
+        .agenda-item-meta { display: flex; gap: 8px; margin-top: 2px; font-size: 11px; color: var(--text-tertiary); }
+        .agenda-item-meta i { font-size: 10px; margin-right: 3px; color: var(--primary); }
+        .agenda-remove-btn { width: 24px; height: 24px; border-radius: 6px; border: none; background: rgba(255,107,107,0.1); color: var(--error); cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .agenda-remove-btn:active { background: rgba(255,107,107,0.2); }
+        .agenda-add-row { display: flex; gap: 6px; align-items: flex-start; }
+        .agenda-add-input { flex: 1; padding: 8px 10px !important; font-size: 13px !important; }
+        .agenda-add-extras { display: flex; gap: 6px; flex-shrink: 0; }
+        .agenda-add-field { display: flex; align-items: center; gap: 4px; background: var(--surface-card); border: 1.5px solid var(--border); border-radius: var(--radius-md); padding: 0 8px; }
+        .agenda-add-field i { font-size: 11px; color: var(--text-tertiary); }
+        .agenda-add-num { width: 36px !important; padding: 8px 4px !important; background: transparent !important; border: none !important; font-size: 13px !important; text-align: center; }
+        .agenda-add-unit { font-size: 10px; color: var(--text-tertiary); font-weight: 600; }
+        .agenda-add-btn { width: 36px; height: 36px; border-radius: var(--radius-sm); border: none; background: linear-gradient(135deg, var(--gradient-blue), #2563EB); color: #fff; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .agenda-add-btn:active { transform: scale(0.95); }
+        .agenda-add-btn:disabled { opacity: 0.4; }
 
         .btn-primary { flex: 1; padding: 14px; background: linear-gradient(135deg, var(--gradient-blue), #2563EB); border: none; border-radius: var(--radius-md); color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 8px; }
         .btn-primary:active { transform: scale(0.97); }
@@ -412,6 +638,13 @@ export default function AdminMeetingsPage() {
                                   <i className="fas fa-users"></i>
                                   {m.maxParticipants} max
                                 </span>
+                                {/* RSVP Summary */}
+                                {rsvpSummaries[m.id || ""] && (
+                                  <span className="meta-chip rsvp-chip">
+                                    <i className="fas fa-check-circle"></i>
+                                    {rsvpSummaries[m.id || ""]!.yes + rsvpSummaries[m.id || ""]!.maybe} ({rsvpSummaries[m.id || ""]!.no})
+                                  </span>
+                                )}
                               </div>
                             </div>
                             <div className="meeting-actions">
@@ -487,10 +720,211 @@ export default function AdminMeetingsPage() {
                         <div className="meeting-status-row">
                           <div className="status-dot ended"></div>
                           <span className="status-label">ended</span>
+                          <button className="status-btn info-small" onClick={() => toggleAttendance(m)}>
+                            {expandedMeeting === m.id ? (
+                              <><i className="fas fa-chevron-up"></i> Hide</>
+                            ) : (
+                              <><i className="fas fa-users"></i> {attendanceCounts[m.id || ""] || "..."}</>
+                            )}
+                          </button>
+                          <button className="status-btn info-small" onClick={() => toggleActionItems(m)}>
+                            {expandedActions === m.id ? (
+                              <><i className="fas fa-chevron-up"></i> Actions</>
+                            ) : (
+                              <><i className="fas fa-check-double"></i> {actionItems[m.id || ""]?.filter((a) => a.status !== "completed").length || 0}</>
+                            )}
+                          </button>
                           <button className="status-btn reset" onClick={() => toggleStatus(m)} disabled={actionLoading}>
                             {actionLoading ? <i className="fas fa-spinner fa-spin"></i> : "Reset"}
                           </button>
                         </div>
+                        {/* Attendance section for past meetings */}
+                        {expandedMeeting === m.id && (
+                          <div className="attendance-section">
+                            <div className="attendance-header">
+                              <i className="fas fa-user-check"></i> Attendance ({attendanceCounts[m.id || ""] || 0})
+                            </div>
+                            {attendanceLoading.has(m.id || "") ? (
+                              <div style={{ padding: "8px 16px", textAlign: "center", color: "var(--text-tertiary)", fontSize: 12 }}>
+                                <i className="fas fa-spinner fa-spin"></i> Loading...
+                              </div>
+                            ) : attendances[m.id || ""]?.length > 0 ? (
+                              <div className="attendance-list">
+                                {attendances[m.id || ""].map((a) => (
+                                  <div className="attendance-item" key={a.id || a.userId}>
+                                    <div className="attendance-avatar">{a.userName.charAt(0).toUpperCase()}</div>
+                                    <div className="attendance-info">
+                                      <div className="attendance-name">{a.userName}</div>
+                                      <div className="attendance-time">
+                                        {a.leftAt ? "Joined & left" : "Joined"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div style={{ padding: "8px 16px", textAlign: "center", color: "var(--text-tertiary)", fontSize: 12 }}>
+                                No attendance recorded
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Action Items section */}
+                        {expandedActions === m.id && (
+                          <div className="attendance-section">
+                            <div className="attendance-header" style={{ justifyContent: "space-between" }}>
+                              <span><i className="fas fa-check-double"></i> Action Items</span>
+                              <button
+                                onClick={() => setShowNewActionForm(true)}
+                                style={{
+                                  background: "none", border: "none", color: "var(--primary)",
+                                  fontSize: 11, fontWeight: 700, cursor: "pointer",
+                                  display: "flex", alignItems: "center", gap: 4,
+                                }}
+                              >
+                                <i className="fas fa-plus"></i> Add
+                              </button>
+                            </div>
+
+                            {/* New Action Item Form */}
+                            {showNewActionForm && (
+                              <div style={{ padding: "8px 0", marginBottom: 8, borderBottom: "1px solid var(--border)" }}>
+                                <div className="form-group" style={{ marginBottom: 8 }}>
+                                  <input
+                                    type="text"
+                                    className="form-input"
+                                    value={newActionTitle}
+                                    onChange={(e) => setNewActionTitle(e.target.value)}
+                                    placeholder="Action item title..."
+                                    style={{ padding: "8px 10px", fontSize: 13 }}
+                                  />
+                                </div>
+                                <div className="form-row" style={{ gap: 8 }}>
+                                  <div className="form-group" style={{ marginBottom: 8, flex: 1 }}>
+                                    <input
+                                      type="text"
+                                      className="form-input"
+                                      value={newActionAssignee}
+                                      onChange={(e) => setNewActionAssignee(e.target.value)}
+                                      placeholder="Assignee"
+                                      style={{ padding: "8px 10px", fontSize: 13 }}
+                                    />
+                                  </div>
+                                  <div className="form-group" style={{ marginBottom: 8, flex: 1 }}>
+                                    <input
+                                      type="date"
+                                      className="form-input"
+                                      value={newActionDue}
+                                      onChange={(e) => setNewActionDue(e.target.value)}
+                                      style={{ padding: "8px 10px", fontSize: 13 }}
+                                    />
+                                  </div>
+                                  <div className="form-group" style={{ marginBottom: 8, width: 70 }}>
+                                    <select
+                                      className="form-select"
+                                      value={newActionPriority}
+                                      onChange={(e) => setNewActionPriority(e.target.value as any)}
+                                      style={{ padding: "8px 6px", fontSize: 12 }}
+                                    >
+                                      <option value="low">Low</option>
+                                      <option value="medium">Med</option>
+                                      <option value="high">High</option>
+                                    </select>
+                                  </div>
+                                </div>
+                                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                                  <button
+                                    onClick={() => setShowNewActionForm(false)}
+                                    style={{
+                                      padding: "6px 12px", borderRadius: 6, border: "1px solid var(--border)",
+                                      background: "transparent", color: "var(--text-secondary)",
+                                      fontSize: 12, fontWeight: 600, cursor: "pointer",
+                                    }}
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={() => handleCreateAction(m.id!)}
+                                    disabled={!newActionTitle.trim()}
+                                    style={{
+                                      padding: "6px 12px", borderRadius: 6, border: "none",
+                                      background: "linear-gradient(135deg, var(--gradient-blue), #2563EB)",
+                                      color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                                      opacity: !newActionTitle.trim() ? 0.5 : 1,
+                                    }}
+                                  >
+                                    <i className="fas fa-plus"></i> Add
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {actionItemsLoading.has(m.id || "") ? (
+                              <div style={{ padding: "8px 16px", textAlign: "center", color: "var(--text-tertiary)", fontSize: 12 }}>
+                                <i className="fas fa-spinner fa-spin"></i> Loading...
+                              </div>
+                            ) : actionItems[m.id || ""]?.length > 0 ? (
+                              <div className="attendance-list">
+                                {actionItems[m.id || ""].map((item) => (
+                                  <div
+                                    className="attendance-item"
+                                    key={item.id}
+                                    onClick={() => handleToggleActionItem(m.id!, item)}
+                                    style={{
+                                      cursor: "pointer",
+                                      opacity: item.status === "completed" ? 0.5 : 1,
+                                      textDecoration: item.status === "completed" ? "line-through" : "none",
+                                    }}
+                                  >
+                                    <div style={{
+                                      width: 22, height: 22, borderRadius: "50%",
+                                      border: `2px solid ${item.status === "completed" ? "var(--success)" : "var(--text-tertiary)"}`,
+                                      background: item.status === "completed" ? "var(--success)" : "transparent",
+                                      display: "flex", alignItems: "center", justifyContent: "center",
+                                      flexShrink: 0, fontSize: 10, color: "#fff",
+                                    }}>
+                                      {item.status === "completed" && <i className="fas fa-check"></i>}
+                                    </div>
+                                    <div className="attendance-info">
+                                      <div className="attendance-name">{item.title}</div>
+                                      <div className="attendance-time" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                        {item.assigneeName && (
+                                          <span><i className="fas fa-user"></i> {item.assigneeName}</span>
+                                        )}
+                                        {item.dueDate && (
+                                          <span style={{
+                                            color: item.dueDate < new Date().toISOString().slice(0, 10) && item.status !== "completed"
+                                              ? "var(--error)" : "var(--text-tertiary)"
+                                          }}>
+                                            <i className="fas fa-calendar"></i>{' '}
+                                            {new Date(item.dueDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                          </span>
+                                        )}
+                                        <span style={{
+                                          padding: "1px 6px", borderRadius: 4, fontSize: 10,
+                                          fontWeight: 700,
+                                          background: item.priority === "high" ? "rgba(255,107,107,0.12)"
+                                            : item.priority === "medium" ? "rgba(232,168,56,0.12)"
+                                            : "rgba(107,107,107,0.12)",
+                                          color: item.priority === "high" ? "var(--error)"
+                                            : item.priority === "medium" ? "var(--primary)"
+                                            : "var(--text-tertiary)",
+                                        }}>
+                                          {item.priority}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div style={{ padding: "8px 16px", textAlign: "center", color: "var(--text-tertiary)", fontSize: 12 }}>
+                                No action items yet. Tap "Add" to create one.
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -526,7 +960,67 @@ export default function AdminMeetingsPage() {
               {editId && (
                 <div className="form-group"><label>Status</label><select className="form-select" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Meeting["status"] })}>{statusOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
               )}
-            </div>
+
+              {/* AGENDA BUILDER */}
+              <div className="form-section">
+                <div className="form-section-title"><i className="fas fa-list-check"></i> Agenda Items</div>
+
+                {agendaItems.map((item, i) => (
+                  <div className="agenda-item-row" key={i}>
+                    <div className="agenda-item-order">
+                      <button className="agenda-move-btn" onClick={() => moveAgendaItem(i, "up")} disabled={i === 0}><i className="fas fa-chevron-up"></i></button>
+                      <span className="agenda-item-num">{i + 1}</span>
+                      <button className="agenda-move-btn" onClick={() => moveAgendaItem(i, "down")} disabled={i === agendaItems.length - 1}><i className="fas fa-chevron-down"></i></button>
+                    </div>
+                    <div className="agenda-item-info">
+                      <div className="agenda-item-title">{item.title}</div>
+                      <div className="agenda-item-meta">
+                        <span><i className="fas fa-clock"></i> {item.duration} min</span>
+                        {item.assigneeName && <span><i className="fas fa-user"></i> {item.assigneeName}</span>}
+                      </div>
+                    </div>
+                    <button className="agenda-remove-btn" onClick={() => removeAgendaItem(i)}><i className="fas fa-xmark"></i></button>
+                  </div>
+                ))}
+
+                <div className="agenda-add-row">
+                  <input
+                    type="text"
+                    className="form-input agenda-add-input"
+                    value={newAgendaTitle}
+                    onChange={(e) => setNewAgendaTitle(e.target.value)}
+                    placeholder="Item title..."
+                    onKeyDown={(e) => e.key === "Enter" && addNewAgendaItem()}
+                  />
+                  <div className="agenda-add-extras">
+                    <div className="agenda-add-field">
+                      <i className="fas fa-clock"></i>
+                      <input
+                        type="number"
+                        className="form-input agenda-add-num"
+                        value={newAgendaDuration}
+                        onChange={(e) => setNewAgendaDuration(parseInt(e.target.value) || 1)}
+                        min="1"
+                        max="120"
+                      />
+                      <span className="agenda-add-unit">min</span>
+                    </div>
+                    <div className="agenda-add-field">
+                      <i className="fas fa-user"></i>
+                      <input
+                        type="text"
+                        className="form-input agenda-add-input"
+                        value={newAgendaAssignee}
+                        onChange={(e) => setNewAgendaAssignee(e.target.value)}
+                        placeholder="Assignee (opt)"
+                      />
+                    </div>
+                  </div>
+                  <button className="agenda-add-btn" onClick={addNewAgendaItem} disabled={!newAgendaTitle.trim()}>
+                    <i className="fas fa-plus"></i>
+                  </button>
+                </div>
+              </div>
             <div className="form-footer">
               <button className="btn-secondary" onClick={resetForm}>Cancel</button>
               <button className="btn-primary" onClick={handleSave} disabled={actionLoading}>
@@ -534,6 +1028,7 @@ export default function AdminMeetingsPage() {
                 {editId ? "Save Changes" : "Create Meeting"}
               </button>
             </div>
+          </div>
           </div>
         </>
       )}

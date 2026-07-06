@@ -140,14 +140,6 @@ export function RadioGoLiveTab(props: RadioGoLiveTabProps) {
         .gl-status-title { font-size: 16px; font-weight: 700; }
         .gl-status-sub { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
         .gl-listeners { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--primary); }
-        .gl-player-container { background: var(--surface-card); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
-        .gl-player-header { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; }
-        .gl-player-header i { color: var(--text-tertiary); font-size: 14px; }
-        .gl-player-badge { margin-left: auto; display: flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 6px; font-size: 10px; font-weight: 700; background: var(--surface-elevated); color: var(--text-tertiary); }
-        .gl-player-badge.live { background: rgba(239,68,68,0.12); color: var(--error); }
-        .gl-player-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); }
-        .gl-player-dot.pulse { background: var(--error); animation: livePulse 1.5s ease-in-out infinite; }
-        .gl-player-iframe { width: 100%; height: 120px; border: none; display: block; }
         .gl-connection-box { background: var(--surface-card); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
         .gl-conn-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s ease; }
         .gl-conn-row:last-child { border-bottom: none; }
@@ -261,23 +253,7 @@ export function RadioGoLiveTab(props: RadioGoLiveTabProps) {
         </div>
       </div>
 
-      <div className="gl-player-container">
-        <div className="gl-player-header">
-          <i className="fas fa-headphones"></i>
-          <span>Monitor Broadcast</span>
-          <span className={`gl-player-badge ${isLive ? "live" : ""}`}>
-            <span className={`gl-player-dot ${isLive ? "pulse" : ""}`}></span>
-            {isLive ? "LIVE" : "Off Air"}
-          </span>
-        </div>
-        <iframe
-          className="gl-player-iframe"
-          src="https://azuracast.histoview.co.ke/public/turningpoint_church/embed?autoplay=true"
-          allow="autoplay"
-          title="Station Player"
-          sandbox="allow-scripts allow-same-origin allow-forms"
-        />
-      </div>
+
 
       {selStreamer && (
         <div className="section-block">

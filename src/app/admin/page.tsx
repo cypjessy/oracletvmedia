@@ -5,13 +5,11 @@ import { useRouter } from "next/navigation";
 import { signOut as firebaseSignOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAppStore } from "@/lib/useAppStore";
-import { getNowPlaying as azuracastGetNowPlaying, getSongHistory, getStationStatus, getQueue, toggleAutoDJ, getStreamers, deleteStreamer, getPlaylists, getStationId } from "@/lib/azuracast";
+import { getNowPlaying as azuracastGetNowPlaying, getSongHistory, getStationStatus, getQueue, toggleAutoDJ, getStreamers, deleteStreamer, getStationId } from "@/lib/azuracast";
 import type { QueueItem, Streamer, Playlist } from "@/lib/azuracast";
-import { getGalleryPhotos } from "@/lib/content";
-import { getBunnyStorageStats, formatBytes } from "@/lib/bunny";
+
 import AlbumArt from "@/components/shared/AlbumArt";
-import { useAudio } from "@/lib/audio/AudioContext";
-import { usePlayConfig } from "@/lib/playControls";
+
 import { useTvPlayer } from "@/lib/tv/TvPlayerProvider";
 import { useFullscreenToggle } from "@/lib/tv/fullscreen";
 import { getChannel, getVideos, getUserTvState, updateUserTvProgress, autoInitUserPlaylist } from "@/lib/youtube";
@@ -84,17 +82,6 @@ function timeAgo(date: Date): string {
   return `${Math.floor(days / 7)}w ago`;
 }
 
-interface ActivityItem {
-  id: string;
-  icon: string;
-  color: string;
-  text: string;
-  time: string;
-  rawTime: Date;
-  category: string;
-  albumArt?: string;
-}
-
 /* ==================================================================
    COMPONENT
    ================================================================== */
@@ -110,7 +97,6 @@ export default function AdminPage() {
     logoInitials: (storeChurchConfig?.name || "CH").split(" ").map((w:string) => w[0]).join("").slice(0, 3).toUpperCase(),
   };
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
-  const [activityFilter, setActivityFilter] = useState<string>("all");
   const [chartPeriod, setChartPeriod] = useState<string>("7days");
   const [showSetup, setShowSetup] = useState(false);
 
@@ -124,11 +110,6 @@ export default function AdminPage() {
   const [liveListeners, setLiveListeners] = useState(DEFAULT_LISTENER_COUNT);
   const [radioQueue, setRadioQueue] = useState<QueueItem[]>([]);
   const [autoDJToggling, setAutoDJToggling] = useState(false);
-  const [wasStreamerLive, setWasStreamerLive] = useState(false);
-  const prevHistoryLenRef = useRef(0);
-  const [liveActivities, setLiveActivities] = useState<ActivityItem[]>([]);
-  // Schedule from AzuraCast playlists
-  const [scheduleSlots, setScheduleSlots] = useState<{time: string; label: string; isNow: boolean; hasContent: boolean; source?: string}[]>([]);
   const [liveStreamers, setLiveStreamers] = useState<Streamer[]>([]);
   const [streamDeletingId, setStreamDeletingId] = useState<string | null>(null);
 
@@ -140,6 +121,7 @@ export default function AdminPage() {
   const [tvLoading, setTvLoading] = useState(true);
   const tvPlayer = useTvPlayer();
   const [tvUserState, setTvUserState] = useState<UserTvState | null>(null);
+  const hasInteractedWithTv = useRef(false);
 
   const tvCurrentVideo = tvUserState && tvUserState.playlist.length > 0
     ? tvVideos.find((v) => v.id === tvUserState.playlist[tvUserState.currentIndex]) ?? null
@@ -158,6 +140,47 @@ export default function AdminPage() {
       tvPlayer.play(tvCurrentVideo.id, tvUserState?.currentSeek || undefined);
     }
   }, [tvCurrentVideo?.id, tvPlayer.currentVideoId, tvPlayer, tvUserState?.currentSeek]);
+
+  /* Start TV — resume saved progress, or advance if already interacted */
+  const handleStartTv = useCallback(() => {
+    if (!tvUserState || tvUserState.playlist.length === 0) {
+      const uid = auth.currentUser?.uid;
+      if (uid && tvVideos.length > 0) {
+        import("@/lib/youtube").then((yt) => {
+          yt.autoInitUserPlaylist(uid).then((state) => {
+            setTvUserState(state);
+          });
+        });
+      } else {
+        window.dispatchEvent(new CustomEvent("show-toast", {
+          detail: { title: "No Videos", message: "No videos available to play. Sync videos from the admin panel.", type: "info", duration: 3000 }
+        }));
+      }
+      return;
+    }
+    const uid = auth.currentUser?.uid;
+    if (tvCurrentVideo && hasInteractedWithTv.current) {
+      const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
+      if (uid) updateUserTvProgress(uid, nextIndex, 0);
+      setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
+      return;
+    }
+    hasInteractedWithTv.current = true;
+    const savedIndex = tvUserState.currentIndex;
+    const savedSeek = tvUserState.currentSeek;
+    const savedVideo = tvVideos.find((v) => v.id === tvUserState.playlist[savedIndex]) ?? null;
+    const nearEnd = savedVideo && savedVideo.duration > 0 && savedSeek >= savedVideo.duration * 0.9;
+    if (nearEnd) {
+      const nextIndex = (savedIndex + 1) % tvUserState.playlist.length;
+      if (uid) updateUserTvProgress(uid, nextIndex, 0);
+      setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
+    } else {
+      const resumeIndex = savedSeek > 0 && savedVideo ? savedIndex : 0;
+      const resumeSeek = resumeIndex === savedIndex ? savedSeek : 0;
+      if (uid) updateUserTvProgress(uid, resumeIndex, resumeSeek);
+      setTvUserState((prev) => prev ? { ...prev, currentIndex: resumeIndex, currentSeek: resumeSeek } : prev);
+    }
+  }, [tvCurrentVideo, tvUserState, tvVideos]);
 
   // Fetch TV channel and videos on mount
   useEffect(() => {
@@ -187,17 +210,7 @@ export default function AdminPage() {
     return () => { mounted = false; };
   }, []);
 
-  // Content summary from Firestore
-  const [contentCounts, setContentCounts] = useState({ gallery: 0, galleryLast: "", videos: 0, videoSync: "" });
 
-  // Storage breakdown computed from real data
-  const [storageBreakdown, setStorageBreakdown] = useState([
-    { label: "Gallery", color: "#3B82F6", size: "0 B", value: 0 },
-    { label: "Banners", color: "#E8A838", size: "0 B", value: 0 },
-    { label: "Other", color: "#EF4444", size: "0 B", value: 0 },
-  ]);
-  const [storageTotal, setStorageTotal] = useState({ used: 0, total: 10 * 1024 * 1024 * 1024 });
-  const [contentLoading, setContentLoading] = useState(true);
 
   // Stat cards (YouTube sections removed)
   interface StatCard {
@@ -206,11 +219,7 @@ export default function AdminPage() {
     subtitle?: string; progress?: number;
   }
 
-  const radioDeepLink = useCallback(() => {
-    window.dispatchEvent(new CustomEvent("show-toast", {
-      detail: { title: "Radio Dashboard", message: "Adio details...", type: "info", duration: 1500 },
-    }));
-  }, []);
+
 
   const nowPlaying = radioNP?.nowPlaying ? {
     title: radioNP.nowPlaying.song.title || "No track",
@@ -255,16 +264,7 @@ export default function AdminPage() {
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const audio = useAudio();
-  const { config: playConfig } = usePlayConfig();
-  const adminStreamUrl = radioNP?.station?.listenUrl || playConfig.streamUrl || "";
-  const isAdminPlaying = audio.isPlaying && audio.currentStreamUrl === adminStreamUrl;
 
-  const toggleAdminPlay = useCallback(() => {
-    if (adminStreamUrl) {
-      audio.toggle(adminStreamUrl, Number(getStationId()));
-    }
-  }, [audio, adminStreamUrl]);
 
   const handleLogout = async () => {
     setShowProfileDropdown(false);
@@ -309,93 +309,9 @@ export default function AdminPage() {
     setStreamDeletingId(null);
   }, []);
 
-  // Fetch content summary + storage from Firestore and BunnyCDN
-  const fetchContentAndStorage = useCallback(async () => {
-    try {
-      // Content — gallery photos
-      const photos = await getGalleryPhotos();
-      const galleryCount = photos.length;
-      let galleryBytes = 0;
-      let latestTime = 0;
-      for (const p of photos) {
-        galleryBytes += p.fileSize || 0;
-        const t = p.uploadedAt?.toMillis?.() || 0;
-        if (t > latestTime) latestTime = t;
-      }
-      const galleryLast = latestTime > 0 ? timeAgo(new Date(latestTime)) : "Never";
 
-      setContentCounts({
-        gallery: galleryCount,
-        galleryLast,
-        videos: 0,
-        videoSync: "—",
-      });
 
-      // Storage — get real BunnyCDN stats
-      const bunnyStats = await getBunnyStorageStats().catch(() => null);
-      const totalUsed = bunnyStats?.totalBytes || galleryBytes;
 
-      // Estimate storage per category
-      const bannerEstimate = Math.round(galleryBytes * 0.08); // ~8% of gallery
-      const otherEstimate = Math.max(0, totalUsed - galleryBytes - bannerEstimate);
-
-      const totalForPct = Math.max(totalUsed, 1);
-      const toPct = (b: number) => Math.round((b / totalForPct) * 100);
-
-      setStorageBreakdown([
-        { label: "Gallery", color: "#3B82F6", size: formatBytes(galleryBytes), value: toPct(galleryBytes) || 1 },
-        { label: "Banners", color: "#E8A838", size: formatBytes(bannerEstimate), value: toPct(bannerEstimate) || 1 },
-        { label: "Other", color: "#EF4444", size: formatBytes(otherEstimate), value: toPct(otherEstimate) || 1 },
-      ]);
-
-      setStorageTotal({ used: totalUsed, total: 10 * 1024 * 1024 * 1024 });
-    } catch {
-      // Keep default state
-    }
-    setContentLoading(false);
-  }, []);
-
-  /* Fetch schedule from AzuraCast playlists */
-  const fetchSchedule = useCallback(async () => {
-    try {
-      const playlists = await getPlaylists();
-      const today = new Date().getDay();
-      const scheduled = playlists
-        .filter((p) => p.type === "scheduled" && p.schedule?.days?.includes(today))
-        .sort((a, b) => {
-          const aStart = parseInt(a.schedule?.startTime || "0");
-          const bStart = parseInt(b.schedule?.startTime || "0");
-          return aStart - bStart;
-        });
-      const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
-      const slots = scheduled.map((p) => {
-        const startHour = parseInt(p.schedule?.startTime || "0");
-        const startMinute = parseInt(p.schedule?.startTime?.split(":")[1] || "0");
-        const endHour = parseInt(p.schedule?.endTime || "0") || startHour + 1;
-        const endMinute = parseInt(p.schedule?.endTime?.split(":")[1] || "0");
-        const startMinutes = startHour * 60 + startMinute;
-        const endMinutes = endHour * 60 + endMinute;
-        const isNow = nowMinutes >= startMinutes && nowMinutes < endMinutes;
-        const displayHour = startHour > 12 ? startHour - 12 : startHour === 0 ? 12 : startHour;
-        const displayMin = String(startMinute).padStart(2, "0");
-        const ampm = startHour >= 12 ? "PM" : "AM";
-        return {
-          time: `${displayHour}:${displayMin} ${ampm}`,
-          label: p.name,
-          isNow,
-          hasContent: true,
-          source: p.enabled ? "AutoDJ" : "Scheduled",
-        };
-      });
-      if (slots.length === 0) {
-        setScheduleSlots([{ time: "—", label: "No playlists scheduled today", isNow: false, hasContent: false }]);
-      } else {
-        setScheduleSlots(slots);
-      }
-    } catch {
-      setScheduleSlots([{ time: "—", label: "Could not load schedule", isNow: false, hasContent: false }]);
-    }
-  }, []);
 
   // Compute uptime from earliest song in history
   useEffect(() => {
@@ -415,10 +331,7 @@ export default function AdminPage() {
     return () => { clearTimeout(timer); clearInterval(interval); };
   }, [radioHistory]);
 
-  // Call schedule + content fetch on mount
-  useEffect(() => {
-    setTimeout(() => { fetchSchedule(); fetchContentAndStorage(); }, 0);
-  }, [fetchSchedule, fetchContentAndStorage]);
+
 
   // Poll AzuraCast every 10 seconds
   useEffect(() => {
@@ -461,68 +374,6 @@ export default function AdminPage() {
           if (mounted) setLiveStreamers(s);
         }).catch(() => {});
 
-        // Build dynamic activity feed from real events
-        const now = new Date();
-        setLiveActivities((prev) => {
-          const next: ActivityItem[] = [...prev];
-          const prevLen = prevHistoryLenRef.current;
-
-          // Detect new songs from history
-          if (history && history.length > prevLen && history.length > 0) {
-            const newSongs = history.slice(0, history.length - prevLen);
-            for (const s of newSongs) {
-              const title = s.song?.title || "Unknown";
-              const artist = s.song?.artist || "";
-              // Avoid duplicates by checking the last event
-              if (next.length === 0 || next[0].text !== `Now playing: "${title}" — ${artist}`) {
-                next.unshift({
-                  id: `song-${now.getTime()}-${Math.random().toString(36).slice(2, 6)}`,
-                  icon: "fa-music",
-                  color: "gold",
-                  text: `Now playing: "${title}" — ${artist}`,
-                  time: "just now",
-                  rawTime: now,
-                  category: "radio",
-                  albumArt: s.song?.albumArt || "",
-                });
-              }
-            }
-          }
-          prevHistoryLenRef.current = history.length;
-
-          // Detect streamer going live
-          const isStreamerLive = np?.live?.isLive ?? false;
-          if (isStreamerLive && !wasStreamerLive) {
-            const name = np?.live?.streamerName || "A streamer";
-            next.unshift({
-              id: `streamer-${now.getTime()}`,
-              icon: "fa-microphone",
-              color: "green",
-              text: `${name} went live`,
-              time: "just now",
-              rawTime: now,
-              category: "radio",
-            });
-          }
-          if (!isStreamerLive && wasStreamerLive) {
-            next.unshift({
-              id: `streamer-off-${now.getTime()}`,
-              icon: "fa-microphone-slash",
-              color: "red",
-              text: "Streamer signed off",
-              time: "just now",
-              rawTime: now,
-              category: "radio",
-            });
-          }
-
-          // Keep max 50 items
-          return next.slice(0, 50);
-        });
-
-        // Track current streamer state for next poll
-        setWasStreamerLive(np?.live?.isLive ?? false);
-
         // Estimate songs played today from history (songs in last 24h)
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -549,41 +400,11 @@ export default function AdminPage() {
     setSetupCompleted((p) => (p.includes(id) ? p : [...p, id]));
   };
 
-  /* Filtered activities — built dynamically from live data */
-  const filteredActivities =
-    activityFilter === "all"
-      ? liveActivities
-      : liveActivities.filter((a) => a.category === activityFilter);
-
-
-
   /* Setup progress */
   const setupProgress = Math.round(
     (setupCompleted.length / setupChecklistItems.length) * 100
   );
   const allSetupDone = setupCompleted.length === setupChecklistItems.length;
-
-  /* Donut chart SVG */
-  const usedFormatted = formatBytes(storageTotal.used).split(" ");
-  const totalStorage = storageBreakdown.reduce((s, i) => s + i.value, 0) || 1;
-  const cumulativeAngles = storageBreakdown.reduce<number[]>((acc, item) => {
-    const prev = acc.length > 0 ? acc[acc.length - 1] : 0;
-    acc.push(prev + (item.value / totalStorage) * 360);
-    return acc;
-  }, []);
-  const donutSegments = storageBreakdown.map((item, i) => {
-    const angle = (item.value / totalStorage) * 360;
-    const startAngle = cumulativeAngles[i] - angle;
-    const startRad = ((startAngle - 90) * Math.PI) / 180;
-    const endRad = ((startAngle + angle - 90) * Math.PI) / 180;
-    const x1 = 50 + 40 * Math.cos(startRad);
-    const y1 = 50 + 40 * Math.sin(startRad);
-    const x2 = 50 + 40 * Math.cos(endRad);
-    const y2 = 50 + 40 * Math.sin(endRad);
-    const largeArc = angle > 180 ? 1 : 0;
-    const path = `M${x1},${y1} A40,40 0 ${largeArc},1 ${x2},${y2}`;
-    return { ...item, path };
-  });
 
   return (
     <>
@@ -644,7 +465,7 @@ export default function AdminPage() {
         .status-bar { height: env(safe-area-inset-top, 24px); min-height: 24px; background: var(--bg); flex-shrink: 0; }
 
         /* ========== SCROLLABLE CONTENT ========== */
-        .content-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 120px; }
+        .content-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 80px; }
         .content-scroll::-webkit-scrollbar { display: none; }
 
         /* ========== HEADER ========== */
@@ -1478,9 +1299,11 @@ export default function AdminPage() {
           overflow: hidden; flex-shrink: 0;
           background: var(--surface-elevated);
           display: flex; align-items: center; justify-content: center;
+          position: relative;
         }
         .tv-channel-avatar img { width: 100%; height: 100%; object-fit: cover; }
         .tv-channel-avatar i { font-size: 16px; color: #FF0000; }
+        .tv-avatar-img { position: absolute; inset: 0; border-radius: 50%; }
         .tv-channel-info { flex: 1; min-width: 0; }
         .tv-channel-name { font-size: 13px; font-weight: 700; }
         .tv-channel-meta { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
@@ -1500,6 +1323,32 @@ export default function AdminPage() {
           transition: all 0.2s;
         }
         .tv-watch-btn:active { transform: scale(0.95); }
+
+        .tv-start-btn {
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          width: calc(100% - 32px); padding: 14px;
+          margin: 8px 16px 0;
+          border-radius: var(--radius-md);
+          background: linear-gradient(135deg, #3B82F6, #6366F1);
+          border: none; color: #fff;
+          font-size: 14px; font-weight: 700;
+          cursor: pointer; transition: all 0.2s ease;
+          position: relative; z-index: 1;
+        }
+        .tv-start-btn:active { transform: scale(0.97); }
+        .tv-start-btn i { font-size: 13px; }
+        .tv-start-hint { font-size: 10px; color: var(--text-tertiary); text-align: center; padding: 4px 16px 0; opacity: 0.7; }
+        .tv-next-slot {
+          display: flex; align-items: center; gap: 6px;
+          padding: 8px 12px;
+          margin: 6px 16px 0;
+          font-size: 11px; color: var(--text-tertiary);
+          background: var(--surface);
+          border-radius: var(--radius-sm);
+          border: 1px solid var(--border);
+          position: relative; z-index: 1;
+        }
+        .tv-next-slot i { color: #3B82F6; font-size: 10px; }
 
                 /* ===== PREMIUM RADIO CARD (compact) ===== */
         .rh-hero {
@@ -1669,6 +1518,22 @@ export default function AdminPage() {
         }
         .rh-expand-small:active { background: var(--surface-elevated); transform: scale(0.88); }.feed-section { padding: 0 var(--section-px, 16px) 16px; }
         .feed-section { --section-px: 16px; }
+
+        /* ===== SECTION HEADER ===== */
+        .section-header-inline {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .section-title { font-size: 17px; font-weight: 700; }
+        .section-link {
+            font-size: 12px; color: var(--primary); font-weight: 600;
+            background: none; border: none; cursor: pointer;
+            display: flex; align-items: center; gap: 4px;
+            padding: 4px 8px; border-radius: 8px;
+            transition: all 0.15s ease;
+        }
+        .section-link i { font-size: 10px; }
+        .section-link:active { background: rgba(232,168,56,0.1); }
       `}</style>
 
       <ToastBridge />
@@ -1813,10 +1678,9 @@ export default function AdminPage() {
               {tvChannel && (
                 <div className="tv-channel-strip">
                   <div className="tv-channel-avatar">
-                    {tvChannel.thumbnail ? (
-                      <img src={tvChannel.thumbnail} alt="" />
-                    ) : (
-                      <i className="fab fa-youtube"></i>
+                    <i className="fab fa-youtube"></i>
+                    {tvChannel.thumbnail && (
+                      <img src={tvChannel.thumbnail.replace(/^http:/, 'https:')} alt="" referrerPolicy="no-referrer" crossOrigin="anonymous" onError={(e) => { e.currentTarget.style.display = 'none'; }} className="tv-avatar-img" />
                     )}
                   </div>
                   <div className="tv-channel-info">
@@ -1826,6 +1690,19 @@ export default function AdminPage() {
                   <button className="tv-watch-btn" onClick={() => router.push("/admin/tv")}>
                     <i className="fas fa-expand"></i> Manage
                   </button>
+                </div>
+              )}
+
+              <button className="tv-start-btn" onClick={handleStartTv} title="Starts TV or skips to next if already playing">
+                <i className="fas fa-play"></i>
+                <span>Start TV</span>
+              </button>
+              <div className="tv-start-hint">Starts TV · Skips to next if already playing</div>
+
+              {tvUserState && tvUserState.playlist.length === 0 && (
+                <div className="tv-next-slot">
+                  <i className="fas fa-list"></i>
+                  <span>Your TV playlist is empty — add videos from the TV page</span>
                 </div>
               )}
             </div>
@@ -1843,17 +1720,17 @@ export default function AdminPage() {
                   <span>{radioNP?.station?.name || "Radio Station"}</span>
                 </div>
                 <div className="rh-badges">
-                  <div className={`rh-live-badge ${isAdminPlaying || radioBackendRunning ? "live" : "off"}`}>
+                  <div className={`rh-live-badge ${radioBackendRunning ? "live" : "off"}`}>
                     <span className="rh-live-dot"></span>
-                    {isAdminPlaying || radioBackendRunning ? "Live" : "Off Air"}
+                    {radioBackendRunning ? "Live" : "Off Air"}
                   </div>
                 </div>
               </div>
 
-              <div className="rh-main">
+              <div className="rh-main" style={{ cursor: "pointer" }} onClick={() => router.push("/admin/radio")}>
                 <div className="rh-art-wrap">
                   <div className="rh-art-ring"></div>
-                  <div className={`rh-art ${isAdminPlaying ? "spinning" : ""}`}>
+                  <div className="rh-art">
                     {nowPlaying.albumArt ? (
                       <img src={nowPlaying.albumArt} alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                     ) : (
@@ -1862,12 +1739,6 @@ export default function AdminPage() {
                       </div>
                     )}
                   </div>
-                  {isAdminPlaying && (
-                    <div className="rh-eq">
-                      <span></span><span></span><span></span><span></span>
-                    </div>
-                  )}
-                  {isAdminPlaying && <div className="rh-vinyl-lines"></div>}
                 </div>
 
                 <div className="rh-info">
@@ -1875,8 +1746,8 @@ export default function AdminPage() {
                   <div className="rh-track-artist">{nowPlaying.artist || "Not currently playing"}</div>
                 </div>
 
-                <button className={`rh-play-btn ${isAdminPlaying ? "playing" : ""}`} onClick={toggleAdminPlay}>
-                  <i className={`fas ${isAdminPlaying ? "fa-pause" : "fa-play"}`}></i>
+                <button className="rh-play-btn" onClick={() => router.push("/admin/radio")}>
+                  <i className="fas fa-headphones"></i>
                   <div className="rh-play-ring"></div>
                 </button>
               </div>
@@ -1897,7 +1768,7 @@ export default function AdminPage() {
           </section>
 
           {/* UPCOMING EVENTS */}
-          <EventCarousel />
+          <EventCarousel redirectUrl="/admin/content" />
 
           {/* PHOTO CAROUSEL */}
           <section className="feed-section">
@@ -2102,82 +1973,9 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* ACTIVITY FEED */}
-              <div className="widget-card">
-                <div className="widget-label">
-                  <i className="fas fa-bell" style={{ marginRight: 6, color: "var(--primary)" }}></i>
-                  Recent Activity
-                  {liveActivities.length > 0 && (
-                    <span className="act-count">{liveActivities.length}</span>
-                  )}
-                </div>
-                <div className="activity-filter">
-                  {["all", "radio", "videos", "content", "djs"].map((f) => (
-                    <button key={f} className={`af-btn ${activityFilter === f ? "active" : ""}`} onClick={() => setActivityFilter(f)}>
-                      {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
-                    </button>
-                  ))}
-                </div>
-                {filteredActivities.length === 0 ? (
-                  <div className="act-empty">
-                    <i className="fas fa-circle-info" style={{ fontSize: 18, color: "var(--text-tertiary)", marginBottom: 6 }}></i>
-                    <p>No activity yet. Start broadcasting to see events here.</p>
-                  </div>
-                ) : (
-                  filteredActivities.slice(0, 10).map((act) => (
-                    <div className="activity-item" key={act.id}>
-                      <div className="activity-icon-wrap">                          {act.albumArt ? (
-                            <img className="act-thumb" src={act.albumArt} alt="" />
-                          ) : (
-                            <div className={`activity-icon ${act.color}`}>
-                              <i className={`fas ${act.icon}`}></i>
-                            </div>
-                          )}
-                      </div>
-                      <div className="activity-text">{act.text}</div>
-                      <div className="activity-time" title={act.rawTime.toLocaleString()}>
-                        {timeAgo(act.rawTime)}
-                      </div>
-                    </div>
-                  ))
-                )}
-                {filteredActivities.length > 10 && (
-                  <button className="load-more-btn" onClick={() => {
-                    window.dispatchEvent(new CustomEvent("show-toast", {
-                      detail: { title: "View All", message: "Opening full activity log...", type: "info", duration: 2000 },
-                    }));
-                  }}>
-                    <i className="fas fa-chevron-down" style={{ marginRight: 6 }}></i>
-                    Show {filteredActivities.length - 10} more
-                  </button>
-                )}
-              </div>
 
-              {/* TODAY'S SCHEDULE */}
-              <div className="widget-card">
-                <div className="widget-label">
-                  <i className="fas fa-calendar-days" style={{ marginRight: 6, color: "var(--primary)" }}></i>
-                  Today&apos;s Schedule
-                </div>
-                <div className="schedule-timeline">
-                  {scheduleSlots.map((slot, i) => (
-                    <div className="schedule-slot" key={i}>
-                      <div className={`schedule-time${slot.isNow ? " now" : ""}`}>{slot.time}</div>
-                      <div className={`schedule-dot ${slot.isNow ? "active" : slot.hasContent ? "upcoming" : "warning"}`}></div>
-                      <div className="schedule-info">
-                        <div className={`schedule-label${!slot.hasContent ? " warning" : ""}`}>{slot.label}</div>
-                        {slot.source && <div className="schedule-source">{slot.source}</div>}
-                      </div>
-                      {slot.isNow && <span className="schedule-badge now">NOW</span>}
-                    </div>
-                  ))}
-                </div>
-                <div style={{ marginTop: 10 }}>
-                  <button className="np-btn secondary" style={{ width: "100%" }} onClick={() => window.dispatchEvent(new CustomEvent("show-toast", { detail: { title: "Add Schedule", message: "Navigate to Radio Station to add playlists", type: "info", duration: 2000 } }))}>
-                    <i className="fas fa-plus"></i> Add Schedule
-                  </button>
-                </div>
-              </div>
+
+
             </div>
 
             {/* RIGHT COLUMN */}
@@ -2271,67 +2069,10 @@ export default function AdminPage() {
               </div>
 
 
-              {/* CONTENT SUMMARY */}
-              <div className="swidget">
-                <div className="swidget-header">
-                  <div className="swidget-title">
-                    <i className="fas fa-photo-film"></i> Content Summary
-                  </div>
-                  {contentLoading && <i className="fas fa-spinner fa-spin" style={{ fontSize: 12, color: "var(--text-tertiary)" }}></i>}
-                </div>
-                <div className="cs-row" onClick={() => window.dispatchEvent(new CustomEvent("show-toast", { detail: { title: "Gallery", message: "Navigating to gallery...", type: "info", duration: 1500 } }))}>
-                  <div className="cs-icon blue"><i className="fas fa-images"></i></div>
-                  <div className="cs-info">
-                    <div className="cs-label">Gallery</div>
-                    <div className="cs-detail">{contentCounts.gallery} photos</div>
-                  </div>
-                  <div className="cs-detail">Last: {contentCounts.galleryLast}</div>
-                </div>
-                <div className="cs-row" onClick={() => window.dispatchEvent(new CustomEvent("show-toast", { detail: { title: "Videos", message: "Navigating to videos...", type: "info", duration: 1500 } }))}>
-                  <div className="cs-icon purple"><i className="fas fa-video"></i></div>
-                  <div className="cs-info">
-                    <div className="cs-label">Videos</div>
-                    <div className="cs-detail">{contentCounts.videos} total</div>
-                  </div>
-                  <div className="cs-detail">Sync: {contentCounts.videoSync}</div>
-                </div>
-              </div>
 
-              {/* STORAGE BREAKDOWN */}
-              <div className="swidget">
-                <div className="swidget-header">
-                  <div className="swidget-title">
-                    <i className="fas fa-database"></i> Storage
-                  </div>
-                  {contentLoading && <i className="fas fa-spinner fa-spin" style={{ fontSize: 12, color: "var(--text-tertiary)" }}></i>}
-                </div>
-                <div className="donut-container">
-                  <svg className="donut-svg" viewBox="0 0 100 100">
-                    {donutSegments.map((seg, i) => (
-                      <path key={i} d={seg.path} fill="none" stroke={seg.color} strokeWidth="8" strokeLinecap="round" />
-                    ))}                      <text x="50" y="46" textAnchor="middle" fill="var(--text-primary)" fontSize="16" fontWeight="800">{usedFormatted[0]}</text>
-                      <text x="50" y="58" textAnchor="middle" fill="var(--text-tertiary)" fontSize="9" fontWeight="500">{usedFormatted[1] || "B"}</text>
-                  </svg>
-                    <div className="donut-legend">
-                      {storageBreakdown.map((item, i) => (
-                        <div className="legend-item" key={i}>
-                          <div className="legend-color" style={{ background: item.color }}></div>
-                          <span className="legend-label">{item.label}</span>
-                          <span className="legend-size">{item.size}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                <div className="storage-total">
-                  Total: <strong>{formatBytes(storageTotal.used)}</strong> of {formatBytes(storageTotal.total)} used
-                </div>
-                <a className="manage-link" href="/admin/content">Manage Storage →</a>
-              </div>
             </div>
           </div>
 
-          {/* bottom spacer */}
-          <div style={{ height: 100 }}></div>
         </div>
 
         {/* QUICK ACTIONS FLOATING BAR */}
