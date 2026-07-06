@@ -8,9 +8,10 @@ import { hapticSuccess } from "@/lib/haptics";
 import { formatBytes } from "@/lib/bunny";
 import {
   getGalleryPhotos, addGalleryPhoto, updateGalleryPhoto, deleteGalleryPhoto,
-  getBanners, addBanner, updateBanner, deleteBanner,
 } from "@/lib/content";
-import type { GalleryPhoto, Banner } from "@/lib/content";
+import type { GalleryPhoto } from "@/lib/content";
+import { getEvents, addEvent, updateEvent, deleteEventById } from "@/lib/churchAiData";
+import type { EventItem } from "@/lib/churchAdminData";
 import { getAlbums, addAlbum, updateAlbum, deleteAlbum } from "@/lib/albums";
 import type { Album } from "@/lib/albums";
 import { getAlbumEntries, addAlbumEntry, updateAlbumEntry, deleteAlbumEntry } from "@/lib/albumEntries";
@@ -62,7 +63,7 @@ function AlbumCarousel({ photos }: { photos: GalleryPhoto[] }) {
 // ========== MAIN COMPONENT ==========
 
 export default function AdminContentPage() {
-  const [activeTab, setActiveTab] = useState<"gallery" | "banners" | "settings">("gallery");
+  const [activeTab, setActiveTab] = useState<"gallery" | "events" | "settings">("gallery");
   const [galleryView, setGalleryView] = useState<"grid" | "masonry" | "list">("grid");
   const [galleryFilter, setGalleryFilter] = useState("all");
   const [gallerySort, setGallerySort] = useState("newest");
@@ -72,9 +73,9 @@ export default function AdminContentPage() {
   // Real data state
   const [galleryPhotos, setGalleryPhotos] = useState<GalleryPhoto[]>([]);
   const [albums, setAlbums] = useState<Album[]>([]);
-  const [banners, setBanners] = useState<Banner[]>([]);
+  const [events, setEvents] = useState<EventItem[]>([]);
   const [loadingPhotos, setLoadingPhotos] = useState(true);
-  const [loadingBanners, setLoadingBanners] = useState(true);
+  const [loadingEvents, setLoadingEvents] = useState(true);
   const [savingEntity, setSavingEntity] = useState(false);
 
   // Album state
@@ -117,16 +118,19 @@ export default function AdminContentPage() {
   const [editAltText, setEditAltText] = useState("");
   const [editAlbumId, setEditAlbumId] = useState<string | undefined>(undefined);
 
-  // Banner modal
-  const [showBannerModal, setShowBannerModal] = useState(false);
-  const [editBanner, setEditBanner] = useState<Banner | null>(null);
-  const [bannerTitle, setBannerTitle] = useState("");
-  const [bannerSubtitle, setBannerSubtitle] = useState("");
-  const [bannerCtaText, setBannerCtaText] = useState("");
-  const [bannerCtaLink, setBannerCtaLink] = useState("");
-  const [bannerActive, setBannerActive] = useState(true);
-  const [bannerStart, setBannerStart] = useState("");
-  const [bannerEnd, setBannerEnd] = useState("");
+  // Events modal
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [editEvent, setEditEvent] = useState<EventItem | null>(null);
+  const [eventName, setEventName] = useState("");
+  const [eventDate, setEventDate] = useState("");
+  const [eventLocation, setEventLocation] = useState("");
+  const [eventDesc, setEventDesc] = useState("");
+  const [eventIsPaid, setEventIsPaid] = useState(false);
+  const [eventFee, setEventFee] = useState(0);
+  const [eventImageFile, setEventImageFile] = useState<File | null>(null);
+  const [eventImagePreview, setEventImagePreview] = useState("");
+  const [eventImageUploading, setEventImageUploading] = useState(false);
+  const eventImageInputRef = useRef<HTMLInputElement>(null);
 
   // Delete confirm
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -186,14 +190,14 @@ export default function AdminContentPage() {
 
   const fetchData = useCallback(async () => {
     setLoadingPhotos(true);
-    setLoadingBanners(true);
+    setLoadingEvents(true);
     await Promise.all([
       getGalleryPhotos().then(setGalleryPhotos).catch(() => setGalleryPhotos([])),
       getAlbums().then(setAlbums).catch(() => setAlbums([])),
-      getBanners().then(setBanners).catch(() => setBanners([])),
+      getEvents().then(setEvents).catch(() => setEvents([])),
     ]);
     setLoadingPhotos(false);
-    setLoadingBanners(false);
+    setLoadingEvents(false);
   }, []);
 
   // Load storage stats and data on mount
@@ -219,7 +223,7 @@ export default function AdminContentPage() {
       return 0;
     });
 
-  const sortedBanners = [...banners].sort((a, b) => a.order - b.order);
+  const sortedEvents = [...events].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   // ========== HANDLERS ==========
 
@@ -283,58 +287,78 @@ export default function AdminContentPage() {
     }
   }
 
-  function openBannerModal(banner?: Banner) {
-    if (banner) {
-      setEditBanner(banner);
-      setBannerTitle(banner.title);
-      setBannerSubtitle(banner.subtitle);
-      setBannerCtaText(banner.ctaText);
-      setBannerCtaLink(banner.ctaLink);
-      setBannerActive(banner.isActive);
-      setBannerStart(banner.startsAt);
-      setBannerEnd(banner.endsAt);
+  function openEventModal(event?: EventItem) {
+    if (event) {
+      setEditEvent(event);
+      setEventName(event.name);
+      setEventDate(event.date);
+      setEventLocation(event.location);
+      setEventDesc(event.desc);
+      setEventIsPaid(event.isPaid);
+      setEventFee(event.fee);
+      setEventImagePreview(event.imageUrl || "");
     } else {
-      setEditBanner(null);
-      setBannerTitle("");
-      setBannerSubtitle("");
-      setBannerCtaText("");
-      setBannerCtaLink("");
-      setBannerActive(true);
-      setBannerStart("");
-      setBannerEnd("");
+      setEditEvent(null);
+      setEventName("");
+      setEventDate(new Date().toISOString().slice(0, 16));
+      setEventLocation("");
+      setEventDesc("");
+      setEventIsPaid(false);
+      setEventFee(0);
+      setEventImagePreview("");
     }
-    setShowBannerModal(true);
+    setEventImageFile(null);
+    setShowEventModal(true);
   }
 
-  async function handleSaveBanner() {
+  async function handleSaveEvent() {
+    if (!eventName.trim()) return;
     setSavingEntity(true);
     try {
-      const data = {
-        title: bannerTitle,
-        subtitle: bannerSubtitle,
-        cdnUrl: editBanner?.cdnUrl || "",
-        ctaText: bannerCtaText,
-        ctaLink: bannerCtaLink,
-        order: editBanner?.order ?? banners.length + 1,
-        isActive: bannerActive,
-        startsAt: bannerStart,
-        endsAt: bannerEnd,
+      let imageUrl = eventImagePreview || "";
+      if (eventImageFile) {
+        setEventImageUploading(true);
+        const fd = new FormData();
+        fd.append("file", eventImageFile);
+        fd.append("church_id", churchId);
+        fd.append("category", "gallery");
+        const res = await apiFetch("/api/content/upload", { method: "POST", body: fd });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Image upload failed");
+        }
+        const result = await res.json();
+        imageUrl = result.cdn_url;
+        setEventImageUploading(false);
+      }
+      const data: Omit<EventItem, "id"> = {
+        name: eventName.trim(),
+        date: eventDate || new Date().toISOString(),
+        location: eventLocation.trim(),
+        desc: eventDesc.trim(),
+        isPaid: eventIsPaid,
+        fee: eventFee,
+        imageUrl,
+        rsvpRequired: false,
+        capacity: 0,
+        attendees: [],
       };
-      if (editBanner) {
-        await updateBanner(editBanner.id, data);
-        setBanners((prev) => prev.map((b) => (b.id === editBanner.id ? { ...b, ...data } : b)));
+      if (editEvent) {
+        await updateEvent(editEvent.id, data);
+        setEvents((prev) => prev.map((e) => (e.id === editEvent.id ? { ...e, ...data } : e)));
       } else {
-        const id = await addBanner(data);
-        setBanners((prev) => [...prev, { id, ...data }]);
+        await addEvent(data);
+        // Re-fetch to get the real saved data with correct ID
+        getEvents().then(setEvents).catch(() => {});
       }
       window.dispatchEvent(new CustomEvent("show-toast", {
-        detail: { title: editBanner ? "Banner Updated" : "Banner Created", message: `"${bannerTitle}" saved`, type: "success", duration: 2500 },
+        detail: { title: editEvent ? "Event Updated" : "Event Created", message: `"${eventName}" saved`, type: "success", duration: 2500 },
       }));
       await hapticSuccess();
-      setShowBannerModal(false);
+      setShowEventModal(false);
     } catch {
       window.dispatchEvent(new CustomEvent("show-toast", {
-        detail: { title: "Error", message: "Failed to save banner", type: "error", duration: 3000 },
+        detail: { title: "Error", message: "Failed to save event", type: "error", duration: 3000 },
       }));
     } finally {
       setSavingEntity(false);
@@ -366,21 +390,16 @@ export default function AdminContentPage() {
           detail: { title: "Deleted", message: `${targets.length} photos deleted permanently`, type: "success", duration: 3000 },
         }));
         await hapticSuccess();
-      } else if (type === "banners" && deleteTargetId) {
-        const item = banners.find((b) => b.id === deleteTargetId);
-        if (item?.storagePath) {
-          await apiFetch("/api/content/delete", {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ storage_paths: [item.storagePath] }),
-          });
+      } else if (type === "events" && deleteTargetId) {
+        const eventId = parseInt(deleteTargetId);
+        if (!isNaN(eventId)) {
+          await deleteEventById(eventId);
+          setEvents((prev) => prev.filter((e) => e.id !== eventId));
+          window.dispatchEvent(new CustomEvent("show-toast", {
+            detail: { title: "Deleted", message: `Event deleted`, type: "success", duration: 3000 },
+          }));
+          await hapticSuccess();
         }
-        await deleteBanner(deleteTargetId);
-        setBanners((prev) => prev.filter((b) => b.id !== deleteTargetId));
-        window.dispatchEvent(new CustomEvent("show-toast", {
-          detail: { title: "Deleted", message: `Banner deleted`, type: "success", duration: 3000 },
-        }));
-        await hapticSuccess();
       }
     } catch {
       window.dispatchEvent(new CustomEvent("show-toast", {
@@ -394,32 +413,7 @@ export default function AdminContentPage() {
     setSelectMode(false);
   }
 
-  function handleBannerDragStart(e: React.DragEvent, index: number) {
-    e.dataTransfer.setData("text/plain", index.toString());
-  }
 
-  async function handleBannerDrop(e: React.DragEvent, toIndex: number) {
-    e.preventDefault();
-    const fromIndex = parseInt(e.dataTransfer.getData("text/plain"));
-    if (isNaN(fromIndex)) return;
-    const items = [...banners];
-    const [moved] = items.splice(fromIndex, 1);
-    items.splice(toIndex, 0, moved);
-    const reordered = items.map((b, i) => ({ ...b, order: i + 1 }));
-    setBanners(reordered);
-    try {
-      await Promise.all(reordered.map((b) => updateBanner(b.id, { order: b.order })));
-      window.dispatchEvent(new CustomEvent("show-toast", {
-        detail: { title: "Reordered", message: "Banner order updated", type: "success", duration: 2000 },
-      }));
-      await hapticSuccess();
-    } catch {
-      window.dispatchEvent(new CustomEvent("show-toast", {
-        detail: { title: "Error", message: "Failed to save banner order", type: "error", duration: 3000 },
-      }));
-      fetchData();
-    }
-  }
 
   // ========== ALBUM HANDLERS ==========
 
@@ -1050,6 +1044,39 @@ export default function AdminContentPage() {
         .banner-image-upload i { font-size: 28px; }
         .banner-image-upload span { font-size: 13px; font-weight: 500; }
 
+        .event-image-upload-zone {
+          width: 100%; aspect-ratio: 16/9;
+          border-radius: var(--radius-md);
+          border: 2px dashed var(--border);
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+          gap: 8px; cursor: pointer;
+          transition: all 0.3s;
+          position: relative;
+          overflow: hidden;
+        }
+        .event-image-upload-zone:active {
+          border-color: var(--primary);
+          background: rgba(232,168,56,0.05);
+        }
+        .event-image-preview {
+          width: 100%; height: 100%;
+          object-fit: cover;
+          position: absolute; inset: 0;
+        }
+        .event-image-clear-btn {
+          position: absolute; top: 8px; right: 8px;
+          width: 28px; height: 28px;
+          border-radius: var(--radius-full);
+          background: rgba(0,0,0,0.6);
+          border: none; color: #fff;
+          font-size: 12px; cursor: pointer;
+          display: flex; align-items: center;
+          justify-content: center; z-index: 2;
+        }
+        .event-image-clear-btn:active {
+          background: rgba(255,255,255,0.2);
+        }
         .load-more-btn:active { background: var(--surface-elevated); }
 
         /* ========== IMAGE VIEWER ========== */
@@ -1169,8 +1196,8 @@ export default function AdminContentPage() {
           <button className={`tab-btn${activeTab === "gallery" ? " active" : ""}`} onClick={() => setActiveTab("gallery")}>
             <i className="fas fa-images"></i> Gallery
           </button>
-          <button className={`tab-btn${activeTab === "banners" ? " active" : ""}`} onClick={() => setActiveTab("banners")}>
-            <i className="fas fa-flag"></i> Banners
+          <button className={`tab-btn${activeTab === "events" ? " active" : ""}`} onClick={() => setActiveTab("events")}>
+            <i className="fas fa-calendar-alt"></i> Events
           </button>
           <button className={`tab-btn${activeTab === "settings" ? " active" : ""}`} onClick={() => setActiveTab("settings")}>
             <i className="fas fa-gear"></i> Settings
@@ -1396,61 +1423,114 @@ export default function AdminContentPage() {
             </>
           )}
 
-          {/* ===== TAB 2: BANNERS ===== */}
-          {activeTab === "banners" && (
+          {/* ===== TAB 2: EVENTS ===== */}
+          {activeTab === "events" && (
             <>
               <div style={{ padding: "12px 16px", display: "flex", gap: 10 }}>
-                <button className="btn-primary" style={{ flex: 1 }} onClick={() => openBannerModal()}>
-                  <i className="fas fa-plus"></i> Create Banner
+                <button className="btn-primary" style={{ flex: 1 }} onClick={() => openEventModal()}>
+                  <i className="fas fa-plus"></i> Create Event
                 </button>
               </div>
-              <div className="banners-list">
-                {loadingBanners ? (
+              <div className="events-list" style={{ padding: "0 16px" }}>
+                {loadingEvents ? (
                   [1,2,3].map((i) => (
-                    <div className="banner-item" key={i} style={{ cursor: "default" }}>
-                      <div className="skel skel-banner" />
-                      <div className="banner-info">
+                    <div className="event-card" key={i} style={{ display: "flex", gap: 12, padding: 14, background: "var(--surface-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", marginBottom: 10 }}>
+                      <div className="skel" style={{ width: 48, height: 48, borderRadius: 10, flexShrink: 0 }} />
+                      <div style={{ flex: 1 }}>
                         <div className="skel skel-line w60" />
                         <div className="skel skel-line w40" />
                       </div>
                     </div>
                   ))
-                ) : sortedBanners.map((banner, i) => (
-                  <div
-                    className="banner-item"
-                    key={banner.id}
-                    draggable
-                    onDragStart={(e) => handleBannerDragStart(e, i)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => handleBannerDrop(e, i)}
-                  >
-                    <div className="banner-thumb">
-                      <img src={banner.cdnUrl} alt={banner.title} loading="lazy" />
-                    </div>
-                    <div className="banner-info">
-                      <div className="banner-title">{banner.title}</div>
-                      <div className="banner-subtitle">{banner.subtitle}</div>
-                      <div className="banner-meta">
-                        <span>#{banner.order}</span>
-                        {banner.ctaText && <><span>·</span><span>{banner.ctaText}</span></>}
-                        {banner.startsAt && <><span>·</span><span>From {banner.startsAt}</span></>}
-                      </div>
-                    </div>
-                    <div className="banner-actions">
-                      <button className={`banner-toggle ${banner.isActive ? "active" : "inactive"}`} onClick={async () => {
-                        const next = !banner.isActive;
-                        setBanners((prev) => prev.map((b) => (b.id === banner.id ? { ...b, isActive: next } : b)));
-                        try { await updateBanner(banner.id, { isActive: next }); } catch { setBanners((prev) => prev.map((b) => (b.id === banner.id ? { ...b, isActive: banner.isActive } : b))); }
-                      }}></button>
-                      <button className="banner-icon-btn" onClick={() => openBannerModal(banner)}>
-                        <i className="fas fa-pen"></i>
-                      </button>
-                      <button className="banner-icon-btn" onClick={() => { setDeleteTargetId(banner.id); setDeleteTargets({ type: "banners", count: 1 }); setShowDeleteConfirm(true); }}>
-                        <i className="fas fa-trash"></i>
-                      </button>
-                    </div>
+                ) : sortedEvents.length === 0 ? (
+                  <div className="empty-state" style={{ padding: "40px 0" }}>
+                    <div className="empty-state-icon"><i className="fas fa-calendar-alt"></i></div>
+                    <h3>No events yet</h3>
+                    <p>Create your first event to show on both dashboards</p>
                   </div>
-                ))}
+                ) : (
+                  sortedEvents.map((ev) => {
+                    const d = new Date(ev.date);
+                    const day = d.getDate();
+                    const month = d.toLocaleString("en-US", { month: "short" });
+                    const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+                    return (
+                      <div className="event-item" key={ev.id} style={{
+                        display: "flex", gap: 12, padding: 14,
+                        background: "var(--surface-card)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "var(--radius-md)",
+                        marginBottom: 10,
+                        position: "relative",
+                        overflow: "hidden",
+                        transition: "all 0.2s",
+                      }}>
+                        {ev.imageUrl ? (
+                          <div style={{
+                            width: 56, height: 56, borderRadius: 10, flexShrink: 0,
+                            overflow: "hidden",
+                            border: "1px solid var(--border)",
+                          }}>
+                            <img src={ev.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          </div>
+                        ) : (
+                          <div style={{
+                            width: 48, height: 48, borderRadius: 10, flexShrink: 0,
+                            background: "rgba(232,168,56,0.08)",
+                            border: "1px solid rgba(232,168,56,0.15)",
+                            display: "flex", flexDirection: "column",
+                            alignItems: "center", justifyContent: "center",
+                          }}>
+                            <span style={{ fontSize: 16, fontWeight: 800, lineHeight: 1.2 }}>{day}</span>
+                            <span style={{ fontSize: 8, fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)" }}>{month}</span>
+                          </div>
+                        )}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{ev.name}</div>
+                          <div style={{ fontSize: 12, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
+                            <i className="fas fa-clock" style={{ fontSize: 10, color: "var(--text-tertiary)" }}></i>
+                            {time}
+                          </div>
+                          {ev.location && (
+                            <div style={{ fontSize: 12, color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4 }}>
+                              <i className="fas fa-location-dot" style={{ fontSize: 10, color: "var(--text-tertiary)" }}></i>
+                              {ev.location}
+                            </div>
+                          )}
+                          {ev.isPaid && ev.fee > 0 && (
+                            <div style={{
+                              marginTop: 4, fontSize: 11, fontWeight: 700,
+                              color: "var(--primary)",
+                              background: "rgba(232,168,56,0.08)",
+                              padding: "2px 8px", borderRadius: 6,
+                              display: "inline-block",
+                            }}>
+                              Ksh {ev.fee}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end", justifyContent: "center" }}>
+                          <button style={{
+                            width: 32, height: 32, borderRadius: "var(--radius-full)",
+                            background: "none", border: "none", color: "var(--text-tertiary)",
+                            fontSize: 14, cursor: "pointer", display: "flex",
+                            alignItems: "center", justifyContent: "center",
+                          }} onClick={() => openEventModal(ev)}>
+                            <i className="fas fa-pen"></i>
+                          </button>
+                          <button style={{
+                            width: 32, height: 32, borderRadius: "var(--radius-full)",
+                            background: "none", border: "none", color: "var(--text-tertiary)",
+                            fontSize: 14, cursor: "pointer", display: "flex",
+                            alignItems: "center", justifyContent: "center",
+                          }} onClick={() => { setDeleteTargetId(String(ev.id)); setDeleteTargets({ type: "events", count: 1 }); setShowDeleteConfirm(true); }}>
+                            <i className="fas fa-trash"></i>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
               <div style={{ height: "40px" }}></div>
             </>
@@ -1755,66 +1835,83 @@ export default function AdminContentPage() {
           </div>
         )}
 
-        {/* ========== CREATE/EDIT BANNER MODAL ========== */}
-        <div className={`modal-overlay${showBannerModal ? " active" : ""}`} onClick={(e) => { if (e.target === e.currentTarget) setShowBannerModal(false); }}>
+        {/* ========== CREATE/EDIT EVENT MODAL ========== */}
+        <div className={`modal-overlay${showEventModal ? " active" : ""}`} onClick={(e) => { if (e.target === e.currentTarget) setShowEventModal(false); }}>
           <div className="modal-sheet">
             <div className="modal-handle"></div>
             <div className="modal-header">
-              <h2>{editBanner ? "Edit Banner" : "Create Banner"}</h2>
-              <p>{editBanner ? "Update banner details" : "Create a promotional banner for the listener app"}</p>
+              <h2>{editEvent ? "Edit Event" : "Create Event"}</h2>
+              <p>Events appear on both admin and member dashboards</p>
             </div>
             <div className="modal-body">
-              {/* Preview */}
-              <div className="banner-preview-box">
-                <div className="banner-preview-label">Preview</div>
-                <div className="banner-preview-overlay">
-                  <div className="banner-preview-text">
-                    <h3>{bannerTitle || "Banner Title"}</h3>
-                    <p>{bannerSubtitle || "Banner subtitle goes here"}</p>
-                  </div>
+              {/* Event Image Upload */}
+              <div className="form-group">
+                <label>Event Image</label>
+                <div
+                  onClick={() => eventImageInputRef.current?.click()}
+                  style={{}}
+                  className="event-image-upload-zone"
+                >
+                  {eventImagePreview ? (
+                    <img src={eventImagePreview} alt="" className="event-image-preview" />
+                  ) : (
+                    <>
+                      <i className="fas fa-image" style={{ fontSize: 28, color: "var(--text-tertiary)" }}></i>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-tertiary)" }}>Tap to upload event image</span>
+                    </>
+                  )}
+                  {eventImagePreview && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEventImageFile(null); setEventImagePreview(""); }}
+                      className="event-image-clear-btn"
+                    >
+                      <i className="fas fa-xmark"></i>
+                    </button>
+                  )}
                 </div>
-              </div>
-
-              {/* Image upload placeholder */}
-              <div className="banner-image-upload">
-                <i className="fas fa-image"></i>
-                <span>Upload Banner Image (1200 × 400px recommended)</span>
-              </div>
-
-              <div className="form-group">
-                <label>Title</label>
-                <input className="form-input" value={bannerTitle} onChange={(e) => setBannerTitle(e.target.value)} placeholder="e.g., Good Friday Service" />
-              </div>
-              <div className="form-group">
-                <label>Subtitle</label>
-                <input className="form-input" value={bannerSubtitle} onChange={(e) => setBannerSubtitle(e.target.value)} placeholder="Optional subtitle" />
+                <input ref={eventImageInputRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setEventImageFile(file);
+                      setEventImagePreview(URL.createObjectURL(file));
+                    }
+                    e.target.value = "";
+                  }}
+                />
               </div>
               <div className="form-group">
-                <label>CTA Button Text</label>
-                <input className="form-input" value={bannerCtaText} onChange={(e) => setBannerCtaText(e.target.value)} placeholder="e.g., Register Now" />
+                <label>Event Name *</label>
+                <input className="form-input" value={eventName} onChange={(e) => setEventName(e.target.value)} placeholder="e.g. Youth Conference" />
               </div>
               <div className="form-group">
-                <label>CTA Link</label>
-                <input className="form-input" value={bannerCtaLink} onChange={(e) => setBannerCtaLink(e.target.value)} placeholder="https://..." />
+                <label>Date & Time</label>
+                <input className="form-input" type="datetime-local" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Show From</label>
-                  <input className="form-input" type="date" value={bannerStart} onChange={(e) => setBannerStart(e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label>Show Until</label>
-                  <input className="form-input" type="date" value={bannerEnd} onChange={(e) => setBannerEnd(e.target.value)} />
-                </div>
+              <div className="form-group">
+                <label>Location</label>
+                <input className="form-input" value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} placeholder="e.g. Main Sanctuary" />
+              </div>
+              <div className="form-group">
+                <label>Description</label>
+                <textarea className="form-textarea" value={eventDesc} onChange={(e) => setEventDesc(e.target.value)} placeholder="Brief description of the event..." />
               </div>
               <div className="toggle-row">
-                <span className="toggle-label">Active</span>
-                <button className={`toggle-switch ${bannerActive ? "on" : "off"}`} onClick={() => setBannerActive(!bannerActive)}></button>
+                <span className="toggle-label">Paid Event</span>
+                <button className={`toggle-switch ${eventIsPaid ? "on" : "off"}`} onClick={() => setEventIsPaid(!eventIsPaid)}></button>
               </div>
+              {eventIsPaid && (
+                <div className="form-group">
+                  <label>Fee (Ksh)</label>
+                  <input className="form-input" type="number" min="0" value={eventFee} onChange={(e) => setEventFee(parseInt(e.target.value) || 0)} placeholder="0" />
+                </div>
+              )}
             </div>
             <div className="modal-footer">
-              <button className="btn-primary" onClick={handleSaveBanner} disabled={savingEntity}>{savingEntity ? <><i className="fas fa-spinner fa-spin"></i> Saving...</> : editBanner ? "Save Changes" : "Create Banner"}</button>
-              <button className="btn-secondary" onClick={() => setShowBannerModal(false)}>Cancel</button>
+              <button className="btn-primary" onClick={handleSaveEvent} disabled={savingEntity || !eventName.trim()}>
+                {savingEntity ? <><i className="fas fa-spinner fa-spin"></i> Saving...</> : editEvent ? "Update Event" : "Create Event"}
+              </button>
+              <button className="btn-secondary" onClick={() => setShowEventModal(false)}>Cancel</button>
             </div>
           </div>
         </div>

@@ -10,6 +10,8 @@ import BottomNavBar from "@/components/shared/BottomNavBar";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import ToastBridge from "@/components/dashboard/ToastBridge";
+import EventCarousel from "@/components/dashboard/EventCarousel";
+import AlbumCarousel from "@/components/shared/AlbumCarousel";
 import { useImageLightbox } from "@/components/shared/ImageLightbox";
 import { getNowPlaying, getSongHistory, getStationId, getPlaylists } from "@/lib/azuracast";
 import { getAlbums } from "@/lib/albums";
@@ -937,10 +939,21 @@ export default function DashboardPage() {
               <i className="fas fa-external-link-alt"></i>
             </button>
           </div>
-        </div>
-      </section>
+        </div>          </section>
 
-      {/* Note: Audio is handled globally by AudioProvider at the layout level */}
+          {/* UPCOMING EVENTS */}
+          <EventCarousel />
+
+          {/* PHOTO CAROUSEL */}
+          <section className="feed-section">
+            <div className="section-header-inline">
+              <h2 className="section-title">Photo Gallery</h2>
+              <button className="section-link" onClick={() => router.push("/gallery")}>View All <i className="fas fa-chevron-right"></i></button>
+            </div>
+            <AlbumCarousel />
+          </section>
+
+          {/* Note: Audio is handled globally by AudioProvider at the layout level */}
 
       {/* RECENTLY PLAYED — glass premium cards */}
       {songHistory.length > 0 && (

@@ -18,6 +18,8 @@ import { getChannel, getVideos, getUserTvState, updateUserTvProgress, autoInitUs
 import type { YouTubeChannel, YouTubeVideo, UserTvState } from "@/lib/youtube";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import ToastBridge from "@/components/dashboard/ToastBridge";
+import EventCarousel from "@/components/dashboard/EventCarousel";
+import AlbumCarousel from "@/components/shared/AlbumCarousel";
 
 /* ==================================================================
    MOCK DATA
@@ -1892,6 +1894,18 @@ export default function AdminPage() {
                 </button>
               </div>
             </div>
+          </section>
+
+          {/* UPCOMING EVENTS */}
+          <EventCarousel />
+
+          {/* PHOTO CAROUSEL */}
+          <section className="feed-section">
+            <div className="section-header-inline">
+              <h2 className="section-title">Photo Gallery</h2>
+              <button className="section-link" onClick={() => router.push("/admin/content")}>Manage <i className="fas fa-chevron-right"></i></button>
+            </div>
+            <AlbumCarousel />
           </section>
 
           {/* STAT CARDS */}

@@ -68,6 +68,7 @@ export interface EventItem {
   date: string;
   location: string;
   desc: string;
+  imageUrl?: string;
   isPaid: boolean;
   fee: number;
   rsvpRequired: boolean;
