@@ -366,7 +366,7 @@ export default function TVPage() {
     };
   }, [saveTvProgress]);
 
-  // ─── App resume — re-fetch user's TV state ───
+  // ─── App resume — save on background, re-fetch on foreground (Android) ───
   useEffect(() => {
     let canceled = false;
     import("@capacitor/core")
@@ -378,7 +378,9 @@ export default function TVPage() {
         if (canceled || !AppModule) return;
         const { App } = AppModule;
         App.addListener("appStateChange", (state) => {
-          if (state.isActive) {
+          if (!state.isActive) {
+            saveTvProgress();
+          } else {
             const uid = auth.currentUser?.uid;
             if (uid) getUserTvState(uid).then((s) => setTvUserState(s));
           }
@@ -387,7 +389,7 @@ export default function TVPage() {
         });
       });
     return () => { canceled = true; };
-  }, []);
+  }, [saveTvProgress]);
 
   // ─── Tab visibility — re-fetch TV state when tab comes back into focus (web) ───
   useEffect(() => {

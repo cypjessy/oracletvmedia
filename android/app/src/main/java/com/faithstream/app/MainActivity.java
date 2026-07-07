@@ -6,6 +6,7 @@ import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Rational;
+import android.view.View;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
@@ -36,12 +37,39 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    /**
+     * Enables immersive sticky mode — app draws edge-to-edge behind the
+     * system bars. The status bar and navigation bar auto-hide, and reappear
+     * temporarily when the user swipes down (status bar) or up (nav bar).
+     * After a few seconds, they slide away again.
+     */
+    private void enableImmersiveMode() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11+ prefers the edge-to-edge display API
+            getWindow().setDecorFitsSystemWindows(false);
+        }
+        getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        );
+    }
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         // Register the PiP plugin
         registerPlugin(PiPPlugin.class);
+
+        // ── Immersive edge-to-edge mode ──
+        // The app draws behind system bars (status bar + navigation bar).
+        // System bars auto-hide and reappear on swipe (IMERSIVE_STICKY).
+        // When they slide away, the app returns to full screen.
+        enableImmersiveMode();
     }
 
     @Override
@@ -59,6 +87,8 @@ public class MainActivity extends BridgeActivity {
             // Ensure media playback doesn't require user gesture after initial play
             webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
         }
+        // Re-apply immersive mode (e.g., after returning from PiP)
+        enableImmersiveMode();
     }
 
     @Override
@@ -67,6 +97,16 @@ public class MainActivity extends BridgeActivity {
         // Keep WebView timers running so audio continues in background
         if (webView != null) {
             webView.resumeTimers();
+        }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        // When the window regains focus (system bars auto-hid after swipe),
+        // re-apply the immersive flags so bars stay hidden.
+        if (hasFocus) {
+            enableImmersiveMode();
         }
     }
 

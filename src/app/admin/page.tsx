@@ -161,12 +161,22 @@ export default function AdminPage() {
     }
   }, []);
 
+  // Advance to next video when current ends
+  const handleAdvanceToNext = useCallback(() => {
+    if (!tvUserState || tvUserState.playlist.length === 0) return;
+    const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
+    const uid = auth.currentUser?.uid;
+    if (uid) updateUserTvProgress(uid, nextIndex, 0);
+    setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
+  }, [tvUserState]);
+
   // Keep callbacks in sync with latest versions
   useEffect(() => {
     tvPlayer.setCallbacks({
+      onEnded: handleAdvanceToNext,
       onTimeUpdate: handleTvTimeUpdate,
     });
-  }, [handleTvTimeUpdate, tvPlayer]);
+  }, [handleAdvanceToNext, handleTvTimeUpdate, tvPlayer]);
 
   /* Save current progress to Firestore (used by interval + cleanup) */
   const saveTvProgress = useCallback(() => {
@@ -209,6 +219,33 @@ export default function AdminPage() {
       window.removeEventListener("beforeunload", handleUnload);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
+  }, [saveTvProgress]);
+
+  // ─── App resume — save on background, re-fetch on foreground (Android) ───
+  useEffect(() => {
+    let canceled = false;
+    import("@capacitor/core")
+      .then(({ Capacitor }) => {
+        if (canceled || !Capacitor.isNativePlatform()) return;
+        return import("@capacitor/app");
+      })
+      .then((AppModule) => {
+        if (canceled || !AppModule) return;
+        const { App } = AppModule;
+        App.addListener("appStateChange", (state) => {
+          if (!state.isActive) {
+            saveTvProgress();
+          } else {
+            const uid = auth.currentUser?.uid;
+            if (uid) {
+              getUserTvState(uid).then((s) => setTvUserState(s));
+            }
+          }
+        }).then((handler) => {
+          if (canceled) handler.remove();
+        });
+      });
+    return () => { canceled = true; };
   }, [saveTvProgress]);
 
   // Countdown timer on Start TV button (prevents premature clicks while video preloads)

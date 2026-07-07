@@ -372,7 +372,7 @@ export default function AdminTVPage() {
     }
     // Persist to Firestore for cross-session resume
     const uid = auth.currentUser?.uid;
-    if (uid && seek > 0) {
+    if (uid) {
       updateUserTvProgress(uid, index, seek);
     }
   }, []);
@@ -427,6 +427,43 @@ export default function AdminTVPage() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [allVideos.length]);
+
+  // ─── App resume — save on background, re-fetch on foreground (Android) ───
+  useEffect(() => {
+    let canceled = false;
+    import("@capacitor/core")
+      .then(({ Capacitor }) => {
+        if (canceled || !Capacitor.isNativePlatform()) return;
+        return import("@capacitor/app");
+      })
+      .then((AppModule) => {
+        if (canceled || !AppModule) return;
+        const { App } = AppModule;
+        App.addListener("appStateChange", (state) => {
+          if (!state.isActive) {
+            saveAdminTvProgress();
+          } else {
+            const uid = auth.currentUser?.uid;
+            if (uid) {
+              getUserTvState(uid).then((s) => {
+                if (s.currentIndex >= 0 && s.currentIndex < allVideos.length) {
+                  setCurrentTvIndex(s.currentIndex);
+                }
+                if (s.currentSeek > 0.1) {
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem(ADMIN_TV_SEEK_KEY, String(s.currentSeek));
+                  }
+                  lastAdminTvSeekRef.current = s.currentSeek;
+                }
+              });
+            }
+          }
+        }).then((handler) => {
+          if (canceled) handler.remove();
+        });
+      });
+    return () => { canceled = true; };
+  }, [saveAdminTvProgress, allVideos.length]);
 
   // Generate today's broadcast
   const handleGenerateBroadcast = useCallback(async () => {
