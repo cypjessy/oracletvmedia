@@ -9,6 +9,7 @@ import ForgotPasswordModal from "@/components/auth/ForgotPasswordModal";
 import PhoneLoginModal from "@/components/auth/PhoneLoginModal";
 import CountryPickerModal from "@/components/auth/CountryPickerModal";
 import RegisterModal from "@/components/auth/RegisterModal";
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 
 
 export default function LoginPage() {
@@ -665,7 +666,7 @@ export default function LoginPage() {
 
       <ToastProvider>
         <div className="app-container">
-          <div className="status-bar"></div>
+          <PremiumTopBar minimal />
           <div className="login-screen">
             <LoginForm />
           </div>

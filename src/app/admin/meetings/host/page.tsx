@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import ToastBridge from "@/components/dashboard/ToastBridge";
 import { useAppStore } from "@/lib/useAppStore";
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 import { getMeeting, updateMeeting, generateLiveKitToken, muteParticipant, getAgenda, toggleAgendaItem, getMinutes, saveMinutes, getActionItems, createActionItem, completeActionItem } from "@/lib/meetings";
 import type { Meeting, AgendaItem, ActionItem } from "@/lib/meetings";
 import { Room, RoomEvent, Track } from "livekit-client";
@@ -474,7 +475,6 @@ export default function AdminMeetingHostPage() {
           flex: 1;
           display: flex;
           flex-direction: column;
-          padding: env(safe-area-inset-top, 0px) 0 0;
         }
 
         /* TOP BAR */
@@ -1061,6 +1061,7 @@ export default function AdminMeetingHostPage() {
 
       <ToastBridge />
       <div className="host-page">
+        <PremiumTopBar minimal />
         <div className="bg-canvas">
           <div className="bg-orb"></div>
           <div className="bg-orb"></div>

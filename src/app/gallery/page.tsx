@@ -12,6 +12,7 @@ import type { Album } from "@/lib/albums";
 import type { AlbumEntry } from "@/lib/albumEntries";
 import { Timestamp, onSnapshot, query, orderBy, collection } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 
 
 // ========== MAIN COMPONENT ==========
@@ -197,7 +198,6 @@ export default function GalleryPage() {
         html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text-primary); }
         .app-container { height: 100%; display: flex; flex-direction: column; position: relative; overflow: hidden; }
         @media (min-width: 480px) { .app-container { max-width: 480px; margin: 0 auto; border-left: 1px solid var(--border); border-right: 1px solid var(--border); } }
-        .status-bar { height: env(safe-area-inset-top, 24px); min-height: 24px; background: var(--bg); flex-shrink: 0; }
 
         /* ========== HEADER — PREMIUM ========== */
         .header { padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; background: linear-gradient(180deg, rgba(15,15,15,0.98) 0%, rgba(15,15,15,0.92) 100%); backdrop-filter: blur(20px); z-index: 100; }
@@ -225,7 +225,7 @@ export default function GalleryPage() {
         .offline-banner { padding: 10px 16px; background: var(--error); color: #fff; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
 
         /* ========== HERO BANNER — PREMIUM ========== */
-        .hero-section { padding: 12px 16px 20px; }
+        .hero-section { padding: 12px 12px 20px; }
         .hero-carousel { position: relative; border-radius: var(--radius-xl); overflow: hidden; cursor: pointer; border: 1px solid var(--border); background: var(--surface); box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
         .hero-slide { width: 100%; aspect-ratio: 16/7; position: relative; overflow: hidden; }
         .hero-slide img { width: 100%; height: 100%; object-fit: cover; transition: transform 6s ease; }
@@ -243,14 +243,14 @@ export default function GalleryPage() {
         .hero-nav.prev { left: 10px; } .hero-nav.next { right: 10px; }
 
         /* ========== SECTION HEADERS — PREMIUM ========== */
-        .section-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 16px 14px; }
+        .section-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 12px 14px; }
         .section-title { font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 10px; letter-spacing: -0.3px; }
         .section-title-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #fff; flex-shrink: 0; }
         .section-see-all { font-size: 12px; color: var(--primary); font-weight: 700; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 6px 14px; border-radius: 20px; background: rgba(232,168,56,0.08); border: 1px solid rgba(232,168,56,0.15); transition: all 0.2s; }
         .section-see-all:active { background: rgba(232,168,56,0.15); transform: scale(0.95); }
 
         /* ========== HORIZONTAL SCROLL — PREMIUM ========== */
-        .h-scroll { display: flex; gap: 12px; overflow-x: auto; padding: 0 16px 8px; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; }
+        .h-scroll { display: flex; gap: 12px; overflow-x: auto; padding: 0 12px 8px; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; }
         .h-scroll::-webkit-scrollbar { display: none; }
         .h-scroll > * { scroll-snap-align: start; flex-shrink: 0; }
 
@@ -269,7 +269,7 @@ export default function GalleryPage() {
         .feat-date { font-size: 10px; color: var(--text-tertiary); }
 
         /* ========== RECENT GRID — PREMIUM ========== */
-        .recent-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 16px; }
+        .recent-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 12px; }
         .recent-grid-item { position: relative; border-radius: var(--radius-md); overflow: hidden; cursor: pointer; border: 1px solid var(--border); transition: all 0.3s ease; }
         .recent-grid-item:active { transform: scale(0.95); }
         .recent-grid-item:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
@@ -280,7 +280,7 @@ export default function GalleryPage() {
         .recent-grid-label { font-size: 11px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
         /* ========== PHOTO GRID — PREMIUM ========== */
-        .photo-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 0 16px; }
+        .photo-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 0 12px; }
         .photo-item { position: relative; border-radius: var(--radius-md); overflow: hidden; cursor: pointer; border: 1px solid var(--border); transition: all 0.3s ease; background: var(--surface); }
         .photo-item:active { transform: scale(0.96); }
         .photo-item img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; transition: transform 0.4s; }
@@ -289,7 +289,7 @@ export default function GalleryPage() {
         .photo-item-title { position: absolute; bottom: 0; left: 0; right: 0; padding: 14px 10px 10px; background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent); font-size: 12px; font-weight: 600; color: #fff; }
 
         /* ========== GALLERY TAB TOOLBAR ========== */
-        .gallery-toolbar { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+        .gallery-toolbar { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
         .gallery-search { position: relative; }
         .gallery-search i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); font-size: 15px; }
         .gallery-search input { width: 100%; padding: 12px 14px 12px 42px; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); font-size: 14px; font-weight: 500; outline: none; transition: all 0.2s; }
@@ -298,7 +298,7 @@ export default function GalleryPage() {
         .gallery-chip { padding: 7px 16px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); color: var(--text-secondary); font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: all 0.2s; flex-shrink: 0; }
         .gallery-chip:active { transform: scale(0.95); }
         .gallery-chip.active { background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); border-color: transparent; color: #fff; box-shadow: 0 4px 12px rgba(232,168,56,0.2); }
-        .gallery-count { font-size: 12px; color: var(--text-tertiary); padding: 0 16px 4px; font-weight: 500; }
+        .gallery-count { font-size: 12px; color: var(--text-tertiary); padding: 0 12px 4px; font-weight: 500; }
 
         /* ========== ALBUM CARD — PREMIUM ========== */
         .album-card { border-radius: var(--radius-lg); overflow: hidden; cursor: pointer; border: 1px solid var(--border); background: var(--surface-card); transition: all 0.35s cubic-bezier(0.4,0,0.2,1); }
@@ -315,7 +315,7 @@ export default function GalleryPage() {
         .album-meta { font-size: 13px; color: var(--text-tertiary); display: flex; align-items: center; gap: 8px; }
 
         /* ========== ALBUM GRID ========== */
-        .album-grid { display: grid; gap: 16px; padding: 0 16px; }
+        .album-grid { display: grid; gap: 16px; padding: 0 12px; }
 
         /* ========== ENTRY CARD ========== */
         .entry-card { border-radius: var(--radius-lg); overflow: hidden; cursor: pointer; border: 1px solid var(--border); background: var(--surface-card); transition: all 0.3s ease; }
@@ -342,7 +342,7 @@ export default function GalleryPage() {
         .view-toggle-btn.active { background: var(--surface-elevated); color: var(--primary); border-color: var(--primary); }
 
         /* ========== PHOTO MASONRY ========== */
-        .photo-masonry { columns: 2; column-gap: 10px; padding: 0 16px; }
+        .photo-masonry { columns: 2; column-gap: 10px; padding: 0 12px; }
         .photo-masonry-item { break-inside: avoid; margin-bottom: 10px; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border); cursor: pointer; position: relative; transition: all 0.2s; }
         .photo-masonry-item:active { transform: scale(0.97); }
         .photo-masonry-item img { width: 100%; display: block; }
@@ -364,7 +364,7 @@ export default function GalleryPage() {
       <ToastBridge />
 
       <div className="app-container">
-        <div className="status-bar"></div>
+        <PremiumTopBar icon="fa-images" title="Kingdom Seekers Church" subtitle="Photo Gallery" />
 
         {/* ========== OFFLINE BANNER ========== */}
         {offline && (
@@ -373,16 +373,6 @@ export default function GalleryPage() {
             <span>You&apos;re offline — showing cached content</span>
           </div>
         )}
-
-        {/* ========== HEADER ========== */}
-        <div className="header">
-          <div className="header-logo"><i className="fas fa-images"></i></div>
-          <div className="header-info">
-            <div className="header-church">Kingdom Seekers Church Nakuru</div>
-          </div>
-          <div className="header-actions">
-          </div>
-        </div>
 
         {/* ========== TABS ========== */}
         <div className="tabs-bar">

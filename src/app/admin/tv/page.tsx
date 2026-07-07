@@ -25,7 +25,7 @@ import { churchConfig } from "@/lib/churchConfig";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import { useTvPlayer } from "@/lib/tv/TvPlayerProvider";
 import ToastBridge from "@/components/dashboard/ToastBridge";
-import PremiumLoader from "@/components/shared/PremiumLoader";
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 
 export default function AdminTVPage() {
   const router = useRouter();
@@ -77,18 +77,6 @@ export default function AdminTVPage() {
     }
   }, []);
 
-  // Countdown timer on Start TV button (prevents premature clicks while video preloads)
-  useEffect(() => {
-    setTvStartCountdown(10);
-    const t = setInterval(() => {
-      setTvStartCountdown((prev) => {
-        if (prev <= 1) { clearInterval(t); return 0; }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(t);
-  }, []);
-
   // Firestore-backed TV progress (persists across browser sessions like member dashboard)
   const [tvFirestoreLoaded, setTvFirestoreLoaded] = useState(false);
 
@@ -97,7 +85,6 @@ export default function AdminTVPage() {
   );
   const [broadcasting, setBroadcasting] = useState(false);
   const [broadcastSlotCount, setBroadcastSlotCount] = useState(0);
-  const [tvStartCountdown, setTvStartCountdown] = useState(10);
   // ─── External video paste ───
   const [externalUrl, setExternalUrl] = useState("");
   const [externalAdding, setExternalAdding] = useState(false);
@@ -112,7 +99,6 @@ export default function AdminTVPage() {
   const cachedAdminSeek = typeof window !== "undefined" ? Number(localStorage.getItem(ADMIN_TV_SEEK_KEY)) || 0 : 0;
   const lastAdminTvSeekRef = useRef(0);
   const lastAdminTvIndexRef = useRef(0);
-  const hasInteractedWithTv = useRef(false);
 
   // Load current channel data + restore Firestore TV state
   useEffect(() => {
@@ -338,27 +324,6 @@ export default function AdminTVPage() {
 
   const currentVideo = allVideos.length > 0 ? allVideos[currentTvIndex >= allVideos.length ? 0 : currentTvIndex] : null;
 
-  // Start TV — resume saved progress, or advance if already interacted
-  const handleStartTv = useCallback(() => {
-    if (allVideos.length === 0) {
-      window.dispatchEvent(new CustomEvent("show-toast", {
-        detail: { title: "No Videos", message: "No videos available. Sync a YouTube channel first.", type: "info", duration: 3000 }
-      }));
-      return;
-    }
-    if (currentVideo && hasInteractedWithTv.current) {
-      const nextIndex = (currentTvIndex + 1) % allVideos.length;
-      setCurrentTvIndex(nextIndex);
-      if (auth.currentUser?.uid) updateUserTvProgress(auth.currentUser.uid, nextIndex, 0);
-      return;
-    }
-    hasInteractedWithTv.current = true;
-    if (!currentVideo) {
-      const resumeIndex = currentTvIndex < allVideos.length ? currentTvIndex : 0;
-      setCurrentTvIndex(resumeIndex);
-    }
-  }, [currentVideo, currentTvIndex, allVideos.length]);
-
   // Sync index ref when currentTvIndex changes + update localStorage
   useEffect(() => {
     lastAdminTvIndexRef.current = currentTvIndex;
@@ -376,16 +341,14 @@ export default function AdminTVPage() {
     if (typeof window !== "undefined") {
       localStorage.setItem(ADMIN_TV_SEEK_KEY, String(time));
     }
-    // Log every 10 seconds to avoid spam
-    if (Math.floor(time) % 10 === 0) {
-      console.log('[Admin TV Time Update]', { time, currentIndex: lastAdminTvIndexRef.current });
-    }
   }, []);
 
-  // Call play() when current video changes — skip if global player already on this video
+  // Call play() when current video changes
+  // NOTE: No else/hide branch — keeping the player alive across async loads
+  // prevents unnecessary destruction/recreation of the YouTube iframe.
+  // The player is restored from localStorage seek on mount.
   useEffect(() => {
     if (currentVideo) {
-      if (adminTvPlayer.currentVideoId === currentVideo.id && adminTvPlayer.visible) return;
       adminTvPlayer.play(currentVideo.id, adminTvInitialSeek);
     }
   }, [currentVideo?.id, adminTvInitialSeek, adminTvPlayer]);
@@ -402,7 +365,6 @@ export default function AdminTVPage() {
   const saveAdminTvProgress = useCallback(() => {
     const seek = lastAdminTvSeekRef.current;
     const index = lastAdminTvIndexRef.current;
-    console.log('[Admin TV Progress] Saving:', { index, seek });
     // Always persist to localStorage for instant cross-page resume
     if (typeof window !== "undefined") {
       localStorage.setItem(ADMIN_TV_SEEK_KEY, String(seek));
@@ -410,12 +372,10 @@ export default function AdminTVPage() {
     }
     // Persist to Firestore for cross-session resume
     const uid = auth.currentUser?.uid;
-    if (uid) {
-      updateUserTvProgress(uid, index, seek).catch((err) => {
-        console.error('[Admin TV Progress] Failed to save to Firestore:', err);
-      });
+    if (uid && seek > 0) {
+      updateUserTvProgress(uid, index, seek);
     }
-  }, [ADMIN_TV_SEEK_KEY, ADMIN_TV_INDEX_KEY]);
+  }, []);
 
   // Periodically save seek position (every 5s)
   useEffect(() => {
@@ -440,35 +400,25 @@ export default function AdminTVPage() {
     };
   }, [saveAdminTvProgress]);
 
-  // Tab visibility — save on hide, merge remote state on show (web)
+  // Tab visibility — restore TV state from Firestore when tab becomes visible (web)
   useEffect(() => {
     const handleVisibilityChange = async () => {
-      if (document.visibilityState === "hidden") {
-        saveAdminTvProgress();
-        return;
-      }
-      console.log('[Admin Tab Visible] Tab became visible');
-      saveAdminTvProgress();
-      const uid = auth.currentUser?.uid;
-      if (uid) {
-        try {
-          const state = await getUserTvState(uid);
-          const liveSeek = lastAdminTvSeekRef.current;
-          const liveIndex = lastAdminTvIndexRef.current;
-          const mergedSeek = Math.max(state.currentSeek, liveSeek);
-          const mergedIndex = adminTvPlayer.visible ? liveIndex : state.currentIndex;
-          console.log('[Admin Tab Visible] Merged state:', { index: mergedIndex, seek: mergedSeek });
-          if (mergedIndex >= 0 && mergedIndex < allVideos.length) {
-            setCurrentTvIndex(mergedIndex);
-          }
-          if (mergedSeek > 0.1) {
-            if (typeof window !== "undefined") {
-              localStorage.setItem(ADMIN_TV_SEEK_KEY, String(mergedSeek));
+      if (document.visibilityState === "visible") {
+        const uid = auth.currentUser?.uid;
+        if (uid) {
+          // Re-fetch TV state from Firestore to pick up changes from other tabs/pages
+          try {
+            const state = await getUserTvState(uid);
+            if (state.currentIndex >= 0 && state.currentIndex < allVideos.length) {
+              setCurrentTvIndex(state.currentIndex);
             }
-            lastAdminTvSeekRef.current = mergedSeek;
-          }
-        } catch (err) {
-          console.error('[Admin Tab Visible] Failed to fetch state:', err);
+            if (state.currentSeek > 0.1) {
+              if (typeof window !== "undefined") {
+                localStorage.setItem(ADMIN_TV_SEEK_KEY, String(state.currentSeek));
+              }
+              lastAdminTvSeekRef.current = state.currentSeek;
+            }
+          } catch {}
         }
       }
     };
@@ -476,49 +426,7 @@ export default function AdminTVPage() {
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [saveAdminTvProgress, adminTvPlayer, allVideos.length, ADMIN_TV_SEEK_KEY]);
-
-  // App resume — save on background, merge remote state on foreground (Android)
-  useEffect(() => {
-    let canceled = false;
-    import("@capacitor/core")
-      .then(({ Capacitor }) => {
-        if (canceled || !Capacitor.isNativePlatform()) return;
-        return import("@capacitor/app");
-      })
-      .then((AppModule) => {
-        if (canceled || !AppModule) return;
-        const { App } = AppModule;
-        App.addListener("appStateChange", async (state) => {
-          if (!state.isActive) {
-            saveAdminTvProgress();
-            return;
-          }
-          saveAdminTvProgress();
-          const uid = auth.currentUser?.uid;
-          if (!uid) return;
-          try {
-            const remote = await getUserTvState(uid);
-            const liveSeek = lastAdminTvSeekRef.current;
-            const liveIndex = lastAdminTvIndexRef.current;
-            const mergedSeek = Math.max(remote.currentSeek, liveSeek);
-            const mergedIndex = adminTvPlayer.visible ? liveIndex : remote.currentIndex;
-            if (mergedIndex >= 0 && mergedIndex < allVideos.length) {
-              setCurrentTvIndex(mergedIndex);
-            }
-            if (mergedSeek > 0.1) {
-              if (typeof window !== "undefined") {
-                localStorage.setItem(ADMIN_TV_SEEK_KEY, String(mergedSeek));
-              }
-              lastAdminTvSeekRef.current = mergedSeek;
-            }
-          } catch {}
-        }).then((handler) => {
-          if (canceled) handler.remove();
-        });
-      });
-    return () => { canceled = true; };
-  }, [saveAdminTvProgress, adminTvPlayer, allVideos.length, ADMIN_TV_SEEK_KEY]);
+  }, [allVideos.length]);
 
   // Generate today's broadcast
   const handleGenerateBroadcast = useCallback(async () => {
@@ -1478,7 +1386,6 @@ export default function AdminTVPage() {
         html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text-primary); }
         .app-container { height: 100%; display: flex; flex-direction: column; position: relative; overflow: hidden; }
         @media (min-width: 480px) { .app-container { max-width: 480px; margin: 0 auto; } }
-        .status-bar { height: env(safe-area-inset-top, 24px); min-height: 24px; background: var(--bg); flex-shrink: 0; }
 
         .header {
           padding: 12px 16px; display: flex; align-items: center; gap: 12px;
@@ -1497,7 +1404,7 @@ export default function AdminTVPage() {
         .content-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 80px; }
         .content-scroll::-webkit-scrollbar { display: none; }
 
-        .section { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+        .section { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 
 
         .channel-card {
@@ -1719,7 +1626,7 @@ export default function AdminTVPage() {
         .tv-top-header-btn:active { background: rgba(255,255,255,0.12); transform: scale(0.9); }
 
         .feed-section { padding: 0 var(--section-px, 16px) 16px; }
-        .feed-section { --section-px: 16px; }
+        .feed-section { --section-px: 12px; }
 
         .tv-top-wrap {
           margin: 0 calc(-1 * var(--section-px, 16px));
@@ -1849,21 +1756,6 @@ export default function AdminTVPage() {
           position: relative;
         }
         .tv-no-video i { font-size: 28px; opacity: 0.4; }
-        .tv-start-btn {
-          display: flex; align-items: center; justify-content: center; gap: 8px;
-          width: calc(100% - 32px); padding: 14px;
-          margin: 8px 16px 0;
-          border-radius: var(--radius-md);
-          background: linear-gradient(135deg, #3B82F6, #6366F1);
-          border: none; color: #fff;
-          font-size: 14px; font-weight: 700;
-          cursor: pointer; transition: all 0.2s ease;
-          position: relative; z-index: 1;
-        }
-        .tv-start-btn:active { transform: scale(0.97); }
-        .tv-start-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
-        .tv-start-btn i { font-size: 13px; }
-        .tv-start-hint { font-size: 10px; color: var(--text-tertiary); text-align: center; padding: 4px 16px 0; opacity: 0.7; }
         .tv-channel-strip {
           display: flex; align-items: center; gap: 12px;
           padding: 10px 12px;
@@ -1878,11 +1770,9 @@ export default function AdminTVPage() {
           overflow: hidden; flex-shrink: 0;
           background: var(--surface-elevated);
           display: flex; align-items: center; justify-content: center;
-          position: relative;
         }
         .tv-channel-avatar img { width: 100%; height: 100%; object-fit: cover; }
         .tv-channel-avatar i { font-size: 16px; color: #FF0000; }
-        .tv-avatar-img { position: absolute; inset: 0; border-radius: 50%; }
         .tv-channel-info { flex: 1; min-width: 0; }
         .tv-channel-name { font-size: 13px; font-weight: 700; }
         .tv-channel-meta { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
@@ -2165,7 +2055,7 @@ export default function AdminTVPage() {
       <ToastBridge />
 
       <div className="app-container">
-        <div className="status-bar"></div>
+        <PremiumTopBar />
 
         {/* ─── TOP HEADER BAR (matches member TV page) ─── */}
         <div className="tv-top-header">
@@ -2254,9 +2144,10 @@ export default function AdminTVPage() {
 
                   <div className="tv-channel-strip">
                     <div className="tv-channel-avatar">
-                      <i className="fab fa-youtube"></i>
-                      {channel.thumbnail && (
-                        <img src={channel.thumbnail.replace(/^http:/, 'https:')} alt={channel.title} referrerPolicy="no-referrer" crossOrigin="anonymous" onError={(e) => { e.currentTarget.style.display = 'none'; }} className="tv-avatar-img" />
+                      {channel.thumbnail ? (
+                        <img src={channel.thumbnail} alt={channel.title} />
+                      ) : (
+                        <i className="fab fa-youtube"></i>
                       )}
                     </div>
                     <div className="tv-channel-info">
@@ -2267,18 +2158,15 @@ export default function AdminTVPage() {
                       <i className="fas fa-expand"></i> Manage
                     </button>
                   </div>
-
-                  <button className="tv-start-btn" onClick={handleStartTv} title={tvStartCountdown > 0 ? `Ready in ${tvStartCountdown}s` : "Starts TV or skips to next if already playing"} disabled={tvStartCountdown > 0}>
-                    <i className="fas fa-play"></i>
-                    <span>{tvStartCountdown > 0 ? `Starting in ${tvStartCountdown}s` : 'Start TV'}</span>
-                  </button>
-                  <div className="tv-start-hint">Starts TV · Skips to next if already playing</div>
                 </div>
               </section>
             )}
 
             {loading ? (
-              <PremiumLoader />
+              <div className="loading-state">
+                <i className="fas fa-tv"></i>
+                <span>Loading TV settings...</span>
+              </div>
             ) : (
               <div className="section">
                 {renderAdminTabContent()}

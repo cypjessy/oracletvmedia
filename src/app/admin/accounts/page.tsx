@@ -8,6 +8,7 @@ import { hapticSuccess } from "@/lib/haptics";
 import type { Timestamp } from "firebase/firestore";
 import { getAdminUsers } from "@/lib/users";
 import type { UserProfile } from "@/lib/users";
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 
 export default function AdminAccountsPage() {
   const router = useRouter();
@@ -337,15 +338,11 @@ export default function AdminAccountsPage() {
       `}</style>
 
       <div className="app-container">
-        <div className="status-bar" />
-
-        <div className="header">
-          <button className="header-back" onClick={() => router.push("/admin")}>
-            <i className="fas fa-chevron-left"></i>
-          </button>
-          <div className="header-title">Admin Accounts</div>
-          <div className="header-actions" />
-        </div>
+        <PremiumTopBar
+          showBack
+          onBack={() => router.push("/admin")}
+          title="Admin Accounts"
+        />
 
         <div className="content-scroll">
           <div className="invite-card">

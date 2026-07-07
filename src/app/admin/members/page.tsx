@@ -8,6 +8,7 @@ import AllMembersList from "@/components/admin/AllMembersList";
 import { getUsersPage, updateUserRole, getUserByEmail } from "@/lib/users";
 import type { UserProfile } from "@/lib/users";
 import type { DocumentSnapshot } from "firebase/firestore";
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 
 type Tab = "admin" | "member";
 
@@ -160,12 +161,6 @@ export default function AdminMembersPage() {
             }
         }
 
-        .status-bar {
-            height: env(safe-area-inset-top, 24px);
-            min-height: 24px;
-            background: var(--bg);
-            flex-shrink: 0;
-        }
 
         .header {
             padding: 8px 20px 12px;
@@ -617,17 +612,26 @@ export default function AdminMembersPage() {
       <ToastBridge />
 
       <div className="app-container">
-        <div className="status-bar"></div>
-
-        <header className="header">
-          <button className="header-back" onClick={() => window.history.back()}><i className="fas fa-arrow-left"></i></button>
-          <h1 className="header-title">Members</h1>
-          <div className="header-actions">
-            <button className="header-btn" onClick={() => setShowAddAdmin(true)} title="Add Admin">
+        <PremiumTopBar
+          showBack
+          title="Members"
+          rightContent={
+            <button
+              onClick={() => setShowAddAdmin(true)}
+              style={{
+                width: 36, height: 36, borderRadius: "50%",
+                background: "var(--surface, #1A1A1A)",
+                border: "1px solid var(--border, #2A2A2A)",
+                color: "var(--text-primary, #fff)",
+                fontSize: 15, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+              title="Add Admin"
+            >
               <i className="fas fa-user-plus"></i>
             </button>
-          </div>
-        </header>
+          }
+        />
 
         <div className="tabs" style={{ padding: "0 20px 12px", flexShrink: 0 }}>
           <div style={{ display: "flex", gap: "6px", background: "var(--surface)", borderRadius: "var(--radius-md)", padding: "4px" }}>

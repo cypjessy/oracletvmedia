@@ -7,6 +7,7 @@ import ToastBridge from "@/components/dashboard/ToastBridge";
 import { getNowPlaying, getSongHistory, getSettings, getStreamers, getApiBase, getStationId } from "@/lib/azuracast";
 import type { NowPlayingData, SongHistoryItem, StationSettings, Streamer } from "@/lib/azuracast";
 import { churchConfig } from "@/lib/churchConfig";
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 
 export default function RadioPage() {
   const router = useRouter();
@@ -106,10 +107,9 @@ export default function RadioPage() {
 
         .app-container { height: 100%; display: flex; flex-direction: column; position: relative; overflow: hidden; }
         @media (min-width: 480px) { .app-container { max-width: 480px; margin: 0 auto; border-left: 1px solid var(--border); border-right: 1px solid var(--border); } }
-        .status-bar { height: env(safe-area-inset-top, 24px); min-height: 24px; background: var(--bg); flex-shrink: 0; }
 
         /* ===== PREMIUM HEADER ===== */
-        .header { padding: 8px 16px 12px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; background: var(--bg); border-bottom: 1px solid var(--border); padding-top: calc(8px + env(safe-area-inset-top, 0px)); }
+        .header { padding: 8px 16px 12px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; background: var(--bg); border-bottom: 1px solid var(--border); }
         .header-back { width: 40px; height: 40px; border-radius: var(--radius-full); background: var(--surface); border: none; color: var(--text-primary); font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: all 0.2s ease; }
         .header-back:active { background: var(--surface-elevated); transform: scale(0.92); }
         .header-info { flex: 1; min-width: 0; }
@@ -132,7 +132,7 @@ export default function RadioPage() {
         /* ===== CONTENT SCROLL ===== */
         .content-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; padding-bottom: 80px; }
         .content-scroll::-webkit-scrollbar { display: none; }
-        .content-inner { padding: 16px; display: flex; flex-direction: column; gap: 20px; }
+        .content-inner { padding: 12px; display: flex; flex-direction: column; gap: 16px; }
 
         /* ===== MESSAGE CARD (loading/empty) ===== */
         .msg-card { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center; gap: 12px; }
@@ -299,7 +299,7 @@ export default function RadioPage() {
       `}</style>
 
       <div className="app-container">
-        <div className="status-bar"></div>
+        <PremiumTopBar minimal />
 
         {/* ===== PREMIUM HEADER ===== */}
         <header className="header">
@@ -331,7 +331,8 @@ export default function RadioPage() {
                   <iframe
                     src="https://azuracast.histoview.co.ke/public/turningpoint_church/embed?primary_color=E8A838&bg_color=1A1A1A&volume=100&rounded=1&allow_popup=1&continuous=1"
                     frameBorder="0"
-                    allowTransparency={true}
+                    // @ts-expect-error - React 19 requires lowercase HTML attributes
+                    allowtransparency
                     allow="autoplay; encrypted-media; fullscreen"
                     sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
                     loading="eager"

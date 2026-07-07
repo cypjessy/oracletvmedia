@@ -7,6 +7,7 @@ import {
   type PaymentMethod,
 } from "@/lib/giving";
 import { auth } from "@/lib/firebase";
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 
 export default function GivePage() {
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
@@ -84,10 +85,11 @@ export default function GivePage() {
       minHeight: "100dvh", background: "#0F0F0F", color: "#fff",
       fontFamily: "system-ui, sans-serif",
     }}>
+      <PremiumTopBar minimal />
       {/* Header */}
       <div style={{
         background: "linear-gradient(180deg, rgba(16,185,129,0.08) 0%, transparent 100%)",
-        padding: "48px 24px 32px", textAlign: "center",
+        padding: "24px 24px 32px", textAlign: "center",
         borderBottom: "1px solid rgba(255,255,255,0.06)",
       }}>
         <div style={{ fontSize: 48, marginBottom: 12 }}>💰</div>

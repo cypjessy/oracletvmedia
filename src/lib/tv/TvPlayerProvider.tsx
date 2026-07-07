@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useRef, useState, useCallback, useEffect, useMemo } from "react";
+import { createContext, useContext, useRef, useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
 import PlyrPlayer from "@/components/tv/PlyrPlayer";
 
@@ -41,49 +41,36 @@ export function TvPlayerProvider({ children }: { children: React.ReactNode }) {
   const [seek, setSeek] = useState<number | undefined>(undefined);
   const [visible, setVisible] = useState(false);
   const callbacksRef = useRef<TvPlayerCallbacks>({});
-  const videoIdRef = useRef<string | null>(null);
-  // Keep ref in sync with state so stable callbacks can read the latest videoId
-  videoIdRef.current = videoId;
 
   // Portal target — the DOM element to render the player into
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
-  // Stable registerTarget — portal target only; never re-apply seek on navigation
-  // (re-seeking from stale Firestore state caused Android resume loops).
   const registerTarget = useCallback((el: HTMLElement | null) => {
     setPortalTarget(el);
-  }, []);
+    // When a new target is registered and the player is already active,
+    // restore the latest seek so PlyrPlayer resumes at the correct position
+    if (el && videoId && latestSeekRef.current !== undefined) {
+      setSeek(latestSeekRef.current);
+    }
+  }, [videoId]);
 
   const [playerKey, setPlayerKey] = useState(0);
   // Track the latest seek time so it's preserved when portal target changes between pages
   const latestSeekRef = useRef<number | undefined>(undefined);
 
   const play = useCallback((id: string, seekTime?: number) => {
-    const isNewVideo = videoIdRef.current !== id;
-    if (isNewVideo) {
-      setPlayerKey((k) => k + 1);
-      const s = seekTime ?? latestSeekRef.current;
-      setSeek(s);
-      if (s !== undefined) latestSeekRef.current = s;
-    } else {
-      // Same video already loaded — never rewind to a stale Firestore seek.
-      // Only forward-seek if another device is meaningfully ahead (>5s).
-      const live = latestSeekRef.current ?? 0;
-      if (seekTime !== undefined && seekTime > live + 5) {
-        setSeek(seekTime);
-        latestSeekRef.current = seekTime;
-      }
-    }
-    setVideoId(id);
+    setVideoId((prev) => {
+      // If switching to a different video, force a fresh Plyr instance
+      if (prev !== id) setPlayerKey((k) => k + 1);
+      return id;
+    });
+    setSeek(seekTime);
+    if (seekTime !== undefined) latestSeekRef.current = seekTime;
     setVisible(true);
   }, []);
 
   const hide = useCallback(() => {
     setVisible(false);
-    setVideoId(null);
-    videoIdRef.current = null;
-    setSeek(undefined);
-    latestSeekRef.current = undefined;
   }, []);
 
   const setCallbacks = useCallback((cbs: TvPlayerCallbacks) => {
@@ -103,20 +90,10 @@ export function TvPlayerProvider({ children }: { children: React.ReactNode }) {
     return () => observer.disconnect();
   }, [portalTarget]);
 
-  // Memoize the context value so it doesn't change on every render.
-  // Only the functions are stable — state-derived values (visible, currentVideoId)
-  // are included in the memo so consumers only re-render when they actually change.
-  const ctx = useMemo<TvPlayerContextValue>(() => ({
-    registerTarget,
-    play,
-    hide,
-    setCallbacks,
-    visible,
-    currentVideoId: videoId,
-  }), [registerTarget, play, hide, setCallbacks, visible, videoId]);
-
   return (
-    <TvPlayerContext.Provider value={ctx}>
+    <TvPlayerContext.Provider
+      value={{ registerTarget, play, hide, setCallbacks, visible, currentVideoId: videoId }}
+    >
       {/* Portal — renders PlyrPlayer into the page's target element (natural document flow) */}
       {visible && videoId && portalTarget && createPortal(
         <div

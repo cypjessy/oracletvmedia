@@ -17,6 +17,7 @@ import type { Album } from "@/lib/albums";
 import { getAlbumEntries, addAlbumEntry, updateAlbumEntry, deleteAlbumEntry } from "@/lib/albumEntries";
 import type { AlbumEntry } from "@/lib/albumEntries";
 import { Timestamp } from "firebase/firestore";
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 
 const churchId = process.env.NEXT_PUBLIC_CHURCH_ID || "kingdom_seekers_church_nakuru";
 const categories = ["all", "events", "services", "community", "leadership", "facility"];
@@ -746,7 +747,6 @@ export default function AdminContentPage() {
 
         .app-container { height: 100%; display: flex; flex-direction: column; position: relative; overflow: hidden; }
         @media (min-width: 480px) { .app-container { max-width: 480px; margin: 0 auto; border-left: 1px solid var(--border); border-right: 1px solid var(--border); } }
-        .status-bar { height: env(safe-area-inset-top, 24px); min-height: 24px; background: var(--bg); flex-shrink: 0; }
 
         /* ========== HEADER ========== */
         .header { padding: 8px 20px 10px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; background: var(--bg); z-index: 100; }
@@ -799,7 +799,7 @@ export default function AdminContentPage() {
         .view-toggle-btn.active { background: var(--surface-elevated); color: var(--primary); border-color: var(--primary); }
 
         /* ========== GALLERY GRID ========== */
-        .gallery-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 0 16px; }
+        .gallery-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 0 12px; }
         .gallery-item { position: relative; border-radius: var(--radius-md); overflow: hidden; cursor: pointer; border: 1px solid var(--border); aspect-ratio: 1; transition: all 0.2s; }
         .gallery-item:active { transform: scale(0.97); opacity: 0.8; }
         .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
@@ -815,12 +815,12 @@ export default function AdminContentPage() {
         .gallery-item-select.selected::after { content: '\\f00c'; font-family: 'Font Awesome 6 Free'; font-weight: 900; color: #fff; font-size: 10px; }
 
         /* ========== GALLERY MASONRY ========== */
-        .gallery-masonry { columns: 2; column-gap: 10px; padding: 0 16px; }
+        .gallery-masonry { columns: 2; column-gap: 10px; padding: 0 12px; }
         .gallery-masonry-item { break-inside: avoid; margin-bottom: 10px; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border); cursor: pointer; position: relative; }
         .gallery-masonry-item img { width: 100%; display: block; }
 
         /* ========== GALLERY LIST ========== */
-        .gallery-list { padding: 0 16px; }
+        .gallery-list { padding: 0 12px; }
         .gallery-list-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); cursor: pointer; transition: opacity 0.2s; }
         .gallery-list-item:last-child { border-bottom: none; }
         .gallery-list-item:active { opacity: 0.6; }
@@ -841,7 +841,7 @@ export default function AdminContentPage() {
         .bulk-btn.delete { background: rgba(239,68,68,0.12); color: var(--error); }
 
         /* ========== ALBUMS ========== */
-        .album-grid { display: grid; grid-template-columns: repeat(1, 1fr); gap: 16px; padding: 0 16px; }
+        .album-grid { display: grid; grid-template-columns: repeat(1, 1fr); gap: 16px; padding: 0 12px; }
         .album-card { position: relative; border-radius: var(--radius-lg); overflow: hidden; cursor: pointer; border: 1px solid var(--border); background: var(--surface-card); transition: all 0.25s; box-shadow: var(--shadow-soft); }
         .album-card:active { transform: scale(0.97); }
         .album-cover { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; background: var(--surface); }
@@ -876,7 +876,7 @@ export default function AdminContentPage() {
         .no-albums p { font-size: 13px; }
 
         /* ========== BANNERS TAB ========== */
-        .banners-list { padding: 0 16px; }
+        .banners-list { padding: 0 12px; }
         .banner-item { display: flex; gap: 12px; padding: 14px; background: var(--surface-card); border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 10px; cursor: grab; transition: all 0.2s; }
         .banner-item:active { cursor: grabbing; background: var(--surface-elevated); }
         .banner-item.dragging { opacity: 0.5; }
@@ -899,7 +899,7 @@ export default function AdminContentPage() {
 
 
         /* ========== SETTINGS ========== */
-        .settings-section { padding: 0 16px; }
+        .settings-section { padding: 0 12px; }
         .settings-group { background: var(--surface-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; margin-bottom: 12px; }
         .settings-group-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
         .settings-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
@@ -1302,21 +1302,38 @@ export default function AdminContentPage() {
       <ToastBridge />
 
       <div className="app-container">
-        <div className="status-bar"></div>
-
-        {/* ========== HEADER ========== */}
-        <div className="header">
-          <button className="header-back" onClick={() => window.history.back()}><i className="fas fa-arrow-left"></i></button>
-          <div className="header-info">
-            <div className="header-title">Content Management</div>
-          </div>
-          <div className="header-actions">
-            <button className="header-upload-btn" onClick={() => setShowUploadModal(true)}>
-              <i className="fas fa-cloud-arrow-up"></i> Upload
-            </button>
-            <button className="header-btn"><i className="fas fa-ellipsis-vertical"></i></button>
-          </div>
-        </div>
+        <PremiumTopBar
+          showBack
+          title="Content Management"
+          rightContent={
+            <>
+              <button
+                onClick={() => setShowUploadModal(true)}
+                style={{
+                  padding: "6px 12px", borderRadius: 10,
+                  background: "linear-gradient(135deg, var(--gradient-start, #E8A838), var(--gradient-end, #D4762A))",
+                  border: "none", color: "#fff",
+                  fontSize: 12, fontWeight: 700, cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 5,
+                }}
+              >
+                <i className="fas fa-cloud-arrow-up"></i> Upload
+              </button>
+              <button
+                style={{
+                  width: 36, height: 36, borderRadius: "50%",
+                  background: "var(--surface, #1A1A1A)",
+                  border: "1px solid var(--border, #2A2A2A)",
+                  color: "var(--text-primary, #fff)",
+                  fontSize: 15, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <i className="fas fa-ellipsis-vertical"></i>
+              </button>
+            </>
+          }
+        />
 
         {/* ========== STORAGE BAR ========== */}
         <div className="storage-bar">

@@ -7,6 +7,7 @@ import { getUpcomingMeetings, submitRSVP, getRSVPsForMeetings, getAgenda, getAct
 import type { Meeting, AgendaItem, ActionItem } from "@/lib/meetings";
 import { useAppStore } from "@/lib/useAppStore";
 import BottomNavBar from "@/components/shared/BottomNavBar";
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 
 export default function MeetingsPage() {
   const router = useRouter();
@@ -110,10 +111,7 @@ export default function MeetingsPage() {
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif; }
         html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text-primary); }
         .app-container { height: 100%; display: flex; flex-direction: column; position: relative; overflow: hidden; }
-        @media (min-width: 480px) { .app-container { max-width: 480px; margin: 0 auto; border-left: 1px solid var(--border); border-right: 1px solid var(--border); } }
-        .status-bar { height: env(safe-area-inset-top, 24px); min-height: 24px; background: var(--bg); flex-shrink: 0; }
-
-        .header { padding: 10px 16px 8px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; background: var(--bg); border-bottom: 1px solid var(--border); }
+        @media (min-width: 480px) { .app-container { max-width: 480px; margin: 0 auto; border-left: 1px solid var(--border); border-right: 1px solid var(--border); } }.header { padding: 10px 16px 8px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; background: var(--bg); border-bottom: 1px solid var(--border); }
         .header-logo { width: 38px; height: 38px; background: linear-gradient(135deg, var(--gradient-blue), #2563EB); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .header-logo i { font-size: 16px; color: #fff; }
         .header-info { flex: 1; min-width: 0; }
@@ -123,7 +121,7 @@ export default function MeetingsPage() {
         .content-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 120px; }
         .content-scroll::-webkit-scrollbar { display: none; }
 
-        .meetings-list { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+        .meetings-list { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
         .meeting-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; display: flex; flex-direction: column; gap: 10px; transition: all 0.2s ease; }
         .meeting-card:active { transform: scale(0.98); }
         .meeting-card.active { border-color: var(--success); background: linear-gradient(135deg, rgba(74,222,128,0.03), rgba(59,130,246,0.03)); }
@@ -187,21 +185,11 @@ export default function MeetingsPage() {
       <ToastBridge />
 
       <div className="app-container">
-        <div className="status-bar"></div>
-
-        {/* HEADER */}
-        <header className="header">
-          <div className="header-logo"><i className="fas fa-people-group"></i></div>
-          <div className="header-info">
-            <div className="header-title">Meetings</div>
-            <div className="header-sub">
-              {userId
-                ? `Join audio meetings with the church`
-                : "Sign in to RSVP and join meetings"
-              }
-            </div>
-          </div>
-        </header>
+        <PremiumTopBar
+          icon="fa-people-group"
+          title="Meetings"
+          subtitle={userId ? "Join audio meetings with the church" : "Sign in to RSVP and join meetings"}
+        />
 
         {/* CONTENT */}
         <div className="content-scroll">

@@ -263,7 +263,8 @@ export function RadioOverviewTab(props: RadioOverviewTabProps) {
         <iframe
           src="https://azuracast.histoview.co.ke/public/turningpoint_church/embed?primary_color=E8A838&bg_color=1E1E1E&volume=100&rounded=1&allow_popup=1&continuous=1"
           frameBorder="0"
-          allowTransparency={true}
+          // @ts-expect-error - React 19 requires lowercase HTML attributes
+          allowtransparency
           allow="autoplay; encrypted-media; fullscreen"
           sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
           loading="eager"

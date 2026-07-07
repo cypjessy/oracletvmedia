@@ -14,6 +14,7 @@ import EventCarousel from "@/components/dashboard/EventCarousel";
 import AlbumCarousel from "@/components/shared/AlbumCarousel";
 import { useImageLightbox } from "@/components/shared/ImageLightbox";
 import PremiumLoader from "@/components/shared/PremiumLoader";
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 import { getNowPlaying, getSongHistory, getStationId, getPlaylists } from "@/lib/azuracast";
 import { getAlbums } from "@/lib/albums";
 import { getAllAlbumEntries } from "@/lib/albumEntries";
@@ -441,7 +442,7 @@ export default function DashboardPage() {
   const [tvLoading, setTvLoading] = useState(true);
   const [showEndCard, setShowEndCard] = useState(false);
   const [nextTvVideo, setNextTvVideo] = useState<YouTubeVideo | null>(null);
-  const [tvStartCountdown, setTvStartCountdown] = useState(10);
+  const [tvStartCountdown, setTvStartCountdown] = useState(20);
   const lastTvSeekRef = useRef(0);
   const lastTvIndexRef = useRef(0);
   const tvPlayerTargetRef = useRef<HTMLDivElement>(null);
@@ -465,7 +466,7 @@ export default function DashboardPage() {
 
   // Countdown timer on Start TV button (prevents premature clicks while video preloads)
   useEffect(() => {
-    setTvStartCountdown(10);
+    setTvStartCountdown(20);
     const t = setInterval(() => {
       setTvStartCountdown((prev) => {
         if (prev <= 1) { clearInterval(t); return 0; }
@@ -1321,7 +1322,6 @@ export default function DashboardPage() {
             .pg-grid { grid-template-columns: repeat(5, 1fr); }
             .feed-section { padding: 0 32px 24px; }
         }
-        .status-bar { height: env(safe-area-inset-top, 24px); min-height: 24px; background: var(--bg); flex-shrink: 0; }
         .offline-banner { padding: 10px 16px; background: var(--error); color: #fff; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
         /* ===== HEADER ===== */
@@ -1390,7 +1390,7 @@ export default function DashboardPage() {
         .content-scroll::-webkit-scrollbar { display: none; }
 
         .feed-section { padding: 0 var(--section-px, 16px) 16px; }
-        .feed-section { --section-px: 16px; }
+        .feed-section { --section-px: 12px; }
 
         .section-header-inline {
             display: flex; align-items: center; justify-content: space-between;
@@ -2569,7 +2569,7 @@ export default function DashboardPage() {
 
       {/* ===== MAIN APP ===== */}
       <div className="app-container">
-        <div className="status-bar"></div>
+        <PremiumTopBar minimal />
 
         {offline && (
           <div className="offline-banner">

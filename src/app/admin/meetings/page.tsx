@@ -6,6 +6,7 @@ import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import ToastBridge from "@/components/dashboard/ToastBridge";
 import { useAppStore } from "@/lib/useAppStore";
 import { getMeetings, createMeeting, updateMeeting, deleteMeeting, generateRoomName, getRSVPSummary, getAttendance, getAgenda, addAgendaItem, updateAgendaItem, deleteAgendaItem, getActionItems, createActionItem, completeActionItem, reopenActionItem } from "@/lib/meetings";
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 import type { Meeting, AttendanceEntry, AgendaItem, ActionItem } from "@/lib/meetings";
 import { hapticSuccess } from "@/lib/haptics";
 
@@ -392,7 +393,6 @@ export default function AdminMeetingsPage() {
         html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text-primary); }
         .app-container { height: 100%; display: flex; flex-direction: column; position: relative; overflow: hidden; }
         @media (min-width: 480px) { .app-container { max-width: 480px; margin: 0 auto; border-left: 1px solid var(--border); border-right: 1px solid var(--border); } }
-        .status-bar { height: env(safe-area-inset-top, 24px); min-height: 24px; background: var(--bg); flex-shrink: 0; }
 
         .header { padding: 10px 16px 8px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; background: var(--bg); border-bottom: 1px solid var(--border); }
         .header-logo { width: 38px; height: 38px; background: linear-gradient(135deg, var(--gradient-blue), #2563EB); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 4px 12px rgba(59,130,246,0.2); }
@@ -572,16 +572,11 @@ export default function AdminMeetingsPage() {
       <ToastBridge />
 
       <div className="app-container">
-        <div className="status-bar"></div>
-
-        {/* HEADER */}
-        <header className="header">
-          <div className="header-logo"><i className="fas fa-people-group"></i></div>
-          <div className="header-info">
-            <div className="header-title">Meetings</div>
-            <div className="header-count">{meetings.length} total meetings</div>
-          </div>
-        </header>
+        <PremiumTopBar
+          icon="fa-people-group"
+          title="Meetings"
+          subtitle={`${meetings.length} total meetings`}
+        />
 
         {/* TOOLBAR */}
         <div className="toolbar">

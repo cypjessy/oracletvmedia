@@ -18,6 +18,7 @@ import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import ToastBridge from "@/components/dashboard/ToastBridge";
 import EventCarousel from "@/components/dashboard/EventCarousel";
 import AlbumCarousel from "@/components/shared/AlbumCarousel";
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 
 /* ==================================================================
    MOCK DATA
@@ -122,7 +123,7 @@ export default function AdminPage() {
   const tvPlayer = useTvPlayer();
   const [tvUserState, setTvUserState] = useState<UserTvState | null>(null);
   const hasInteractedWithTv = useRef(false);
-  const [tvStartCountdown, setTvStartCountdown] = useState(10);
+  const [tvStartCountdown, setTvStartCountdown] = useState(20);
   const lastTvSeekRef = useRef(0);
   const lastTvIndexRef = useRef(0);
 
@@ -212,7 +213,7 @@ export default function AdminPage() {
 
   // Countdown timer on Start TV button (prevents premature clicks while video preloads)
   useEffect(() => {
-    setTvStartCountdown(10);
+    setTvStartCountdown(20);
     const t = setInterval(() => {
       setTvStartCountdown((prev) => {
         if (prev <= 1) { clearInterval(t); return 0; }
@@ -544,7 +545,6 @@ export default function AdminPage() {
             .dash-nowplaying-strip { padding: 12px 32px; }
         }
 
-        .status-bar { height: env(safe-area-inset-top, 24px); min-height: 24px; background: var(--bg); flex-shrink: 0; }
 
         /* ========== SCROLLABLE CONTENT ========== */
         .content-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 80px; }
@@ -1600,7 +1600,7 @@ export default function AdminPage() {
             cursor: pointer; flex-shrink: 0; transition: all 0.2s ease;
         }
         .rh-expand-small:active { background: var(--surface-elevated); transform: scale(0.88); }.feed-section { padding: 0 var(--section-px, 16px) 16px; }
-        .feed-section { --section-px: 16px; }
+        .feed-section { --section-px: 12px; }
 
         /* ===== SECTION HEADER ===== */
         .section-header-inline {
@@ -1660,7 +1660,7 @@ export default function AdminPage() {
 
       {/* ===== MAIN APP ===== */}
       <div className="app-container">
-        <div className="status-bar"></div>
+        <PremiumTopBar minimal />
 
         {/* HEADER */}
         <header className="dash-header">

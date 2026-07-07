@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import ToastBridge from "@/components/dashboard/ToastBridge";
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 import {
   getNowPlaying, getStationStatus, toggleAutoDJ,
   getPlaylists, createPlaylist as apiCreatePlaylist,
@@ -442,7 +443,6 @@ export default function AdminRadioPage() {
           .app-container { max-width: 480px; margin: 0 auto; border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
         }
 
-        .status-bar { height: env(safe-area-inset-top, 24px); min-height: 24px; background: var(--bg); flex-shrink: 0; }
 
         /* ========== HEADER ========== */
         .radio-header {
@@ -735,7 +735,7 @@ export default function AdminRadioPage() {
         .content-scroll::-webkit-scrollbar { display: none; }
 
         /* ========== OVERVIEW SECTION ========== */
-        .overview-content { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+        .overview-content { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 
         /* Status Cards Row */
         .overview-cards-row { display: flex; gap: 12px; }
@@ -964,7 +964,7 @@ export default function AdminRadioPage() {
         .ov-pc-q-artist { font-size: 10px; color: var(--text-tertiary); }
 
         /* ========== MEDIA LIBRARY SECTION ========== */
-        .media-content { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+        .media-content { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 
         .upload-zone {
           display: flex; flex-direction: column; align-items: center; gap: 10px;
@@ -1289,7 +1289,7 @@ export default function AdminRadioPage() {
           background: var(--error); border-radius: var(--radius-full); border: 2px solid var(--bg);
         }
         /* ========== PLAYLISTS SECTION ========== */
-        .pl-content { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+        .pl-content { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
         .pl-toolbar { display: flex; gap: 10px; align-items: center; }
         .pl-search-wrapper { position: relative; flex: 1; }
         .pl-search-wrapper > i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); font-size: 14px; pointer-events: none; }
@@ -1381,7 +1381,7 @@ export default function AdminRadioPage() {
         .pl-picker-checked { color: var(--success); font-size: 18px; }
 
         /* ========== NEW PLAYLISTS SECTION ========== */
-        .pl-content-new { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+        .pl-content-new { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
         .pl-new-header { display: flex; align-items: center; justify-content: space-between; }
         .pl-new-heading { font-size: 22px; font-weight: 800; }
         .pl-filter-tabs { display: flex; gap: 6px; align-items: center; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -1703,7 +1703,7 @@ export default function AdminRadioPage() {
       <ToastBridge />
 
       <div className="app-container">
-        <div className="status-bar"></div>
+        <PremiumTopBar />
 
         {/* ========== RADIO HEADER ========== */}
         <header className="radio-header">
@@ -1729,7 +1729,8 @@ export default function AdminRadioPage() {
           <iframe
             src="https://azuracast.histoview.co.ke/public/turningpoint_church/embed?primary_color=E8A838&bg_color=1E1E1E&volume=100&rounded=1&allow_popup=1&continuous=1"
             frameBorder="0"
-            allowTransparency={true}
+            // @ts-expect-error - React 19 requires lowercase HTML attributes
+            allowtransparency
             allow="autoplay; encrypted-media; fullscreen"
             sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
             loading="eager"

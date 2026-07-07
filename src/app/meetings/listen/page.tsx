@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import ToastBridge from "@/components/dashboard/ToastBridge";
 import BottomNavBar from "@/components/shared/BottomNavBar";
 import { useAppStore } from "@/lib/useAppStore";
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 import { getMeeting, generateLiveKitToken, getAgenda } from "@/lib/meetings";
 import type { Meeting, AgendaItem } from "@/lib/meetings";
 import { Room, RoomEvent, Track } from "livekit-client";
@@ -401,7 +402,6 @@ export default function MemberListenPage() {
           flex: 1;
           display: flex;
           flex-direction: column;
-          padding: env(safe-area-inset-top, 0px) 0 0;
         }
 
         /* ===== TOP BAR ===== */
@@ -930,6 +930,7 @@ export default function MemberListenPage() {
 
       <ToastBridge />
       <div className="listen-page">
+        <PremiumTopBar minimal />
         <div className="bg-canvas">
           <div className="bg-orb"></div>
           <div className="bg-orb"></div>

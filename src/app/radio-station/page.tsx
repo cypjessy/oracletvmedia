@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useNowPlaying } from "@/lib/useNowPlaying";
 import { getNowPlaying, toggleAutoDJ, getStationId } from "@/lib/azuracast";
 
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 import Overview from "@/components/radio-station/sections/Overview";
 import Media from "@/components/radio-station/sections/Media";
 import Playlists from "@/components/radio-station/sections/Playlists";
@@ -475,6 +476,7 @@ export default function RadioStationPage() {
 
       {/* ========== MAIN APP ========== */}
       <div className="rs-app">
+        <PremiumTopBar minimal />
         {/* HEADER */}
         <header className="rs-header">
           <button className="rs-header-play-btn" style={{ display: "none" }} id="rsMobileMenuBtn"

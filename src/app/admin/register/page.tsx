@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
+import PremiumTopBar from "@/components/shared/PremiumTopBar";
 
 const ADMIN_REG_TOKEN = process.env.NEXT_PUBLIC_ADMIN_REG_TOKEN || "admin-secret-token";
 
@@ -257,6 +258,7 @@ export default function AdminRegisterPage() {
         @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
       <div className="app-container">
+        <PremiumTopBar minimal />
         <Suspense fallback={<div style={{ padding: 40, textAlign: "center", color: "var(--text-secondary)" }}>Loading...</div>}>
           <RegisterForm />
         </Suspense>
