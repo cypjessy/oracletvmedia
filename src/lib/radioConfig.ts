@@ -59,7 +59,7 @@ export function defaultRadioConfig(): Omit<RadioConfigDoc, "updatedAt" | "update
     stationName: "CHRISTIAN REVIVAL CHURCH Radio",
     description: "CHRISTIAN REVIVAL CHURCH Radio Station",
     stationId: "2",
-    embedUrl: "https://azuracast.histoview.co.ke/public/kingdom_seekers_church/embed?autoplay=1&rounded=1&allow_popup=1&continuous=1",
+    embedUrl: "https://azuracast.histoview.co.ke/public/christian_revival_church/embed?autoplay=1&rounded=1&allow_popup=1&continuous=1",
     streamUrl: "",
   };
 }

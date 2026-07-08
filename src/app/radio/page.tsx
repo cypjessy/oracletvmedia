@@ -330,7 +330,7 @@ export default function RadioPage() {
                 {/* Now Playing — Premium AzuraCast Embedded Player */}
                 <div className="np-glass" style={{ padding: 0, overflow: 'hidden' }}>
                   <RadioEmbed
-                    src="https://azuracast.histoview.co.ke/public/kingdom_seekers_church/embed?autoplay=1&rounded=1&allow_popup=1&continuous=1"
+                    src="https://azuracast.histoview.co.ke/public/christian_revival_church/embed?autoplay=1&rounded=1&allow_popup=1&continuous=1"
                     title="CHRISTIAN REVIVAL CHURCH Radio Player"
                   />
                 </div>

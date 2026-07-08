@@ -262,7 +262,7 @@ export function RadioOverviewTab(props: RadioOverviewTabProps) {
           {/* Now Playing - Premium AzuraCast Embedded Player */}
           <div style={{ background: "var(--surface-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 0, overflow: "hidden" }}>
             <RadioEmbed
-              src="https://azuracast.histoview.co.ke/public/kingdom_seekers_church/embed?autoplay=1&rounded=1&allow_popup=1&continuous=1"
+              src="https://azuracast.histoview.co.ke/public/christian_revival_church/embed?autoplay=1&rounded=1&allow_popup=1&continuous=1"
               title="CHRISTIAN REVIVAL CHURCH Radio Player"
             />
           </div>

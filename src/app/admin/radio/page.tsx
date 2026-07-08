@@ -66,7 +66,7 @@ export default function AdminRadioPage() {
         stationName: config.stationName || "CHRISTIAN REVIVAL CHURCH Radio",
         description: config.description || "Radio Station",
         stationId: config.stationId || "2",
-        embedUrl: config.embedUrl || "https://azuracast.histoview.co.ke/public/kingdom_seekers_church/embed?autoplay=1&rounded=1&allow_popup=1&continuous=1",
+        embedUrl: config.embedUrl || "https://azuracast.histoview.co.ke/public/christian_revival_church/embed?autoplay=1&rounded=1&allow_popup=1&continuous=1",
         streamUrl: config.streamUrl || "",
       });
     }).catch(() => {});
@@ -1728,7 +1728,7 @@ export default function AdminRadioPage() {
         {/* ========== AZURACAST EMBEDDED PLAYER ========== */}
         <div style={{ margin: "8px 16px 0" }}>
           <RadioEmbed
-            src="https://azuracast.histoview.co.ke/public/kingdom_seekers_church/embed?autoplay=1&rounded=1&allow_popup=1&continuous=1"
+            src="https://azuracast.histoview.co.ke/public/christian_revival_church/embed?autoplay=1&rounded=1&allow_popup=1&continuous=1"
             title="CHRISTIAN REVIVAL CHURCH Radio Player"
           />
         </div>
