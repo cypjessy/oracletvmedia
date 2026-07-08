@@ -11,7 +11,7 @@ import { churchConfig } from "@/lib/churchConfig";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 const PUBLIC_PATHS = ["/", "/login"];
-const PUBLIC_PATH_PREFIXES: string[] = [];
+const PUBLIC_PATH_PREFIXES: string[] = ["/admin/register"];
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
