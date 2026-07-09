@@ -192,11 +192,11 @@ export default function AdminPage() {
     }
   }, []);
 
-  /* Periodically save seek position (every 5s), regardless of state changes. */
+  /* Periodically save seek position (every 5s) — stable deps, never restarts mid-session */
   useEffect(() => {
     if (!auth.currentUser?.uid) return;
     const interval = setInterval(saveTvProgress, 5000);
-    return () => { clearInterval(interval); saveTvProgress(); };
+    return () => clearInterval(interval);
   }, [saveTvProgress]);
 
   /* Save on page unload / tab hide */
