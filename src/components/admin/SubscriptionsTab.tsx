@@ -166,7 +166,7 @@ export default function SubscriptionsTab() {
     setPaymentStatus("paid");
     setPaying(false);
     window.dispatchEvent(new CustomEvent("show-toast", {
-      detail: { title: "Payment Successful", message: "€29.60 paid · Server subscription active until next billing", type: "success", duration: 4000 },
+      detail: { title: "Payment Successful", message: "KES 4,372 paid · Server subscription active until next billing", type: "success", duration: 4000 },
     }));
     // Re-fetch countdown resets
     setNow(new Date());
@@ -634,10 +634,10 @@ export default function SubscriptionsTab() {
           {/* Amount */}
           <div style={{ marginBottom: 16, textAlign: "center" }}>
             <div style={{ fontSize: 32, fontWeight: 800, color: paidThisMonth ? "#4ADE80" : "var(--primary)", fontVariantNumeric: "tabular-nums" }}>
-              €29.60
+              KES 4,372
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 2 }}>
-              {currentMonth}
+            <div style={{ fontSize: 11, color: "var(--text-tertiary)", marginTop: 2 }}>
+              ≈ €29.60 · {currentMonth}
             </div>
           </div>
 
@@ -714,7 +714,7 @@ export default function SubscriptionsTab() {
             ) : paidThisMonth ? (
               <><i className="fas fa-check-circle"></i> Paid for {currentMonth}</>
             ) : (
-              <><i className="fas fa-lock"></i> Pay Now — €29.60</>
+              <>              <i className="fas fa-lock"></i> Pay Now — KES 4,372</>
             )}
           </button>
 
@@ -879,7 +879,7 @@ export default function SubscriptionsTab() {
               Virtual Private Server
             </div>
             <div className="vps-price">
-              €29.60 <small>/mo</small>
+              KES 4,372 <small>/mo ≈ €29.60</small>
             </div>
           </div>
           <div className="vps-grid">
