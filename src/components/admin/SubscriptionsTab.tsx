@@ -6,16 +6,20 @@ import {
   PAYSTACK_PUBLIC_KEY,
   loadPaystackSDK,
   PAYSTACK_PLANS,
+  isPaystackLiveMode,
+  isPaystackTestMode,
 } from "@/lib/paystack";
 import {
   getSubscriptionStatus,
   getPaymentHistory,
   recordPayment,
   updatePlan,
+  activateTrial,
   getBillingSnapshot,
   getBillingPeriodLabel,
   getNextBillingDate,
   getCountdown,
+  PLAN_PRICES,
   type SubscriptionStatus,
   type SubscriptionPayment,
   type BillingSnapshot,
@@ -132,6 +136,8 @@ export default function SubscriptionsTab() {
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [payments, setPayments] = useState<SubscriptionPayment[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
+  const [activatingTrial, setActivatingTrial] = useState(false);
+  const [trialDuration, setTrialDuration] = useState(30);
 
   // Tick every second for live countdown
   useEffect(() => {
@@ -193,6 +199,7 @@ export default function SubscriptionsTab() {
   // ════ Upgrade Toggle ════
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
+  const [confirmingUpgrade, setConfirmingUpgrade] = useState(false);
   const [isUpgraded, setIsUpgraded] = useState(false);
 
   const currentPlan = {
@@ -222,33 +229,182 @@ export default function SubscriptionsTab() {
   const activePlan = isUpgraded ? upgradePlan : currentPlan;
 
   // Derive billing values from the snapshot
-  const nextBilling = getNextBillingDate();
-  const diffMs = nextBilling.getTime() - now.getTime();
+  const { paidThisPeriod, totalDue, remaining, status, overdueMonths, accumulatedDebt, isTrial, trialDaysRemaining, trialEndDate } = snapshot;
+
+  // Use trial end date for countdown during trial, otherwise use the 10th billing date
+  const countdownTarget = isTrial && trialEndDate ? trialEndDate.getTime() : getNextBillingDate().getTime();
+  const diffMs = countdownTarget - now.getTime();
   const countdown = getCountdown(diffMs);
-  const { paidThisPeriod, totalDue, remaining, status, overdueMonths, accumulatedDebt } = snapshot;
   const isPaid = status === "paid";
   const isPartiallyPaid = status === "partial";
   const isMissed = status === "overdue";
 
+  // Upgrade cost = VPS M price minus what they've already paid this period
+  // Detect test vs live mode
+  const paystackLiveMode = isPaystackLiveMode();
+  const paystackTestMode = isPaystackTestMode();
+
+  const upgradeCost = Math.max(0, PLAN_PRICES["VPS M"] - paidThisPeriod);
+  const isUpgradeFree = upgradeCost <= 0;
+
   async function handleUpgrade() {
-    setUpgrading(true);
-    await new Promise((r) => setTimeout(r, 2500));
-    setIsUpgraded(true);
-    setUpgrading(false);
-    // Save plan choice to Firestore + reload status
-    updatePlan("VPS M").catch(() => {});
-    getSubscriptionStatus().then(setSubStatus).catch(() => {});
-    window.dispatchEvent(new CustomEvent("show-toast", {
-      detail: { title: "Upgrade Successful", message: `Plan upgraded to ${upgradePlan.name} · ${upgradePlan.priceKES}/mo`, type: "success", duration: 4000 },
-    }));
+    // Show confirmation with the cost first
+    setConfirmingUpgrade(true);
   }
+
+  async function handleConfirmUpgrade() {
+    setConfirmingUpgrade(false);
+    setUpgrading(true);
+
+    // If they've already paid enough, upgrade is free — just save the plan
+    if (isUpgradeFree) {
+      updatePlan("VPS M").catch(() => {});
+      setIsUpgraded(true);
+      setUpgrading(false);
+      getSubscriptionStatus().then(setSubStatus).catch(() => {});
+      window.dispatchEvent(new CustomEvent("show-toast", {
+        detail: { title: "Upgrade Successful", message: `Plan upgraded to ${upgradePlan.name} · ${upgradePlan.priceKES}/mo`, type: "success", duration: 4000 },
+      }));
+      return;
+    }
+
+    // Otherwise, charge the difference via Paystack
+    const planConfig = PAYSTACK_PLANS["VPS M"];
+
+    try {
+      await loadPaystackSDK();
+
+      const res = await apiFetch("/api/paystack/initialize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "admin@mountainofdeliverance.org",
+          plan: "VPS M",
+          amount: upgradeCost, // custom amount — just the difference
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Server error: ${res.status}`);
+      }
+
+      const { authorization_url, reference } = await res.json();
+
+      const popupHandler = (window as any).PaystackPop?.setup({
+        key: PAYSTACK_PUBLIC_KEY,
+        email: "admin@mountainofdeliverance.org",
+        amount: upgradeCost * 100,
+        currency: "KES",
+        ref: reference,
+        metadata: {
+          plan: "VPS M",
+          type: "upgrade",
+          church_id: process.env.NEXT_PUBLIC_CHURCH_ID || "mountain_of_deliverance",
+        },
+        callback: (response: { reference: string }) => {
+          apiFetch("/api/paystack/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reference: response.reference }),
+          })
+            .then((r) => r.json())
+            .then((verifyData: any) => {
+              if (verifyData.verified) {
+                // Record upgrade payment + save new plan
+                recordPayment({
+                  reference: verifyData.reference || response.reference,
+                  amount: upgradeCost,
+                  plan: "VPS M",
+                  status: "paid",
+                  paidAt: Timestamp.now(),
+                  billingPeriod: snapshot.currentPeriod,
+                  email: "admin@mountainofdeliverance.org",
+                  channel: verifyData.channel || "paystack",
+                  church_id: process.env.NEXT_PUBLIC_CHURCH_ID || "mountain_of_deliverance",
+                  isTest: paystackTestMode,
+                }).then(() => {
+                  // Save plan and reload status
+                  updatePlan("VPS M").catch(() => {});
+                  getSubscriptionStatus().then(setSubStatus);
+                  window.dispatchEvent(new CustomEvent("payments-refresh"));
+                }).catch((err) => {
+                  console.error("[Upgrade] Failed to save payment:", err);
+                });
+
+                setIsUpgraded(true);
+                setNow(new Date());
+                window.dispatchEvent(new CustomEvent("show-toast", {
+                  detail: { title: "Upgrade Successful", message: `Plan upgraded to ${upgradePlan.name} · KES ${upgradeCost.toLocaleString()} paid`, type: "success", duration: 5000 },
+                }));
+              } else {
+                throw new Error("Payment verification failed");
+              }
+            })
+            .catch((err: any) => {
+              window.dispatchEvent(new CustomEvent("show-toast", {
+                detail: { title: "Upgrade Error", message: err.message || "Could not verify upgrade payment", type: "error", duration: 4000 },
+              }));
+            })
+            .finally(() => setUpgrading(false));
+        },
+        onClose: () => {
+          setUpgrading(false);
+          window.dispatchEvent(new CustomEvent("show-toast", {
+            detail: { title: "Upgrade Cancelled", message: "You closed the payment window", type: "info", duration: 3000 },
+          }));
+        },
+      });
+
+      // On Capacitor (Android app), redirect to Paystack checkout page
+      if (isCapacitor) {
+        sessionStorage.setItem('paystack_pending', JSON.stringify({
+          reference,
+          planKey: 'VPS M',
+          amount: upgradeCost,
+          isTest: paystackTestMode,
+          type: 'upgrade',
+        }));
+        window.location.href = authorization_url;
+      } else if (popupHandler) {
+        popupHandler.openIframe();
+      } else if (authorization_url) {
+        sessionStorage.setItem('paystack_pending', JSON.stringify({
+          reference,
+          planKey: 'VPS M',
+          amount: upgradeCost,
+          isTest: paystackTestMode,
+          type: 'upgrade',
+        }));
+        window.location.href = authorization_url;
+      } else {
+        throw new Error("Paystack SDK failed");
+      }
+    } catch (err: any) {
+      console.error("[Upgrade] Fatal error:", err);
+      setUpgrading(false);
+      window.dispatchEvent(new CustomEvent("show-toast", {
+        detail: { title: "Upgrade Error", message: err.message || "Something went wrong", type: "error", duration: 5000 },
+      }));
+    }
+  }
+
+  async function handleCancelUpgrade() {
+    setConfirmingUpgrade(false);
+  }
+
+  // ════ Detect Capacitor (Android app) ════
+  // On mobile, the inline Paystack popup doesn't fit well — we redirect instead
+  const isCapacitor = typeof window !== 'undefined' && !!(window as any).Capacitor?.isNative;
 
   // ════ Upgrade Toggle ════
 
-  // Load Paystack SDK on mount
+  // Load Paystack SDK on mount (only needed for desktop inline popup)
   useEffect(() => {
-    loadPaystackSDK().catch(() => {});
-  }, []);
+    if (!isCapacitor) {
+      loadPaystackSDK().catch(() => {});
+    }
+  }, [isCapacitor]);
 
   async function handlePayNow() {
     const planKey = isUpgraded ? "VPS M" : "VPS S";
@@ -280,9 +436,10 @@ export default function SubscriptionsTab() {
                   paidAt: Timestamp.now(),
                   billingPeriod,
                   email: "admin@mountainofdeliverance.org",
-                  channel: "simulation",
-                  church_id: process.env.NEXT_PUBLIC_CHURCH_ID || "mountain_of_deliverance",
-                }).then(() => {
+              channel: "simulation",
+              church_id: process.env.NEXT_PUBLIC_CHURCH_ID || "mountain_of_deliverance",
+              isTest: true,
+            }).then(() => {
                   getSubscriptionStatus().then(setSubStatus);
                   window.dispatchEvent(new CustomEvent("payments-refresh"));
                 }).catch((err) => {
@@ -371,17 +528,18 @@ export default function SubscriptionsTab() {
                   paidAt: Timestamp.now(),
                   billingPeriod,
                   email: "admin@mountainofdeliverance.org",
-                  channel: verifyData.channel || "card",
-                  church_id: process.env.NEXT_PUBLIC_CHURCH_ID || "mountain_of_deliverance",
-                }).then(() => {
-                  // Reload subscription status to reflect the new payment
-                  getSubscriptionStatus().then(setSubStatus);
-                  window.dispatchEvent(new CustomEvent("payments-refresh"));
-                }).catch((err) => {
-                  console.error("[Pay] Failed to save payment record:", err);
-                });
+              channel: verifyData.channel || "card",
+              church_id: process.env.NEXT_PUBLIC_CHURCH_ID || "mountain_of_deliverance",
+              isTest: paystackTestMode,
+            }).then(() => {
+              // Reload subscription status to reflect the new payment
+              getSubscriptionStatus().then(setSubStatus);
+              window.dispatchEvent(new CustomEvent("payments-refresh"));
+            }).catch((err) => {
+              console.error("[Pay] Failed to save payment record:", err);
+            });
 
-                setNow(new Date());
+            setNow(new Date());
                 window.dispatchEvent(new CustomEvent("show-toast", {
                   detail: { title: "Payment Successful", message: `${planConfig.label} paid via Paystack · ${planKey} active`, type: "success", duration: 5000 },
                 }));
@@ -400,12 +558,13 @@ export default function SubscriptionsTab() {
                 paidAt: Timestamp.now(),
                 billingPeriod: snapshot.currentPeriod,
                 email: "admin@mountainofdeliverance.org",
-                channel: "paystack",
-                church_id: process.env.NEXT_PUBLIC_CHURCH_ID || "mountain_of_deliverance",
-              }).catch(() => {});
-              window.dispatchEvent(new CustomEvent("show-toast", {
-                detail: { title: "Verification Error", message: err.message || "Could not verify payment", type: "error", duration: 4000 },
-              }));
+              channel: "paystack",
+              church_id: process.env.NEXT_PUBLIC_CHURCH_ID || "mountain_of_deliverance",
+              isTest: paystackTestMode,
+            }).catch(() => {});
+            window.dispatchEvent(new CustomEvent("show-toast", {
+              detail: { title: "Verification Error", message: err.message || "Could not verify payment", type: "error", duration: 4000 },
+            }));
             })
             .finally(() => setPaying(false));
         },
@@ -418,13 +577,32 @@ export default function SubscriptionsTab() {
         },
       });
 
-      if (popupHandler) {
+      // On Capacitor (Android app), redirect to Paystack checkout page
+      // which is mobile-responsive. On desktop, use the inline popup.
+      if (isCapacitor) {
+        console.log("[Pay] Capacitor detected — redirecting to Paystack checkout");
+        sessionStorage.setItem('paystack_pending', JSON.stringify({
+          reference,
+          planKey,
+          amount: planConfig.amountKES,
+          isTest: paystackTestMode,
+          type: 'payment',
+        }));
+        window.location.href = authorization_url;
+      } else if (popupHandler) {
         console.log("[Pay] Opening Paystack popup...");
         popupHandler.openIframe();
       } else {
         console.error("[Pay] PaystackPop.setup returned falsy — falling back to redirect");
         if (authorization_url) {
           console.log("[Pay] Redirecting to:", authorization_url);
+          sessionStorage.setItem('paystack_pending', JSON.stringify({
+            reference,
+            planKey,
+            amount: planConfig.amountKES,
+            isTest: paystackTestMode,
+            type: 'payment',
+          }));
           window.location.href = authorization_url;
         } else {
           throw new Error("Paystack SDK failed to load and no authorization URL available.");
@@ -436,6 +614,25 @@ export default function SubscriptionsTab() {
       window.dispatchEvent(new CustomEvent("show-toast", {
         detail: { title: "Payment Error", message: err.message || "Something went wrong", type: "error", duration: 5000 },
       }));
+    }
+  }
+
+  async function handleActivateTrial() {
+    setActivatingTrial(true);
+    try {
+      const plan = isUpgraded ? "VPS M" : "VPS S";
+      await activateTrial(plan, trialDuration);
+      const newStatus = await getSubscriptionStatus();
+      setSubStatus(newStatus);
+      window.dispatchEvent(new CustomEvent("show-toast", {
+        detail: { title: "Free Trial Activated", message: `${trialDuration}-day free trial started on ${plan}`, type: "success", duration: 4000 },
+      }));
+    } catch (err: any) {
+      window.dispatchEvent(new CustomEvent("show-toast", {
+        detail: { title: "Trial Error", message: err?.message || "Could not activate trial", type: "error", duration: 4000 },
+      }));
+    } finally {
+      setActivatingTrial(false);
     }
   }
 
@@ -886,10 +1083,16 @@ export default function SubscriptionsTab() {
             <div style={{
               fontSize: 11, fontWeight: 700, padding: "4px 12px",
               borderRadius: 20,
-              background: isPaid ? "rgba(74,222,128,0.12)" : isMissed ? "rgba(239,68,68,0.12)" : isPartiallyPaid ? "rgba(251,191,36,0.12)" : "rgba(232,168,56,0.12)",
-              color: isPaid ? "#4ADE80" : isMissed ? "#EF4444" : isPartiallyPaid ? "#FBBF24" : "var(--primary)",
+              background: isTrial
+                ? "rgba(59,130,246,0.12)"
+                : isPaid ? "rgba(74,222,128,0.12)" : isMissed ? "rgba(239,68,68,0.12)" : isPartiallyPaid ? "rgba(251,191,36,0.12)" : "rgba(232,168,56,0.12)",
+              color: isTrial
+                ? "#3B82F6"
+                : isPaid ? "#4ADE80" : isMissed ? "#EF4444" : isPartiallyPaid ? "#FBBF24" : "var(--primary)",
             }}>
-              {isPaid ? (
+              {isTrial ? (
+                <><i className="fas fa-gift"></i> Trial</>
+              ) : isPaid ? (
                 <><i className="fas fa-check-circle"></i> Paid</>
               ) : isMissed ? (
                 <><i className="fas fa-exclamation-circle"></i> Missed</>
@@ -999,7 +1202,7 @@ export default function SubscriptionsTab() {
             </div>
           )}
 
-          {/* Countdown */}
+          {/* Countdown — trial or billing */}
           <div style={{
             background: "rgba(0,0,0,0.2)",
             borderRadius: "var(--radius-md)",
@@ -1008,7 +1211,7 @@ export default function SubscriptionsTab() {
             textAlign: "center",
           }}>
             <div style={{ fontSize: 11, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
-              {isPaid ? "Next billing in" : isMissed ? "Overdue by" : "Due in"}
+              {isTrial ? "Trial ends in" : isPaid ? "Next billing in" : isMissed ? "Overdue by" : "Due in"}
             </div>
             <div style={{ display: "flex", justifyContent: "center", gap: 12 }}>
               {[
@@ -1020,7 +1223,7 @@ export default function SubscriptionsTab() {
                 <div key={unit.label} style={{ textAlign: "center" }}>
                   <div style={{
                     fontSize: 22, fontWeight: 800,
-                    color: isPaid ? "#4ADE80" : "var(--primary)",
+                    color: isTrial ? "#3B82F6" : isPaid ? "#4ADE80" : "var(--primary)",
                     fontVariantNumeric: "tabular-nums",
                     lineHeight: 1.1,
                   }}>
@@ -1034,19 +1237,24 @@ export default function SubscriptionsTab() {
             </div>
           </div>
 
-          {/* Due date info */}
+          {/* Due date info — trial or billing */}
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
             fontSize: 12, color: "var(--text-secondary)", marginBottom: 16,
           }}>
-            <i className="fas fa-calendar-alt" style={{ color: "var(--text-tertiary)" }}></i>
-            Due on the <strong style={{ color: "var(--text-primary)" }}>10th</strong> of each month
+            {isTrial ? (
+              <><i className="fas fa-gift" style={{ color: "#3B82F6", fontSize: 11 }}></i>
+              Free trial — <strong style={{ color: "var(--text-primary)" }}>{trialDaysRemaining} day{trialDaysRemaining !== 1 ? "s" : ""}</strong> remaining</>
+            ) : (
+              <><i className="fas fa-calendar-alt" style={{ color: "var(--text-tertiary)" }}></i>
+              Due on the <strong style={{ color: "var(--text-primary)" }}>10th</strong> of each month</>
+            )}
           </div>
 
           {/* Pay Now button */}
           <button
-            onClick={handlePayNow}
-            disabled={paying || isPaid}
+            onClick={isTrial ? undefined : handlePayNow}
+            disabled={paying || isPaid || isTrial}
             style={{
               width: "100%",
               padding: "16px",
@@ -1054,21 +1262,23 @@ export default function SubscriptionsTab() {
               borderRadius: "var(--radius-md)",
               fontSize: 16,
               fontWeight: 700,
-              cursor: (paying || isPaid) ? "not-allowed" : "pointer",
+              cursor: (paying || isPaid || isTrial) ? "not-allowed" : "pointer",
               transition: "all 0.2s",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
-              background: isPaid
+              background: isPaid || isTrial
                 ? "var(--surface-elevated)"
                 : "linear-gradient(135deg, var(--gradient-start), var(--gradient-end))",
-              color: isPaid ? "var(--text-tertiary)" : "#fff",
-              opacity: (paying || isPaid) ? 0.7 : 1,
+              color: isPaid || isTrial ? "var(--text-tertiary)" : "#fff",
+              opacity: (paying || isPaid || isTrial) ? 0.7 : 1,
             }}
           >
             {paying ? (
               <><i className="fas fa-spinner fa-spin"></i> Processing…</>
+            ) : isPaid && isTrial ? (
+              <><i className="fas fa-gift"></i> Free Trial — {trialDaysRemaining} day{trialDaysRemaining !== 1 ? "s" : ""} left</>
             ) : isPaid ? (
               <><i className="fas fa-check-circle"></i> Paid for {currentMonthLabel}</>
             ) : isPartiallyPaid ? (
@@ -1078,17 +1288,164 @@ export default function SubscriptionsTab() {
             )}
           </button>
 
-          {/* Payment secured note */}
+          {/* Payment mode indicator */}
           {!isPaid && !paying && (
             <div style={{
-              fontSize: 11, color: "var(--text-tertiary)",
-              marginTop: 12, textAlign: "center",
+              fontSize: 11,
+              marginTop: 12,
+              textAlign: "center",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              color: "var(--text-tertiary)",
             }}>
-              <i className="fas fa-shield-halved" style={{ marginRight: 4, fontSize: 10 }}></i>
-              Secured via Paystack · Test mode active
+              <i className="fas fa-shield-halved" style={{ fontSize: 10 }}></i>
+              Secured via Paystack
+              <span style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "2px 8px",
+                borderRadius: 4,
+                fontSize: 10,
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+                background: paystackLiveMode
+                  ? "rgba(74,222,128,0.12)"
+                  : "rgba(232,168,56,0.12)",
+                color: paystackLiveMode
+                  ? "#4ADE80"
+                  : "var(--primary)",
+              }}>
+                {paystackLiveMode ? (
+                  <><i className="fas fa-check-circle" style={{ fontSize: 9 }}></i> Live</>
+                ) : (
+                  <><i className="fas fa-flask" style={{ fontSize: 9 }}></i> Test</>
+                )}
+              </span>
             </div>
           )}
         </div>
+
+        {/* ════ Activate Free Trial Button (shows only before trial ever activated — once used, gone forever) ════ */}
+        {subStatus?.trialStartDate == null && !loadingStatus && (
+          <div style={{
+            background: "var(--surface-card)",
+            border: "1px solid rgba(59,130,246,0.2)",
+            borderRadius: "var(--radius-lg)",
+            padding: "20px",
+            marginBottom: 20,
+            position: "relative",
+            overflow: "hidden",
+          }}>
+            <div style={{
+              position: "absolute", top: "-30%", right: "-10%",
+              width: 140, height: 140,
+              background: "radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%)",
+              pointerEvents: "none",
+            }} />
+
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
+              <div style={{
+                width: 48, height: 48,
+                borderRadius: "var(--radius-full)",
+                background: "rgba(59,130,246,0.12)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                fontSize: 20,
+                color: "#3B82F6",
+              }}>
+                <i className="fas fa-gift"></i>
+              </div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>Activate Free Trial</div>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
+                  Try {isUpgraded ? "VPS M" : "VPS S"} free — choose your trial period
+                </div>
+              </div>
+            </div>
+
+            {/* Duration presets */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+                Trial Period
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {[7, 14, 30, 60, 90].map((days) => (
+                  <button
+                    key={days}
+                    onClick={() => setTrialDuration(days)}
+                    disabled={activatingTrial}
+                    style={{
+                      flex: 1,
+                      padding: "10px 0",
+                      border: days === trialDuration ? "1.5px solid #3B82F6" : "1px solid var(--border)",
+                      borderRadius: "var(--radius-sm)",
+                      background: days === trialDuration ? "rgba(59,130,246,0.1)" : "var(--surface)",
+                      color: days === trialDuration ? "#3B82F6" : "var(--text-secondary)",
+                      fontSize: 13,
+                      fontWeight: days === trialDuration ? 700 : 600,
+                      cursor: activatingTrial ? "not-allowed" : "pointer",
+                      transition: "all 0.2s",
+                      textAlign: "center",
+                    }}
+                  >
+                    {days}d
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <ul style={{
+              listStyle: "none",
+              padding: 0,
+              margin: "0 0 16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              fontSize: 12,
+              color: "var(--text-secondary)",
+            }}>
+              <li><i className="fas fa-check-circle" style={{ color: "#3B82F6", width: 16, marginRight: 6 }}></i>Full access to all features during trial</li>
+              <li><i className="fas fa-check-circle" style={{ color: "#3B82F6", width: 16, marginRight: 6 }}></i>No credit card required</li>
+              <li><i className="fas fa-check-circle" style={{ color: "#3B82F6", width: 16, marginRight: 6 }}></i>Billing starts automatically after {trialDuration} days</li>
+            </ul>
+
+            <button
+              onClick={handleActivateTrial}
+              disabled={activatingTrial}
+              style={{
+                width: "100%",
+                padding: "14px",
+                border: "none",
+                borderRadius: "var(--radius-md)",
+                fontSize: 15,
+                fontWeight: 700,
+                cursor: activatingTrial ? "not-allowed" : "pointer",
+                transition: "all 0.2s",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                background: activatingTrial
+                  ? "var(--surface-elevated)"
+                  : "linear-gradient(135deg, #2563EB, #3B82F6)",
+                color: "#fff",
+                opacity: activatingTrial ? 0.7 : 1,
+              }}
+            >
+              {activatingTrial ? (
+                <><i className="fas fa-spinner fa-spin"></i> Activating trial…</>
+              ) : (
+                <><i className="fas fa-gift"></i> Activate Free Trial — {trialDuration} Days</>
+              )}
+            </button>
+          </div>
+        )}
 
         {/* ════ Payment History ════ */}
         <div className="payments-card" style={{
@@ -1137,6 +1494,7 @@ export default function SubscriptionsTab() {
                   ? paidDate.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
                   : "";
                 const isSimulation = pmt.channel === "simulation";
+                const isTestPayment = pmt.isTest === true && !isSimulation;
                 return (
                   <div key={pmt.id || i} style={{
                     display: "flex",
@@ -1154,12 +1512,14 @@ export default function SubscriptionsTab() {
                       borderRadius: "var(--radius-full)",
                       background: isSimulation
                         ? "rgba(232,168,56,0.12)"
-                        : "rgba(74,222,128,0.12)",
+                        : isTestPayment
+                          ? "rgba(59,130,246,0.12)"
+                          : "rgba(74,222,128,0.12)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       flexShrink: 0,
-                      color: isSimulation ? "var(--primary)" : "#4ADE80",
+                      color: isSimulation ? "var(--primary)" : isTestPayment ? "#3B82F6" : "#4ADE80",
                       fontSize: 14,
                     }}>
                       {isSimulation ? (
@@ -1184,6 +1544,16 @@ export default function SubscriptionsTab() {
                             background: "rgba(232,168,56,0.15)",
                             color: "var(--primary)",
                           }}>SIM</span>
+                        )}
+                        {isTestPayment && (
+                          <span style={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 4,
+                            background: "rgba(59,130,246,0.15)",
+                            color: "#3B82F6",
+                          }}>TEST</span>
                         )}
                         <span style={{
                           fontSize: 11,
@@ -1481,8 +1851,160 @@ export default function SubscriptionsTab() {
             </div>
           </div>
 
+          {/* Upgrade Confirmation Card */}
+          {confirmingUpgrade && (
+            <div style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 9999,
+              background: "rgba(0,0,0,0.85)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 24,
+            }}>
+              <div style={{
+                background: "var(--surface-card)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-lg)",
+                padding: 24,
+                maxWidth: 360,
+                width: "100%",
+                position: "relative",
+              }}>
+                {/* Close button */}
+                <button
+                  onClick={handleCancelUpgrade}
+                  style={{
+                    position: "absolute", top: 12, right: 12,
+                    width: 32, height: 32,
+                    borderRadius: "50%",
+                    background: "var(--surface)",
+                    border: "none",
+                    color: "var(--text-tertiary)",
+                    fontSize: 14,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <i className="fas fa-times"></i>
+                </button>
+
+                <div style={{ textAlign: "center", marginBottom: 20 }}>
+                  <div style={{
+                    width: 56, height: 56,
+                    borderRadius: "50%",
+                    background: "rgba(232,168,56,0.12)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    margin: "0 auto 14px",
+                    fontSize: 22,
+                    color: "var(--primary)",
+                  }}>
+                    <i className="fas fa-arrow-up"></i>
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>Upgrade to VPS M</div>
+                  <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
+                    {currentPlan.name} → {upgradePlan.name}
+                  </div>
+                </div>
+
+                {/* Cost breakdown */}
+                <div style={{
+                  background: "rgba(0,0,0,0.15)",
+                  borderRadius: "var(--radius-md)",
+                  padding: 16,
+                  marginBottom: 16,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}>
+                    <span style={{ color: "var(--text-secondary)" }}>VPS S (current plan)</span>
+                    <span style={{ color: "var(--text-secondary)" }}>KES {PLAN_PRICES["VPS S"].toLocaleString()}/mo</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}>
+                    <span style={{ color: "var(--text-secondary)" }}>VPS M (upgrade)</span>
+                    <span>KES {PLAN_PRICES["VPS M"].toLocaleString()}/mo</span>
+                  </div>
+                  <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                    <span style={{ color: "var(--text-secondary)" }}>Already paid this period</span>
+                    <span style={{ fontWeight: 600 }}>KES {paidThisPeriod.toLocaleString()}</span>
+                  </div>
+                  <div style={{
+                    marginTop: 10,
+                    padding: "10px 12px",
+                    background: "rgba(232,168,56,0.1)",
+                    borderRadius: "var(--radius-sm)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}>
+                    <span style={{ fontWeight: 700, fontSize: 14 }}>Pay today</span>
+                    <span style={{ fontWeight: 800, fontSize: 20, color: "var(--primary)" }}>
+                      KES {upgradeCost.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <button
+                  onClick={handleConfirmUpgrade}
+                  disabled={upgrading}
+                  style={{
+                    width: "100%",
+                    padding: "16px",
+                    border: "none",
+                    borderRadius: "var(--radius-md)",
+                    fontSize: 16,
+                    fontWeight: 700,
+                    cursor: upgrading ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    background: upgrading
+                      ? "var(--surface-elevated)"
+                      : "linear-gradient(135deg, var(--gradient-start), var(--gradient-end))",
+                    color: "#fff",
+                    opacity: upgrading ? 0.7 : 1,
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {upgrading ? (
+                    <><i className="fas fa-spinner fa-spin"></i> Processing payment…</>
+                  ) : isUpgradeFree ? (
+                    <><i className="fas fa-check-circle"></i> Confirm Upgrade</>
+                  ) : (
+                    <><i className="fas fa-lock"></i> Pay KES {upgradeCost.toLocaleString()} & Upgrade</>
+                  )}
+                </button>
+
+                <button
+                  onClick={handleCancelUpgrade}
+                  disabled={upgrading}
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    marginTop: 8,
+                    border: "none",
+                    borderRadius: "var(--radius-md)",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: upgrading ? "not-allowed" : "pointer",
+                    background: "transparent",
+                    color: "var(--text-tertiary)",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Upgrade CTA */}
-          {showUpgrade && !isUpgraded && (
+          {showUpgrade && !isUpgraded && !confirmingUpgrade && (
             <>
               {/* Diff highlights */}
               <div style={{

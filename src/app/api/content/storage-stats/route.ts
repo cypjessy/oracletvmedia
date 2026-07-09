@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
 import { getBunnyStorageStats, formatBytes } from "@/lib/bunny";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+};
+
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
 export async function GET() {
   try {
     const stats = await getBunnyStorageStats();
@@ -18,7 +28,7 @@ export async function GET() {
       formattedTotal: "10 GB",
       totalFiles: stats.totalFiles,
       totalDirectories: stats.totalDirectories,
-    });
+    }, { headers: corsHeaders });
   } catch (err: any) {
     console.error("Storage stats error:", err);
     // Return fallback so the UI doesn't break
@@ -30,6 +40,6 @@ export async function GET() {
       formattedTotal: "10 GB",
       totalFiles: 0,
       totalDirectories: 0,
-    });
+    }, { headers: corsHeaders });
   }
 }

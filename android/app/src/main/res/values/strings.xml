@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
     <string name="app_name">MOUNTAIN OF DELIVERANCE CHURCH</string>
-    <string name="title_activity_main">CHRISTIAN REVIVAL CHURCH</string>
-    <string name="package_name">com.christianrevival.church</string>
-    <string name="custom_url_scheme">com.christianrevival.church</string>
+    <string name="title_activity_main">MOUNTAIN OF DELIVERANCE CHURCH</string>
+    <string name="package_name">com.mountainofdeliverance.church</string>
+    <string name="custom_url_scheme">com.mountainofdeliverance.church</string>
 </resources>

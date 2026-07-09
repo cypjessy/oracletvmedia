@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { deleteFromBunny } from "@/lib/bunny";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+};
+
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
 export async function DELETE(req: NextRequest) {
   try {
     const { storage_paths } = await req.json();
@@ -24,12 +34,12 @@ export async function DELETE(req: NextRequest) {
       deleted,
       failed,
       total: storage_paths.length,
-    });
+    }, { headers: corsHeaders });
   } catch (err: any) {
     console.error("Delete error:", err);
     return NextResponse.json(
       { error: err.message || "Delete failed" },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }

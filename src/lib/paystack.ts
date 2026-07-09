@@ -10,6 +10,29 @@
 export const PAYSTACK_PUBLIC_KEY =
   process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || "";
 
+/**
+ * Free trial duration in days (0 = no trial).
+ * During the trial, the subscription shows as paid automatically.
+ * Set NEXT_PUBLIC_FREE_TRIAL_DAYS in .env.local to activate.
+ */
+export const FREE_TRIAL_DAYS = parseInt(
+  process.env.NEXT_PUBLIC_FREE_TRIAL_DAYS || "0", 10
+);
+
+/**
+ * Whether Paystack is in live (production) mode.
+ * Live keys start with pk_live_. Test keys start with pk_test_,
+ * or the key may be empty/unconfigured.
+ * Only live-mode payments count as real income.
+ */
+export function isPaystackLiveMode(): boolean {
+  return PAYSTACK_PUBLIC_KEY.startsWith("pk_live_");
+}
+
+export function isPaystackTestMode(): boolean {
+  return !isPaystackLiveMode();
+}
+
 // ═══════════════════════════════════════════════
 // Plan Pricing (single source of truth)
 // ═══════════════════════════════════════════════

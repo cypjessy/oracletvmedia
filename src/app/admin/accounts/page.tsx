@@ -5,11 +5,94 @@ import { useRouter } from "next/navigation";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import ToastBridge from "@/components/dashboard/ToastBridge";
 import { hapticSuccess } from "@/lib/haptics";
-import type { Timestamp } from "firebase/firestore";
+import { Timestamp } from "firebase/firestore";
 import { getAdminUsers } from "@/lib/users";
 import type { UserProfile } from "@/lib/users";
 import PremiumTopBar from "@/components/shared/PremiumTopBar";
 import SubscriptionsTab from "@/components/admin/SubscriptionsTab";
+import type { SubscriptionPayment } from "@/lib/subscriptions";
+
+// ═══════════════════════════════════════════════
+// Paystack Redirect Callback
+// When the user pays on mobile (redirect flow), Paystack redirects back
+// to this page with ?reference=xxx&trxref=yyy in the URL.
+// We detect this and verify the payment.
+// ═══════════════════════════════════════════════
+
+interface PaystackPendingPayment {
+  reference: string;
+  planKey: string;
+  amount: number;
+  isTest: boolean;
+  type: 'payment' | 'upgrade';
+}
+
+async function handlePaystackCallback(reference: string) {
+  const pendingJson = sessionStorage.getItem('paystack_pending');
+  if (!pendingJson) return;
+
+  sessionStorage.removeItem('paystack_pending');
+  let pending: PaystackPendingPayment;
+  try {
+    pending = JSON.parse(pendingJson);
+  } catch { return; }
+
+  try {
+    // Call verify endpoint
+    const res = await fetch('/api/paystack/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reference }),
+    });
+    const verifyData = await res.json();
+
+    if (!verifyData.verified) {
+      window.dispatchEvent(new CustomEvent('show-toast', {
+        detail: { title: 'Payment Failed', message: 'Could not verify payment. Please check your Paystack dashboard.', type: 'error', duration: 5000 },
+      }));
+      return;
+    }
+
+    // Record the payment to Firestore
+    const { recordPayment, getSubscriptionStatus, getCurrentBillingPeriod } = await import('@/lib/subscriptions');
+    const billingPeriod = getCurrentBillingPeriod();
+
+    await recordPayment({
+      reference: verifyData.reference || reference,
+      amount: verifyData.amount || pending.amount,
+      plan: pending.planKey as 'VPS S' | 'VPS M',
+      status: 'paid',
+      paidAt: Timestamp.now(),
+      billingPeriod,
+      email: 'admin@mountainofdeliverance.org',
+      channel: verifyData.channel || 'paystack',
+      church_id: process.env.NEXT_PUBLIC_CHURCH_ID || 'mountain_of_deliverance',
+      isTest: pending.isTest,
+    });
+
+    // If upgrade, save the new plan
+    if (pending.type === 'upgrade') {
+      const { updatePlan } = await import('@/lib/subscriptions');
+      await updatePlan('VPS M').catch(() => {});
+    }
+
+    // Refresh subscription status
+    window.dispatchEvent(new CustomEvent('payments-refresh'));
+    window.dispatchEvent(new CustomEvent('show-toast', {
+      detail: { title: 'Payment Successful', message: `${pending.type === 'upgrade' ? 'Plan upgrade' : 'Subscription'} payment of KES ${pending.amount.toLocaleString()} confirmed`, type: 'success', duration: 5000 },
+    }));
+
+    // Reload the page to refresh all state
+    setTimeout(() => {
+      window.location.href = '/admin/accounts';
+    }, 1500);
+  } catch (err: any) {
+    console.error('[Paystack callback] Error:', err);
+    window.dispatchEvent(new CustomEvent('show-toast', {
+      detail: { title: 'Verification Error', message: err.message || 'Could not verify payment after redirect', type: 'error', duration: 5000 },
+    }));
+  }
+}
 
 export default function AdminAccountsPage() {
   const router = useRouter();
@@ -34,6 +117,19 @@ export default function AdminAccountsPage() {
   }, []);
 
   useEffect(() => { setTimeout(() => loadAdmins(), 0); }, [loadAdmins]);
+
+  // ════ Paystack Redirect Callback ════
+  // After paying on mobile (Capacitor), Paystack redirects back to this page
+  // with query params. Detect and verify the payment.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('reference') || params.get('trxref');
+    if (ref) {
+      // Clean up URL to prevent double-processing on re-render
+      window.history.replaceState({}, '', '/admin/accounts');
+      handlePaystackCallback(ref);
+    }
+  }, []);
 
   const handleCopyLink = async () => {
     const token = process.env.NEXT_PUBLIC_ADMIN_REG_TOKEN || "admin-secret-token";

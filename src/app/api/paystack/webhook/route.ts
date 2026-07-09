@@ -27,6 +27,7 @@ async function recordPaymentViaFirestore(data: {
   church_id: string;
   billingPeriod: string;
   paidAt: Date;
+  isTest: boolean;
 }) {
   try {
     const { recordPayment } = await import("@/lib/subscriptions");
@@ -40,6 +41,7 @@ async function recordPaymentViaFirestore(data: {
       email: data.email,
       channel: data.channel,
       church_id: data.church_id,
+      isTest: data.isTest,
     });
     console.log(`Webhook: payment recorded for ${data.reference}`);
   } catch (err) {
@@ -103,6 +105,7 @@ export async function POST(req: NextRequest) {
           email: customer?.email || "admin@mountainofdeliverance.org",
           channel: channel || "paystack",
           church_id: metadata?.church_id || "mountain_of_deliverance",
+          isTest: !PAYSTACK_SECRET_KEY.startsWith("sk_live_"), // live keys start with sk_live_
         });
 
         break;
@@ -127,6 +130,7 @@ export async function POST(req: NextRequest) {
           email: customer?.email || "admin@mountainofdeliverance.org",
           channel: "paystack",
           church_id: metadata?.church_id || "mountain_of_deliverance",
+          isTest: !PAYSTACK_SECRET_KEY.startsWith("sk_live_"),
         });
 
         break;

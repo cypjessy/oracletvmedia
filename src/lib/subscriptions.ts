@@ -34,6 +34,7 @@ export interface SubscriptionPayment {
   email: string;
   channel: string;
   church_id: string;
+  isTest: boolean; // true = test payment (no real income), false = live payment
   createdAt?: Timestamp | null;
 }
 
@@ -43,7 +44,9 @@ export interface SubscriptionStatus {
   paidThisPeriod: number; // amount paid so far
   billingPeriod: string; // "YYYY-MM"
   lastPaidAt: Timestamp | null;
-  status: "paid" | "partial" | "overdue" | "pending";
+  status: "paid" | "partial" | "overdue" | "pending" | "trial";
+  trialStartDate?: Timestamp | null; // when the free trial started
+  trialDurationDays?: number; // how many days the trial lasts (stored at activation)
   updatedAt?: Timestamp | null;
 }
 
@@ -261,6 +264,32 @@ export function computeBalance(status: SubscriptionStatus | null): number {
 }
 
 /**
+ * Activate the free trial by creating/updating the subscription status
+ * with a trial start date and a chosen duration.
+ * Can only be called once — subsequent calls will overwrite but that's
+ * the caller's responsibility to guard against.
+ *
+ * @param plan - The subscription plan to trial
+ * @param durationDays - Number of days the trial should last (default 30)
+ */
+export async function activateTrial(plan: "VPS S" | "VPS M" = "VPS S", durationDays: number = 30): Promise<void> {
+  const statusRef = doc(db, PAYMENTS_COL, STATUS_DOC);
+  const totalDue = PLAN_PRICES[plan] || 4372;
+
+  await setDoc(statusRef, {
+    plan,
+    totalDue,
+    paidThisPeriod: 0,
+    billingPeriod: getCurrentBillingPeriod(),
+    lastPaidAt: null,
+    status: "trial",
+    trialStartDate: Timestamp.now(),
+    trialDurationDays: durationDays,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/**
  * Update the subscription plan in Firestore.
  */
 export async function updatePlan(plan: "VPS S" | "VPS M"): Promise<void> {
@@ -304,12 +333,19 @@ export interface BillingSnapshot {
   overdueMonths: number;
   accumulatedDebt: number;
   isNewPeriod: boolean;
+  isTrial: boolean;
+  trialDaysRemaining: number;
+  trialEndDate: Date | null; // for live countdown during trial
 }
 
 export function getBillingSnapshot(subStatus: SubscriptionStatus | null): BillingSnapshot {
   const currentPeriod = getCurrentBillingPeriod();
   const plan = subStatus?.plan || "VPS S";
   const totalDue = subStatus?.totalDue || PLAN_PRICES[plan];
+
+  // Default trial values
+  let isTrial = false;
+  let trialDaysRemaining = 0;
 
   if (!subStatus) {
     return {
@@ -322,7 +358,40 @@ export function getBillingSnapshot(subStatus: SubscriptionStatus | null): Billin
       overdueMonths: 0,
       accumulatedDebt: 0,
       isNewPeriod: false,
+      isTrial,
+      trialDaysRemaining,
+      trialEndDate: null,
     };
+  }
+
+  // ════ Free Trial Handling ════
+  if (subStatus.status === "trial" && subStatus.trialStartDate) {
+    const trialDuration = subStatus.trialDurationDays || 30;
+    const trialEnd = subStatus.trialStartDate.toDate();
+    trialEnd.setDate(trialEnd.getDate() + trialDuration);
+    const now = new Date();
+    const msRemaining = trialEnd.getTime() - now.getTime();
+
+    if (msRemaining > 0) {
+      // Still in trial — treat as fully paid
+      isTrial = true;
+      trialDaysRemaining = Math.ceil(msRemaining / (1000 * 60 * 60 * 24));
+      return {
+        currentPeriod,
+        paidThisPeriod: totalDue, // show as fully paid
+        totalDue,
+        remaining: 0,
+        plan,
+        status: "paid",
+        overdueMonths: 0,
+        accumulatedDebt: 0,
+        isNewPeriod: false,
+        isTrial,
+        trialDaysRemaining,
+        trialEndDate: trialEnd,
+      };
+    }
+    // Trial expired — mark as pending to require payment
   }
 
   // Detect if we're in a new billing period (the status hasn't been updated yet)
@@ -344,13 +413,11 @@ export function getBillingSnapshot(subStatus: SubscriptionStatus | null): Billin
       accumulatedDebt = totalDue - subStatus.paidThisPeriod;
 
       // Check if we're more than one period behind
-      // (e.g., the status is from 2+ months ago)
       const [statusYear, statusMonth] = subStatus.billingPeriod.split("-").map(Number);
       const [currYear, currMonth] = currentPeriod.split("-").map(Number);
       const monthsDiff = (currYear - statusYear) * 12 + (currMonth - statusMonth);
       if (monthsDiff > 1) {
         overdueMonths = monthsDiff;
-        // Full debt for months where nothing was paid + partial for the last active month
         accumulatedDebt = (monthsDiff - 1) * totalDue + (totalDue - subStatus.paidThisPeriod);
       }
     }
@@ -358,12 +425,10 @@ export function getBillingSnapshot(subStatus: SubscriptionStatus | null): Billin
     // Same period — check if overdue based on date
     const now = new Date();
     if (now.getDate() > 10 && subStatus.paidThisPeriod < totalDue) {
-      // This month is overdue
       if (subStatus.paidThisPeriod === 0) {
         overdueMonths = 1;
         accumulatedDebt = totalDue;
       } else {
-        // Partially paid this month
         accumulatedDebt = totalDue - subStatus.paidThisPeriod;
       }
     }
@@ -391,5 +456,8 @@ export function getBillingSnapshot(subStatus: SubscriptionStatus | null): Billin
     overdueMonths,
     accumulatedDebt,
     isNewPeriod,
+    isTrial,
+    trialDaysRemaining,
+    trialEndDate: null,
   };
 }
