@@ -1,12 +1,60 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyWebhookSignature, PAYSTACK_SECRET_KEY } from "@/lib/paystack-server";
+import { Timestamp } from "firebase/firestore";
+
+/**
+ * Helper to determine the billing period for a given date string.
+ */
+function getBillingPeriodForDate(dateStr: string | null): string {
+  const d = dateStr ? new Date(dateStr) : new Date();
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  if (d.getDate() < 10) {
+    const prev = new Date(year, month - 1, 1);
+    return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
+  }
+  return `${year}-${String(month + 1).padStart(2, "0")}`;
+}
+
+// Lazy-load the client-side Firebase SDK (works in Node.js via fetch)
+async function recordPaymentViaFirestore(data: {
+  reference: string;
+  amount: number;
+  plan: "VPS S" | "VPS M";
+  status: "paid" | "failed";
+  email: string;
+  channel: string;
+  church_id: string;
+  billingPeriod: string;
+  paidAt: Date;
+}) {
+  try {
+    const { recordPayment } = await import("@/lib/subscriptions");
+    await recordPayment({
+      reference: data.reference,
+      amount: data.amount,
+      plan: data.plan,
+      status: data.status,
+      paidAt: Timestamp.fromDate(data.paidAt),
+      billingPeriod: data.billingPeriod,
+      email: data.email,
+      channel: data.channel,
+      church_id: data.church_id,
+    });
+    console.log(`Webhook: payment recorded for ${data.reference}`);
+  } catch (err) {
+    console.error(`Webhook: failed to record payment ${data.reference}:`, err);
+  }
+}
 
 /**
  * Paystack Webhook Handler
  *
  * Paystack sends POST requests to this endpoint when payment events occur.
- * The endpoint URL should be registered in your Paystack dashboard:
- * Settings → Webhooks → Add URL → https://your-domain.com/api/paystack/webhook
+ * Acts as a backup recording path — the primary path is the client-side callback.
+ *
+ * Register in Paystack Dashboard → Settings → Webhooks:
+ * https://your-domain.com/api/paystack/webhook
  */
 export async function POST(req: NextRequest) {
   try {
@@ -36,36 +84,51 @@ export async function POST(req: NextRequest) {
 
     switch (eventType) {
       case "charge.success": {
-        // Payment was successful — update subscription status
-        const { reference, amount, customer, metadata } = data;
-        const plan = metadata?.plan || "VPS S";
+        const { reference, amount, customer, metadata, paid_at, channel } = data;
+        const plan: "VPS S" | "VPS M" = metadata?.plan || "VPS S";
+        const amountKES = Math.round((amount || 0) / 100);
 
-        // Here you would update Firestore with the payment record
-        // e.g., create a subscription_payments document
         console.log(
-          `Payment successful: ${reference}, ${amount / 100} KES, ${plan}`
+          `Payment successful: ${reference}, ${amountKES} KES, ${plan}`
         );
 
-        // TODO: Save to Firestore when Firebase Admin SDK is configured
-        // const { db } = await import("@/lib/firebase-admin");
-        // await db.collection("subscription_payments").add({
-        //   reference,
-        //   amount: amount / 100,
-        //   currency: data.currency,
-        //   plan,
-        //   email: customer?.email,
-        //   status: "paid",
-        //   paidAt: data.paid_at,
-        //   createdAt: new Date().toISOString(),
-        // });
+        // Record the payment to Firestore (backup path)
+        await recordPaymentViaFirestore({
+          reference,
+          amount: amountKES,
+          plan,
+          status: "paid",
+          paidAt: paid_at ? new Date(paid_at) : new Date(),
+          billingPeriod: getBillingPeriodForDate(paid_at),
+          email: customer?.email || "admin@mountainofdeliverance.org",
+          channel: channel || "paystack",
+          church_id: metadata?.church_id || "mountain_of_deliverance",
+        });
 
         break;
       }
 
       case "charge.failed": {
+        const { reference, amount, customer, metadata } = data;
+        const plan: "VPS S" | "VPS M" = metadata?.plan || "VPS S";
+
         console.warn(
-          `Payment failed: ${data?.reference}, reason: ${data?.status}`
+          `Payment failed: ${reference}, amount: ${amount / 100} KES, plan: ${plan}`
         );
+
+        // Record the failed payment for audit trail
+        await recordPaymentViaFirestore({
+          reference,
+          amount: Math.round((amount || 0) / 100),
+          plan,
+          status: "failed",
+          paidAt: new Date(),
+          billingPeriod: getBillingPeriodForDate(null),
+          email: customer?.email || "admin@mountainofdeliverance.org",
+          channel: "paystack",
+          church_id: metadata?.church_id || "mountain_of_deliverance",
+        });
+
         break;
       }
 

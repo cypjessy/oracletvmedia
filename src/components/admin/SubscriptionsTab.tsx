@@ -11,14 +11,14 @@ import {
   getSubscriptionStatus,
   getPaymentHistory,
   recordPayment,
-  computeBalance,
-  getCurrentBillingPeriod,
+  updatePlan,
+  getBillingSnapshot,
   getBillingPeriodLabel,
   getNextBillingDate,
   getCountdown,
-  PLAN_PRICES,
   type SubscriptionStatus,
   type SubscriptionPayment,
+  type BillingSnapshot,
 } from "@/lib/subscriptions";
 import { Timestamp } from "firebase/firestore";
 
@@ -145,6 +145,12 @@ export default function SubscriptionsTab() {
       try {
         const status = await getSubscriptionStatus();
         setSubStatus(status);
+        // Restore plan choice from Firestore
+        if (status?.plan === "VPS M") {
+          setIsUpgraded(true);
+        } else if (status?.plan === "VPS S") {
+          setIsUpgraded(false);
+        }
       } catch {
         // silent
       } finally {
@@ -180,12 +186,9 @@ export default function SubscriptionsTab() {
     return () => window.removeEventListener("payments-refresh", handler);
   }, []);
 
-  // Compute payment status based on Firestore + calendar
-  const balance = computeBalance(subStatus);
-  const currentBillingPeriod = getCurrentBillingPeriod();
-  const currentMonthLabel = getBillingPeriodLabel(currentBillingPeriod);
-
-  // (isUpgraded is declared below in the upgrade section — we'll compute totalDue there)
+  // Compute subscription billing snapshot (includes overdue tracking, new period detection)
+  const snapshot = getBillingSnapshot(subStatus);
+  const currentMonthLabel = getBillingPeriodLabel(snapshot.currentPeriod);
 
   // ════ Upgrade Toggle ════
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -218,23 +221,22 @@ export default function SubscriptionsTab() {
 
   const activePlan = isUpgraded ? upgradePlan : currentPlan;
 
-  // Derive billing values after all state declarations
+  // Derive billing values from the snapshot
   const nextBilling = getNextBillingDate();
   const diffMs = nextBilling.getTime() - now.getTime();
   const countdown = getCountdown(diffMs);
-  const isOverdue = diffMs < 0;
-  const totalDue = subStatus?.totalDue || PLAN_PRICES[isUpgraded ? "VPS M" : "VPS S"];
-  const paidThisPeriod = subStatus?.paidThisPeriod || 0;
-  const isPaid = subStatus?.status === "paid";
-  const isPartiallyPaid = !isPaid && paidThisPeriod > 0;
-  const isMissed = isOverdue && !isPaid && paidThisPeriod === 0;
+  const { paidThisPeriod, totalDue, remaining, status, overdueMonths, accumulatedDebt } = snapshot;
+  const isPaid = status === "paid";
+  const isPartiallyPaid = status === "partial";
+  const isMissed = status === "overdue";
 
   async function handleUpgrade() {
     setUpgrading(true);
     await new Promise((r) => setTimeout(r, 2500));
     setIsUpgraded(true);
     setUpgrading(false);
-    // Reload subscription status to reflect plan change
+    // Save plan choice to Firestore + reload status
+    updatePlan("VPS M").catch(() => {});
     getSubscriptionStatus().then(setSubStatus).catch(() => {});
     window.dispatchEvent(new CustomEvent("show-toast", {
       detail: { title: "Upgrade Successful", message: `Plan upgraded to ${upgradePlan.name} · ${upgradePlan.priceKES}/mo`, type: "success", duration: 4000 },
@@ -270,7 +272,7 @@ export default function SubscriptionsTab() {
 
       setTimeout(() => {
         // Save simulation payment to Firestore
-        const billingPeriod = getCurrentBillingPeriod();            recordPayment({
+        const billingPeriod = snapshot.currentPeriod;            recordPayment({
                   reference: `sim_${Date.now()}`,
                   amount: planConfig.amountKES,
                   plan: planKey as "VPS S" | "VPS M",
@@ -360,7 +362,7 @@ export default function SubscriptionsTab() {
               console.log("[Pay] Verify response:", verifyData);
               if (verifyData.verified) {
                 // Save payment record to Firestore
-                const billingPeriod = getCurrentBillingPeriod();
+                const billingPeriod = snapshot.currentPeriod;
                 recordPayment({
                   reference: verifyData.reference || response.reference,
                   amount: verifyData.amount || planConfig.amountKES,
@@ -389,6 +391,18 @@ export default function SubscriptionsTab() {
             })
             .catch((err: any) => {
               console.error("[Pay] Verification error:", err);
+              // Save failed payment record for audit trail
+              recordPayment({
+                reference: response.reference,
+                amount: planConfig.amountKES,
+                plan: planKey as "VPS S" | "VPS M",
+                status: "failed",
+                paidAt: Timestamp.now(),
+                billingPeriod: snapshot.currentPeriod,
+                email: "admin@mountainofdeliverance.org",
+                channel: "paystack",
+                church_id: process.env.NEXT_PUBLIC_CHURCH_ID || "mountain_of_deliverance",
+              }).catch(() => {});
               window.dispatchEvent(new CustomEvent("show-toast", {
                 detail: { title: "Verification Error", message: err.message || "Could not verify payment", type: "error", duration: 4000 },
               }));
@@ -912,13 +926,13 @@ export default function SubscriptionsTab() {
             }}>
               <span style={{ color: "var(--text-secondary)" }}>Paid so far</span>
               <span style={{ fontWeight: 700, color: "#FBBF24" }}>KES {paidThisPeriod.toLocaleString()}</span>
-              <span style={{ color: "var(--text-secondary)" }}>Balance</span>
-              <span style={{ fontWeight: 700, color: "var(--primary)" }}>KES {balance.toLocaleString()}</span>
+              <span style={{ color: "var(--text-secondary)" }}>Remaining</span>
+              <span style={{ fontWeight: 700, color: "var(--primary)" }}>KES {remaining.toLocaleString()}</span>
             </div>
           )}
 
-          {/* Missed payment alert */}
-          {isMissed && (
+          {/* Missed payment alert (current month overdue) */}
+          {isMissed && overdueMonths === 1 && (
             <div style={{
               background: "rgba(239,68,68,0.08)",
               border: "1px solid rgba(239,68,68,0.2)",
@@ -934,6 +948,54 @@ export default function SubscriptionsTab() {
             }}>
               <i className="fas fa-exclamation-triangle"></i>
               Payment missed — due on the 10th
+            </div>
+          )}
+
+          {/* Multiple months overdue — accumulated debt banner */}
+          {overdueMonths > 1 && (
+            <div style={{
+              background: "rgba(239,68,68,0.08)",
+              border: "1px solid rgba(239,68,68,0.2)",
+              borderRadius: "var(--radius-sm)",
+              padding: "12px 14px",
+              marginBottom: 12,
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              fontSize: 13,
+              color: "var(--error)",
+              fontWeight: 600,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <i className="fas fa-exclamation-triangle"></i>
+                {overdueMonths} month{overdueMonths > 1 ? "s" : ""} overdue
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-secondary)" }}>
+                Accumulated debt: <strong style={{ color: "#EF4444" }}>KES {accumulatedDebt.toLocaleString()}</strong>
+                <span style={{ marginLeft: 8 }}>· KES {totalDue.toLocaleString()}/mo</span>
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 400, color: "var(--text-tertiary)", marginTop: 2 }}>
+                This month: KES {remaining.toLocaleString()} remaining
+              </div>
+            </div>
+          )}
+
+          {/* Accumulated debt on overdue single month with partial payment */}
+          {isMissed && overdueMonths === 1 && accumulatedDebt > remaining && (
+            <div style={{
+              background: "rgba(239,68,68,0.05)",
+              border: "1px solid rgba(239,68,68,0.12)",
+              borderRadius: "var(--radius-sm)",
+              padding: "8px 14px",
+              marginBottom: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 12,
+              color: "var(--text-secondary)",
+            }}>
+              <i className="fas fa-coins" style={{ color: "#EF4444", fontSize: 11 }}></i>
+              KES {accumulatedDebt.toLocaleString()} total overdue
             </div>
           )}
 
@@ -1010,7 +1072,7 @@ export default function SubscriptionsTab() {
             ) : isPaid ? (
               <><i className="fas fa-check-circle"></i> Paid for {currentMonthLabel}</>
             ) : isPartiallyPaid ? (
-              <><i className="fas fa-lock"></i> Pay Balance — KES {balance.toLocaleString()}</>
+              <><i className="fas fa-lock"></i> Pay Balance — KES {remaining.toLocaleString()}</>
             ) : (
               <>              <i className="fas fa-lock"></i> Pay Now — KES {totalDue.toLocaleString()}</>
             )}
