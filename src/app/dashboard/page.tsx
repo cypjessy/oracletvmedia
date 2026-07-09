@@ -742,14 +742,20 @@ export default function DashboardPage() {
     });
   }, [advanceTvVideo, handleTvTimeUpdate, tvPlayer]);
 
-  /* Save current progress to Firestore. Only writes to Firestore — does NOT
-     update local tvUserState, avoiding cascading re-renders. */
+  /* Save current progress to Firestore and sync local state.
+     setTvUserState is safe here because the interval effect has stable deps
+     ([saveTvProgress]) — it does NOT restart on state changes. */
   const saveTvProgress = useCallback(() => {
     const uid = auth.currentUser?.uid;
     const seek = lastTvSeekRef.current;
     const index = lastTvIndexRef.current;
     if (uid) {
       updateUserTvProgress(uid, index, seek).catch(() => {});
+      setTvUserState((prev) =>
+        prev && (prev.currentIndex !== index || prev.currentSeek !== seek)
+          ? { ...prev, currentIndex: index, currentSeek: seek }
+          : prev
+      );
     }
   }, []);
 
