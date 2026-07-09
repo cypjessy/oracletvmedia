@@ -67,7 +67,6 @@ async function apiFetch<T>(
   options?: RequestInit
 ): Promise<{ ok: boolean; status: number; data?: T }> {
   const key = getApiKey();
-  const apiHost = getApiHost();
   const apiBase = getApiBase();
   try {
     const headers: Record<string, string> = {
@@ -76,10 +75,8 @@ async function apiFetch<T>(
     };
     if (key) headers["Authorization"] = `Bearer ${key}`;
 
-    // When apiHost is set, call via the Vercel proxy; otherwise call AzuraCast directly
-    const url = apiHost
-      ? `${apiHost}/api/azuracast${endpoint}`
-      : `${apiBase}/api${endpoint}`;
+    // Call AzuraCast directly (no Vercel proxy — no /api/azuracast routes exist)
+    const url = `${apiBase}/api${endpoint}`;
 
     const res = await fetch(url, {
       ...options,
