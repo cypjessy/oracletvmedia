@@ -89,6 +89,7 @@ export default function AdminTVPage() {
   const [currentTvIndex, setCurrentTvIndex] = useState(
     () => typeof window !== "undefined" ? Number(localStorage.getItem(ADMIN_TV_INDEX_KEY)) || 0 : 0
   );
+  const [startTvCountdown, setStartTvCountdown] = useState<number | null>(null);
   const [broadcasting, setBroadcasting] = useState(false);
   const [broadcastSlotCount, setBroadcastSlotCount] = useState(0);
   // ─── External video paste ───
@@ -328,6 +329,7 @@ export default function AdminTVPage() {
 
   // Advance to next video in the admin embedded player (save to Firestore + localStorage)
   const advanceTvVideo = useCallback(() => {
+    setStartTvCountdown(null);
     const nextIndex = (lastAdminTvIndexRef.current + 1) % (allVideos.length || 1);
     setCurrentTvIndex(nextIndex);
     // Reset seek cache
@@ -376,7 +378,13 @@ export default function AdminTVPage() {
   // Keep callbacks in sync with latest versions
   useEffect(() => {
     adminTvPlayer.setCallbacks({
-      onEnded: advanceTvVideo,
+      onEnded: () => {
+            if (allVideos.length > 1) {
+              setStartTvCountdown(20);
+            } else {
+              advanceTvVideo();
+            }
+          },
       onTimeUpdate: handleAdminTvTimeUpdate,
     });
   }, [advanceTvVideo, handleAdminTvTimeUpdate, adminTvPlayer]);
@@ -405,6 +413,21 @@ export default function AdminTVPage() {
       saveAdminTvProgress();
     };
   }, [saveAdminTvProgress]);
+
+  // ─── Start TV countdown timer ───
+  useEffect(() => {
+    if (startTvCountdown === null || startTvCountdown <= 0) return;
+    const timer = setTimeout(() => {
+      if (startTvCountdown <= 1) {
+        // Countdown reached 0 — auto-advance
+        setStartTvCountdown(null);
+        advanceTvVideo();
+      } else {
+        setStartTvCountdown(startTvCountdown - 1);
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [startTvCountdown, advanceTvVideo]);
 
   // Save on page unload / tab hide
   useEffect(() => {
@@ -1988,6 +2011,33 @@ export default function AdminTVPage() {
           font-size: 11px; font-weight: 600; color: var(--text-secondary);
         }
         .tv-sub-badge i { font-size: 10px; color: #3B82F6; }
+        .tv-start-badge {
+          display: flex; align-items: center; gap: 5px;
+          padding: 4px 12px;
+          border-radius: 20px;
+          border: none;
+          background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+          color: #fff;
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          cursor: pointer;
+          animation: tvStartIn 0.3s ease;
+          transition: all 0.2s;
+        }
+        .tv-start-badge:active { transform: scale(0.92); }
+        .tv-start-badge .tv-start-countdown {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: rgba(0,0,0,0.2);
+          font-size: 9px;
+          font-weight: 700;
+        }
         .tv-player-container {
           position: relative;
           width: 100%;
@@ -2058,6 +2108,37 @@ export default function AdminTVPage() {
           backdrop-filter: blur(4px);
         }
         .tv-expand-btn:active { background: rgba(255,255,255,0.2); transform: scale(0.9); }
+        .tv-start-btn {
+          display: flex; align-items: center; gap: 6px;
+          padding: 8px 14px;
+          border-radius: 10px;
+          border: none;
+          background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+          color: #fff;
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          backdrop-filter: blur(4px);
+          animation: tvStartIn 0.3s ease;
+          flex-shrink: 0;
+        }
+        .tv-start-btn:active { transform: scale(0.92); }
+        .tv-start-countdown {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          background: rgba(0,0,0,0.2);
+          font-size: 11px;
+          font-weight: 700;
+        }
+        @keyframes tvStartIn {
+          from { opacity: 0; transform: scale(0.8); }
+          to { opacity: 1; transform: scale(1); }
+        }
         .tv-no-video {
           display: flex;
           flex-direction: column;
@@ -2075,6 +2156,49 @@ export default function AdminTVPage() {
           position: relative;
         }
         .tv-no-video i { font-size: 28px; opacity: 0.4; }
+        .tv-nextup {
+          display: flex; align-items: center; gap: 10px;
+          padding: 8px 12px;
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
+          cursor: pointer;
+          transition: all 0.2s ease;
+          margin-bottom: 8px;
+          position: relative;
+          z-index: 1;
+        }
+        .tv-nextup:active { background: var(--surface-elevated); transform: scale(0.98); }
+        .tv-nextup-thumb {
+          width: 60px; height: 36px; border-radius: 6px;
+          overflow: hidden; flex-shrink: 0;
+          background: var(--surface-elevated);
+          position: relative;
+        }
+        .tv-nextup-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .tv-nextup-play-icon {
+          position: absolute; inset: 0;
+          display: flex; align-items: center; justify-content: center;
+          background: rgba(0,0,0,0.3);
+          color: rgba(255,255,255,0.9);
+          font-size: 12px;
+        }
+        .tv-nextup-info { flex: 1; min-width: 0; }
+        .tv-nextup-label {
+          font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+          color: var(--primary); margin-bottom: 1px;
+        }
+        .tv-nextup-title {
+          font-size: 12px; font-weight: 600;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .tv-nextup-btn {
+          width: 30px; height: 30px; border-radius: 8px;
+          background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+          border: none; color: #fff; font-size: 12px;
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+        }
         .tv-channel-strip {
           display: flex; align-items: center; gap: 12px;
           padding: 10px 12px;
@@ -2437,6 +2561,19 @@ export default function AdminTVPage() {
                         {channel?.subscriberCount || "—"}
                       </div>
                     </div>
+                    {startTvCountdown !== null && (
+                      <button
+                        className="tv-start-badge"
+                        onClick={() => {
+                          setStartTvCountdown(null);
+                          advanceTvVideo();
+                        }}
+                      >
+                        <i className="fas fa-play"></i>
+                        Start TV
+                        <span className="tv-start-badge-count">{startTvCountdown}s</span>
+                      </button>
+                    )}
                   </div>
 
 

@@ -122,7 +122,6 @@ export default function AdminPage() {
   const [tvLoading, setTvLoading] = useState(true);
   const tvPlayer = useTvPlayer();
   const [tvUserState, setTvUserState] = useState<UserTvState | null>(null);
-  const hasInteractedWithTv = useRef(false);
   const [tvStartCountdown, setTvStartCountdown] = useState(20);
   const lastTvSeekRef = useRef(0);
   const lastTvIndexRef = useRef(0);
@@ -137,13 +136,12 @@ export default function AdminPage() {
     tvPlayer.registerTarget(el);
   }, [tvPlayer.registerTarget]);
 
-  // Auto-start TV only when no video is already playing (e.g., first visit).
-  // When switching from TV page, tvPlayer.currentVideoId is already set — no-op.
+  // Play current video whenever it changes (initial mount, advancement, page switches).
   useEffect(() => {
-    if (tvCurrentVideo && !tvPlayer.currentVideoId) {
+    if (tvCurrentVideo && tvPlayer.currentVideoId !== tvCurrentVideo.id) {
       tvPlayer.play(tvCurrentVideo.id, tvUserState?.currentSeek || undefined);
     }
-  }, [tvCurrentVideo?.id, tvPlayer.currentVideoId, tvPlayer, tvUserState?.currentSeek]);
+  }, [tvCurrentVideo?.id, tvPlayer, tvUserState?.currentSeek]);
 
   // Sync index ref when state changes
   useEffect(() => {
@@ -165,10 +163,12 @@ export default function AdminPage() {
   const handleAdvanceToNext = useCallback(() => {
     if (!tvUserState || tvUserState.playlist.length === 0) return;
     const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
+    const nextId = tvUserState.playlist[nextIndex];
     const uid = auth.currentUser?.uid;
     if (uid) updateUserTvProgress(uid, nextIndex, 0);
     setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
-  }, [tvUserState]);
+    if (nextId) tvPlayer.play(nextId, 0);
+  }, [tvUserState, tvPlayer]);
 
   // Keep callbacks in sync with latest versions
   useEffect(() => {
@@ -260,16 +260,18 @@ export default function AdminPage() {
     return () => clearInterval(t);
   }, []);
 
-  /* Start TV — resume saved progress, or advance if already interacted */
-  const handleStartTv = useCallback(() => {
+  /* Start TV — always advances to the next video in the playlist.
+     If no playlist exists yet, auto-initialises one and plays the first video.
+     Progress is saved periodically by the 5s interval once the new video plays. */
+  const handleStartTv = useCallback(async () => {
     if (!tvUserState || tvUserState.playlist.length === 0) {
       const uid = auth.currentUser?.uid;
       if (uid && tvVideos.length > 0) {
-        import("@/lib/youtube").then((yt) => {
-          yt.autoInitUserPlaylist(uid).then((state) => {
-            setTvUserState(state);
-          });
-        });
+        const yt = await import("@/lib/youtube");
+        const state = await yt.autoInitUserPlaylist(uid);
+        setTvUserState(state);
+        const firstId = state.playlist[state.currentIndex];
+        if (firstId) tvPlayer.play(firstId, state.currentSeek || 0);
       } else {
         window.dispatchEvent(new CustomEvent("show-toast", {
           detail: { title: "No Videos", message: "No videos available to play. Sync videos from the admin panel.", type: "info", duration: 3000 }
@@ -277,30 +279,13 @@ export default function AdminPage() {
       }
       return;
     }
+    const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
+    const nextId = tvUserState.playlist[nextIndex];
     const uid = auth.currentUser?.uid;
-    if (tvCurrentVideo && hasInteractedWithTv.current) {
-      const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
-      if (uid) updateUserTvProgress(uid, nextIndex, 0);
-      setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
-      return;
-    }
-    hasInteractedWithTv.current = true;
-    const savedIndex = tvUserState.currentIndex;
-    const savedSeek = tvUserState.currentSeek;
-    const savedVideo = tvVideos.find((v) => v.id === tvUserState.playlist[savedIndex]) ?? null;
-    const nearEnd = savedVideo && savedVideo.duration > 0 && savedSeek >= savedVideo.duration * 0.9;
-    if (nearEnd) {
-      const nextIndex = (savedIndex + 1) % tvUserState.playlist.length;
-      if (uid) updateUserTvProgress(uid, nextIndex, 0);
-      setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
-    } else {
-      const resumeIndex = savedSeek > 0 && savedVideo ? savedIndex : 0;
-      const resumeSeek = resumeIndex === savedIndex ? savedSeek : 0;
-      console.log('[Admin Dashboard Start TV] Resuming:', { resumeIndex, resumeSeek, videoTitle: savedVideo?.title });
-      // DON'T write to Firestore on resume - let the interval save actual progress
-      setTvUserState((prev) => prev ? { ...prev, currentIndex: resumeIndex, currentSeek: resumeSeek } : prev);
-    }
-  }, [tvCurrentVideo, tvUserState, tvVideos]);
+    if (uid) await updateUserTvProgress(uid, nextIndex, 0);
+    setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
+    if (nextId) tvPlayer.play(nextId, 0);
+  }, [tvUserState, tvVideos, tvPlayer]);
 
   // Fetch TV channel and videos on mount
   useEffect(() => {
@@ -1782,7 +1767,7 @@ export default function AdminPage() {
                 </div>
               )}
 
-              <button className="tv-start-btn" onClick={handleStartTv} title={tvStartCountdown > 0 ? `Ready in ${tvStartCountdown}s` : "Starts TV or skips to next if already playing"} disabled={tvStartCountdown > 0}>
+              <button className="tv-start-btn" onClick={handleStartTv} title={tvStartCountdown > 0 ? `Ready in ${tvStartCountdown}s` : "Skip to next video"} disabled={tvStartCountdown > 0}>
                 <i className="fas fa-play"></i>
                 <span>{tvStartCountdown > 0 ? `Starting in ${tvStartCountdown}s` : 'Start TV'}</span>
               </button>

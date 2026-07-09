@@ -23,15 +23,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    // Validate file type
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"];
-    if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json(
-        { error: `Unsupported file type: ${file.type}. Allowed: JPG, PNG, WEBP, GIF, AVIF` },
-        { status: 400 }
-      );
-    }
-
     // Validate file size (max 10MB)
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
@@ -41,8 +32,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Infer MIME from extension when file.type is empty (common on Android)
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const mimeFromExt: Record<string, string> = {
+      jpg: "image/jpeg", jpeg: "image/jpeg",
+      png: "image/png",
+      webp: "image/webp",
+      gif: "image/gif",
+      avif: "image/avif",
+    };
+    const mimeType = file.type || mimeFromExt[ext] || "";
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"];
+    if (!allowedTypes.includes(mimeType)) {
+      return NextResponse.json(
+        { error: `Unsupported file type: "${file.type || ext}". Allowed: JPG, PNG, WEBP, GIF, AVIF` },
+        { status: 400 }
+      );
+    }
+
     // Generate a unique storage path
-    const ext = file.name.split(".").pop() || "jpg";
     const uuid = crypto.randomUUID();
     const storagePath = `churches/${churchId}/${category}/${uuid}.${ext}`;
 
@@ -50,17 +59,19 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
 
     // Upload to BunnyCDN
-    const result = await uploadToBunny(buffer, storagePath, file.type);
+    const result = await uploadToBunny(buffer, storagePath, mimeType);
 
     // Try to get image dimensions by reading binary headers (best-effort)
     let width = 0;
     let height = 0;
     try {
-      if (file.type === "image/png" && buffer.length >= 24) {
+      // Detect image type from magic bytes (works even with empty file.type)
+      const magic = buffer.length >= 8 ? buffer.toString("hex", 0, 8) : "";
+      if (magic.startsWith("89504e47") && buffer.length >= 24) {
         // PNG: IHDR chunk at bytes 16-23
         width = buffer.readUInt32BE(16);
         height = buffer.readUInt32BE(20);
-      } else if (file.type === "image/jpeg") {
+      } else if (magic.startsWith("ffd8")) {
         // JPEG: scan for SOF0 marker (0xFF 0xC0) which contains dimensions
         for (let i = 0; i < buffer.length - 9; i++) {
           if (buffer[i] === 0xFF && buffer[i + 1] === 0xC0) {
@@ -69,8 +80,8 @@ export async function POST(req: NextRequest) {
             break;
           }
         }
-      } else if (file.type === "image/webp" && buffer.length >= 30) {
-        // WEBP: VP8/VP8L header contains dimensions
+      } else if (magic.startsWith("52494646") && buffer.length >= 30) {
+        // WEBP: RIFF header, VP8/VP8L at bytes 12-15
         if (buffer.toString("ascii", 12, 16) === "VP8 " && buffer.length >= 30) {
           width = buffer.readUInt16LE(26) & 0x3FFF;
           height = buffer.readUInt16LE(28) & 0x3FFF;
@@ -85,11 +96,11 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
-      cdn_url: result.cdnUrl,
-      file_size: file.size,
+      cdnUrl: result.cdnUrl,
+      fileSize: file.size,
       width,
       height,
-      storage_path: storagePath,
+      storagePath: storagePath,
     }, { headers: corsHeaders });
   } catch (err: any) {
     console.error("Upload error:", err);

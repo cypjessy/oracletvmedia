@@ -82,12 +82,13 @@ function AlbumCarousel() {
   }, []);
 
   const display = photos.slice(0, 10);
+  const safeIdx = idx >= display.length ? 0 : idx;
 
   useEffect(() => {
     if (display.length <= 1) return;
-    const id = setInterval(() => setIdx((i) => (i + 1) % display.length), 3000);
-    return () => clearInterval(id);
-  }, [display.length]);
+    const id = setTimeout(() => setIdx((i) => (i + 1) % display.length), 3000);
+    return () => clearTimeout(id);
+  }, [idx, display.length]);
 
   if (loading) {
     return (
@@ -112,7 +113,7 @@ function AlbumCarousel() {
           key={p.id}
           src={p.cdnUrl}
           alt=""
-          style={{ ...STYLES.img, opacity: i === idx ? 1 : 0 }}
+          style={{ ...STYLES.img, opacity: i === safeIdx ? 1 : 0 }}
           loading="lazy"
         />
       ))}
@@ -121,7 +122,7 @@ function AlbumCarousel() {
           {display.map((_, i) => (
             <div
               key={i}
-              style={i === idx ? STYLES.dotActive : { ...STYLES.dot, width: 6 }}
+              style={i === safeIdx ? STYLES.dotActive : { ...STYLES.dot, width: 6 }}
             />
           ))}
         </div>

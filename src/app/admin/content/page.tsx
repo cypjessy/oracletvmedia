@@ -34,12 +34,13 @@ const defaultAlbumTitles: Record<string, string> = {
 function AlbumCarousel({ photos }: { photos: GalleryPhoto[] }) {
   const [idx, setIdx] = useState(0);
   const display = photos.slice(0, 10);
+  const safeIdx = idx >= display.length ? 0 : idx;
 
   useEffect(() => {
     if (display.length <= 1) return;
-    const id = setInterval(() => setIdx((i) => (i + 1) % display.length), 3000);
-    return () => clearInterval(id);
-  }, [display.length]);
+    const id = setTimeout(() => setIdx((i) => (i + 1) % display.length), 3000);
+    return () => clearTimeout(id);
+  }, [idx, display.length]);
 
   if (display.length === 0) {
     return <div className="album-cover-placeholder"><i className="fas fa-image"></i></div>;
@@ -48,12 +49,12 @@ function AlbumCarousel({ photos }: { photos: GalleryPhoto[] }) {
   return (
     <div className="album-carousel">
       {display.map((p, i) => (
-        <img key={p.id} src={p.cdnUrl} alt="" className="album-carousel-img" style={{ opacity: i === idx ? 1 : 0 }} loading="lazy" />
+        <img key={p.id} src={p.cdnUrl} alt="" className="album-carousel-img" style={{ opacity: i === safeIdx ? 1 : 0 }} loading="lazy" />
       ))}
       {display.length > 1 && (
         <div className="album-carousel-dots">
           {display.map((_, i) => (
-            <div key={i} className={`album-carousel-dot${i === idx ? " active" : ""}`} />
+            <div key={i} className={`album-carousel-dot${i === safeIdx ? " active" : ""}`} />
           ))}
         </div>
       )}

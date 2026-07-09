@@ -7,7 +7,7 @@ const API_BASE = (process.env.NEXT_PUBLIC_VERCEL_URL || "").replace(/\/+$/, "");
 
 /** Detect if running inside Capacitor native WebView */
 function isCapacitorNative(): boolean {
-  return typeof window !== "undefined" && !!(window as any).Capacitor?.isNative;
+  return typeof window !== "undefined" && typeof (window as any).Capacitor?.isNativePlatform === "function" && (window as any).Capacitor.isNativePlatform();
 }
 
 export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {

@@ -448,7 +448,6 @@ export default function DashboardPage() {
   const tvPlayerTargetRef = useRef<HTMLDivElement>(null);
   const tvPlayer = useTvPlayer();
   const { toggleFullscreen } = useFullscreenToggle();
-  const hasInteractedWithTv = useRef(false);
 
   // Derive current video from user's playlist
   const tvCurrentVideo = tvUserState && tvUserState.playlist.length > 0
@@ -669,17 +668,18 @@ export default function DashboardPage() {
     return () => { mounted = false; };
   }, []);
 
-  /* Start TV — resume saved progress, or advance if already interacted */
-  const handleStartTv = useCallback(() => {
+  /* Start TV — always advances to the next video in the playlist.
+     If no playlist exists yet, auto-initialises one and plays the first video.
+     Progress is saved periodically by the 5s interval once the new video plays. */
+  const handleStartTv = useCallback(async () => {
     if (!tvUserState || tvUserState.playlist.length === 0) {
-      // No playlist — try to auto-populate
       const uid = auth.currentUser?.uid;
       if (uid && tvVideos.length > 0) {
-        import("@/lib/youtube").then((yt) => {
-          yt.autoInitUserPlaylist(uid).then((state) => {
-            setTvUserState(state);
-          });
-        });
+        const yt = await import("@/lib/youtube");
+        const state = await yt.autoInitUserPlaylist(uid);
+        setTvUserState(state);
+        const firstId = state.playlist[state.currentIndex];
+        if (firstId) tvPlayer.play(firstId, state.currentSeek || 0);
       } else {
         window.dispatchEvent(new CustomEvent("show-toast", {
           detail: { title: "No Videos", message: "No videos available to play. Sync videos from the admin panel.", type: "info", duration: 3000 }
@@ -687,45 +687,14 @@ export default function DashboardPage() {
       }
       return;
     }
+    setShowEndCard(false);
+    const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
+    const nextId = tvUserState.playlist[nextIndex];
     const uid = auth.currentUser?.uid;
-    // First click after page load = resume saved progress, subsequent clicks = advance
-    if (tvCurrentVideo && hasInteractedWithTv.current) {
-      // User already pressed Start TV before — advance to next video
-      const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
-      const next = tvVideos.find((v) => v.id === tvUserState.playlist[nextIndex]) ?? null;
-      if (next) setNextTvVideo(next);
-      if (uid) updateUserTvProgress(uid, nextIndex, 0);
-      setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
-      return;
-    }
-    hasInteractedWithTv.current = true;
-    // Resume or start — check saved progress to decide
-    const savedIndex = tvUserState.currentIndex;
-    const savedSeek = tvUserState.currentSeek;
-    const savedVideo = tvVideos.find((v) => v.id === tvUserState.playlist[savedIndex]) ?? null;
-    const nearEnd = savedVideo && savedVideo.duration > 0 && savedSeek >= savedVideo.duration * 0.9;
-    if (nearEnd) {
-      // Near the end — advance to next video
-      const nextIndex = (savedIndex + 1) % tvUserState.playlist.length;
-      const next = tvVideos.find((v) => v.id === tvUserState.playlist[nextIndex]) ?? null;
-      if (next) setNextTvVideo(next);
-      if (uid) updateUserTvProgress(uid, nextIndex, 0);
-      setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
-    } else {
-      // Resume current video at saved progress (or start from index 0 if no progress)
-      const resumeIndex = savedSeek > 0 && savedVideo ? savedIndex : 0;
-      const resumeSeek = resumeIndex === savedIndex ? savedSeek : 0;
-      if (tvUserState.playlist.length > 1) {
-        const nextIdx = (resumeIndex + 1) % tvUserState.playlist.length;
-        const next = tvVideos.find((v) => v.id === tvUserState.playlist[nextIdx]) ?? null;
-        if (next) setNextTvVideo(next);
-      }
-      console.log('[Dashboard Start TV] Resuming:', { resumeIndex, resumeSeek, videoTitle: savedVideo?.title });
-      // DON'T write to Firestore on resume - let the interval save actual progress
-      setTvUserState((prev) => prev ? { ...prev, currentIndex: resumeIndex, currentSeek: resumeSeek } : prev);
-      if (savedVideo) tvPlayer.play(savedVideo.id, resumeSeek);
-    }
-  }, [tvCurrentVideo, tvUserState, tvVideos, router, tvPlayer]);
+    if (uid) await updateUserTvProgress(uid, nextIndex, 0);
+    setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
+    if (nextId) tvPlayer.play(nextId, 0);
+  }, [tvUserState, tvVideos, tvPlayer]);
 
   /* Advance TV video when it ends — show end card with next video ready */
   const advanceTvVideo = useCallback(() => {
@@ -748,6 +717,7 @@ export default function DashboardPage() {
   const handleContinueWatching = useCallback(() => {
     if (!tvUserState || tvUserState.playlist.length === 0) return;
     const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
+    const nextId = tvUserState.playlist[nextIndex];
     const uid = auth.currentUser?.uid;
     if (uid) {
       updateUserTvProgress(uid, nextIndex, 0);
@@ -755,7 +725,8 @@ export default function DashboardPage() {
     setShowEndCard(false);
     setNextTvVideo(null);
     setTvUserState((prev) => prev ? { ...prev, currentIndex: nextIndex, currentSeek: 0 } : prev);
-  }, [tvUserState]);
+    if (nextId) tvPlayer.play(nextId, 0);
+  }, [tvUserState, tvPlayer]);
 
   /* Track current time for periodic Firestore saves */
   const handleTvTimeUpdate = useCallback((time: number) => {
@@ -1048,7 +1019,7 @@ export default function DashboardPage() {
           )}
 
           {/* Start TV button — always visible */}
-          <button className="tv-start-btn" onClick={handleStartTv} title={tvStartCountdown > 0 ? `Ready in ${tvStartCountdown}s` : "Starts TV or skips to next if already playing"} disabled={tvStartCountdown > 0}>
+          <button className="tv-start-btn" onClick={handleStartTv} title={tvStartCountdown > 0 ? `Ready in ${tvStartCountdown}s` : "Skip to next video"} disabled={tvStartCountdown > 0}>
             <i className="fas fa-play"></i>
             <span>{tvStartCountdown > 0 ? `Starting in ${tvStartCountdown}s` : 'Start TV'}</span>
           </button>

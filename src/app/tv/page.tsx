@@ -84,6 +84,7 @@ export default function TVPage() {
 
   // ─── User TV state (per-member playlist + progress) ───
   const [tvUserState, setTvUserState] = useState<UserTvState | null>(null);
+  const [startTvCountdown, setStartTvCountdown] = useState<number | null>(null);
   const lastTvSeekRef = useRef(0);
   const lastTvIndexRef = useRef(0);
 
@@ -359,6 +360,7 @@ export default function TVPage() {
 
   // ─── Advance to next video in user's playlist ───
   const advanceToNext = useCallback(() => {
+    setStartTvCountdown(null);
     if (!tvUserState || tvUserState.playlist.length === 0) return;
     const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
     const uid = auth.currentUser?.uid;
@@ -385,7 +387,13 @@ export default function TVPage() {
   // Keep callbacks in sync with latest versions (after advanceToNext/handleTvTimeUpdate)
   useEffect(() => {
     tvPlayer.setCallbacks({
-      onEnded: advanceToNext,
+      onEnded: () => {
+      if (tvUserState && tvUserState.playlist.length > 1) {
+        setStartTvCountdown(20);
+      } else {
+        advanceToNext();
+      }
+    },
       onTimeUpdate: handleTvTimeUpdate,
     });
   }, [advanceToNext, handleTvTimeUpdate, tvPlayer]);
@@ -413,6 +421,20 @@ export default function TVPage() {
       saveTvProgress();
     };
   }, [tvUserState?.currentIndex, saveTvProgress]);
+
+  // ─── Start TV countdown timer ───
+  useEffect(() => {
+    if (startTvCountdown === null || startTvCountdown <= 0) return;
+    const timer = setTimeout(() => {
+      if (startTvCountdown <= 1) {
+        setStartTvCountdown(null);
+        advanceToNext();
+      } else {
+        setStartTvCountdown(startTvCountdown - 1);
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [startTvCountdown, advanceToNext]);
 
   /* Save on page unload / tab hide */
   useEffect(() => {
@@ -892,6 +914,7 @@ export default function TVPage() {
   }, []);
 
   // ─── Playlist helpers ───
+  
   const [addingToPlaylist, setAddingToPlaylist] = useState<string | null>(null);
   const [removingFromPlaylist, setRemovingFromPlaylist] = useState<string | null>(null);
 
@@ -1707,6 +1730,56 @@ export default function TVPage() {
           backdrop-filter: blur(4px);
         }
         .tv-shuffle-badge i { font-size: 8px; }
+
+        /* ─── START TV BUTTON ─── */
+        .tv-start-btn {
+          display: flex; align-items: center; gap: 6px;
+          padding: 10px 18px;
+          border-radius: 12px;
+          border: none;
+          background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+          color: #fff;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+          animation: tvStartIn 0.35s ease;
+        }
+        .tv-start-btn:active { transform: scale(0.92); }
+        .tv-start-countdown {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: rgba(0,0,0,0.2);
+          font-size: 12px;
+          font-weight: 700;
+        }
+        @keyframes tvStartIn {
+          from { opacity: 0; transform: scale(0.8) translateY(8px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+
+        .tv-nextup-info { flex: 1; min-width: 0; }
+        .tv-nextup-label {
+          font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+          color: var(--primary); margin-bottom: 1px;
+        }
+        .tv-nextup-title {
+          font-size: 12px; font-weight: 600;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .tv-nextup-btn {
+          width: 30px; height: 30px; border-radius: 8px;
+          background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+          border: none; color: #fff; font-size: 12px;
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+        }
 
         /* ─── TAB BAR ─── */
         .tv-tab-bar {
@@ -2664,6 +2737,24 @@ export default function TVPage() {
                   )}
                 </div>
 
+                {/* Start TV button */}
+                {startTvCountdown !== null && (
+                  <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", justifyContent: "center", padding: "10px", zIndex: 15, pointerEvents: "none" }}>
+                    <button
+                      style={{ pointerEvents: "auto" }}
+                      className="tv-start-btn"
+                      onClick={() => {
+                        setStartTvCountdown(null);
+                        advanceToNext();
+                      }}
+                    >
+                      <i className="fas fa-play"></i>
+                      Start TV
+                      <span className="tv-start-countdown">{startTvCountdown}s</span>
+                    </button>
+                  </div>
+                )}
+
                 {/* Playlist badge */}
                 {currentVideo && tvUserState && (
                   <div className="tv-shuffle-badge">
@@ -2672,6 +2763,8 @@ export default function TVPage() {
                   </div>
                 )}
               </div>
+
+
 
               {/* ─── TAB BAR ─── */}
               <div className="tv-tab-bar">
