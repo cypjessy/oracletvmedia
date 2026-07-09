@@ -926,6 +926,27 @@ export default function SubscriptionsTab() {
               </div>
             </div>
           </div>
+
+          {/* Provider credit */}
+          <div style={{
+            marginTop: 16,
+            paddingTop: 14,
+            borderTop: "1px solid rgba(232,168,56,0.12)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            fontSize: 12,
+            color: "var(--text-tertiary)",
+          }}>
+            <img
+              src="https://www.contabo.com/favicon.ico"
+              alt="Contabo"
+              style={{ width: 16, height: 16, borderRadius: 2, opacity: 0.5 }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
+            Server provided by <strong style={{ color: "var(--text-secondary)", fontWeight: 600 }}>Contabo</strong>
+          </div>
         </div>
 
         {/* ════ Event Log ════ */}
