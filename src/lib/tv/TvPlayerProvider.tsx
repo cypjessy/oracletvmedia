@@ -2,7 +2,10 @@
 
 import { createContext, useContext, useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import PlyrPlayer from "@/components/tv/PlyrPlayer";
+import type { LiveStatus } from "@/lib/youtube";
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
@@ -24,6 +27,10 @@ interface TvPlayerContextValue {
   visible: boolean;
   /** The current video ID. */
   currentVideoId: string | null;
+  /** Current live stream status (auto-detected from Firestore). */
+  liveStatus: LiveStatus | null;
+  /** True when a live stream is active. */
+  isLive: boolean;
 }
 
 const TvPlayerContext = createContext<TvPlayerContextValue | null>(null);
@@ -41,6 +48,26 @@ export function TvPlayerProvider({ children }: { children: React.ReactNode }) {
   const [seek, setSeek] = useState<number | undefined>(undefined);
   const [visible, setVisible] = useState(false);
   const callbacksRef = useRef<TvPlayerCallbacks>({});
+
+  // ─── Live stream status (listens to tv_live_status/main globally) ───
+  const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "tv_live_status", "main"), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setLiveStatus({
+          isLive: data.isLive || false,
+          liveVideoId: data.liveVideoId || null,
+          liveTitle: data.liveTitle || null,
+          startedBy: data.startedBy || null,
+          startedAt: data.startedAt?.toDate?.() || null,
+        } as LiveStatus);
+      } else {
+        setLiveStatus(null);
+      }
+    });
+    return () => unsub();
+  }, []);
 
   // Portal target — use ref + ready flag instead of direct state to avoid
   // callback-ref cascades (registerTarget is fully stable, never changes identity).
@@ -107,7 +134,9 @@ export function TvPlayerProvider({ children }: { children: React.ReactNode }) {
   // Stable context value
   const ctxValue = useMemo<TvPlayerContextValue>(() => ({
     registerTarget, play, hide, setCallbacks, visible, currentVideoId: videoId,
-  }), [registerTarget, play, hide, setCallbacks, visible, videoId]);
+    liveStatus,
+    isLive: liveStatus?.isLive ?? false,
+  }), [registerTarget, play, hide, setCallbacks, visible, videoId, liveStatus]);
 
   const currentPortalTarget = portalTargetRef.current;
 

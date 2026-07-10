@@ -3,16 +3,14 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import "plyr/dist/plyr.css";
-import { useTvPlayer } from "@/lib/tv/TvPlayerProvider";
-import {
-  getVideos, getVideosPage, getVideosByIds, getVideo,
+import { useTvPlayer } from "@/lib/tv/TvPlayerProvider";import { getVideos, getVideosPage, getVideosByIds, getVideo,
   getChannel,
   getUserTvState, updateUserTvProgress, saveUserTvState,
   addToUserPlaylist, removeFromUserPlaylist,
   updateTvHeartbeat,
   saveUserNote, getUserNote, getAllUserNotes, deleteUserNote,
 } from "@/lib/youtube";
-import type { YouTubeVideo, YouTubeChannel, UserTvState, TvNote } from "@/lib/youtube";
+import type { YouTubeVideo, YouTubeChannel, UserTvState, TvNote, LiveStatus } from "@/lib/youtube";
 import { auth, db } from "@/lib/firebase";
 import {
   getEnabledPaymentMethods, getMemberTransactions, submitTransaction,
@@ -108,10 +106,15 @@ export default function TVPage() {
     tvPlayer.registerTarget(el);
   }, [tvPlayer.registerTarget]);
 
-  // ─── Current playing video ───
-  const currentVideo = tvUserState && tvUserState.playlist.length > 0
-    ? videos.find((v) => v.id === tvUserState.playlist[tvUserState.currentIndex])
-    : undefined;
+  // ─── Live stream mode (from global TvPlayerProvider, auto-detected) ───
+  const liveStatus = tvPlayer.liveStatus;
+
+  // ─── Current playing video (override with live stream when active) ───
+  const currentVideo = liveStatus?.isLive && liveStatus.liveVideoId
+    ? { id: liveStatus.liveVideoId, title: liveStatus.liveTitle || "Live Stream", description: "", thumbnail: "", channelTitle: "", channelId: "", publishedAt: "", duration: 0, position: 0, isFeatured: false, isHidden: false, syncedAt: null }
+    : tvUserState && tvUserState.playlist.length > 0
+      ? videos.find((v) => v.id === tvUserState.playlist[tvUserState.currentIndex])
+      : undefined;
   const currentSeek = (() => {
     // Prefer Firestore if it has a valid seek > 0.1 seconds
     if (tvUserState && tvUserState.currentSeek > 0.1) return tvUserState.currentSeek;
@@ -265,6 +268,13 @@ export default function TVPage() {
             userVideos = valid;
           }
         } else {
+          // Restore index from localStorage as fallback if Firestore was reset
+          const cachedIndex = typeof window !== "undefined"
+            ? Number(localStorage.getItem(TV_INDEX_KEY)) || 0
+            : 0;
+          if (cachedIndex > 0 && cachedIndex < state.playlist.length && state.currentIndex === 0) {
+            state.currentIndex = cachedIndex;
+          }
           // Only load the current video for playback; rest load lazily when Playlist tab opens
           const currentId = state.playlist[state.currentIndex];
           if (currentId) {
@@ -353,10 +363,13 @@ export default function TVPage() {
   }, [tvUserState?.currentIndex]);
 
   // ─── Advance to next video in user's playlist ───
+  // Stops at the end — never wraps back to index 0.
   const advanceToNext = useCallback(() => {
     setStartTvCountdown(null);
     if (!tvUserState || tvUserState.playlist.length === 0) return;
-    const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
+    // If on the last video, don't advance — playlist is complete
+    if (tvUserState.currentIndex >= tvUserState.playlist.length - 1) return;
+    const nextIndex = tvUserState.currentIndex + 1;
     const uid = auth.currentUser?.uid;
     if (uid) {
       updateUserTvProgress(uid, nextIndex, 0);
@@ -380,17 +393,29 @@ export default function TVPage() {
 
   // Keep callbacks in sync with latest versions (after advanceToNext/handleTvTimeUpdate)
   useEffect(() => {
-    tvPlayer.setCallbacks({
-      onEnded: () => {
-      if (tvUserState && tvUserState.playlist.length > 1) {
-        setStartTvCountdown(20);
-      } else {
-        advanceToNext();
-      }
-    },
-      onTimeUpdate: handleTvTimeUpdate,
-    });
-  }, [advanceToNext, handleTvTimeUpdate, tvPlayer]);
+    // Don't advance when in live mode — Firestore listener handles end
+    if (liveStatus?.isLive) {
+      tvPlayer.setCallbacks({
+        onEnded: () => {},
+        onTimeUpdate: () => {},
+      });
+    } else {
+      tvPlayer.setCallbacks({
+        onEnded: () => {
+          if (tvUserState && tvUserState.currentIndex >= tvUserState.playlist.length - 1) {
+            // Last video finished — playlist complete, don't advance
+            return;
+          }
+          if (tvUserState && tvUserState.playlist.length > 1) {
+            setStartTvCountdown(20);
+          } else {
+            advanceToNext();
+          }
+        },
+        onTimeUpdate: handleTvTimeUpdate,
+      });
+    }
+  }, [advanceToNext, handleTvTimeUpdate, tvPlayer, liveStatus?.isLive]);
 
   /* Save current progress to Firestore + localStorage (used by interval + cleanup) */
   const saveTvProgress = useCallback(() => {
@@ -1693,6 +1718,37 @@ export default function TVPage() {
         .tv-player-placeholder i { font-size: 36px; color: var(--primary); opacity: 0.5; }
         .tv-player-placeholder p { font-size: 13px; color: var(--text-tertiary); }
 
+        /* ─── LIVE STREAM BADGE ─── */
+        .tv-live-badge-overlay {
+          position: absolute; top: 12px; left: 12px;
+          z-index: 15;
+          display: flex; align-items: center; gap: 8px;
+          padding: 6px 14px;
+          background: rgba(239,68,68,0.9);
+          border-radius: 10px;
+          backdrop-filter: blur(8px);
+          animation: tvBadgeIn 0.3s ease;
+          pointer-events: none;
+          max-width: calc(100% - 24px);
+        }
+        .tv-live-badge-dot {
+          width: 8px; height: 8px; border-radius: 50%;
+          background: #fff;
+          animation: livePulse 1.2s ease-in-out infinite;
+        }
+        .tv-live-badge-text {
+          font-size: 11px; font-weight: 800; color: #fff;
+          letter-spacing: 1px; text-transform: uppercase;
+        }
+        .tv-live-badge-title {
+          font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.9);
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        @keyframes livePulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.4; transform: scale(1.5); }
+        }
+
         /* ─── BROADCAST / SHUFFLE OVERLAYS ─── */
         .tv-broadcast-badge {
           position: absolute; top: 48px; left: 50%; transform: translateX(-50%);
@@ -2720,6 +2776,16 @@ export default function TVPage() {
             <div className="tv-player-section">
               <div className="tv-player-outer">
                 {/* Player — rendered by global TvPlayerProvider */}
+                {/* Live badge overlay */}
+                {liveStatus?.isLive && (
+                  <div className="tv-live-badge-overlay">
+                    <span className="tv-live-badge-dot"></span>
+                    <span className="tv-live-badge-text">LIVE</span>
+                    {liveStatus.liveTitle && (
+                      <span className="tv-live-badge-title">{liveStatus.liveTitle}</span>
+                    )}
+                  </div>
+                )}
                 <div ref={tvPlayerTargetRef} className="tv-player-outer" style={{ aspectRatio: "16/9" }}>
                   {currentVideo ? (
                     <div className="tv-schedule-now" style={{ display: "none" }}></div>

@@ -836,29 +836,28 @@ export default function MemberListenPage() {
           line-height: 1.5;
         }
 
-        /* Speaker card */
-        .speaker-card {
+        /* ===== PTT + SPEAKER STATUS ===== */
+        .ptt-section {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 20px;
           width: 100%;
           max-width: 340px;
-          padding: 16px 20px;
-          background: var(--surface-card);
-          border: 1px solid var(--border);
-          border-radius: 20px;
-          backdrop-filter: blur(20px);
+        }
+
+        .ptt-speaking-indicator {
           display: flex;
+          flex-direction: column;
           align-items: center;
-          gap: 14px;
-          transition: all 0.5s ease;
+          gap: 6px;
+          text-align: center;
+          animation: fadeIn 0.3s ease;
         }
 
-        .speaker-card.speaking {
-          border-color: rgba(74,222,128,0.2);
-          box-shadow: 0 0 30px rgba(74,222,128,0.05);
-        }
-
-        .speaker-avatar {
-          width: 48px;
-          height: 48px;
+        .ptt-speaking-avatar {
+          width: 44px;
+          height: 44px;
           border-radius: 50%;
           display: flex;
           align-items: center;
@@ -866,45 +865,47 @@ export default function MemberListenPage() {
           font-size: 18px;
           font-weight: 700;
           color: #fff;
-          flex-shrink: 0;
-          transition: all 0.3s ease;
-        }
-
-        .speaker-avatar.speaking-ring {
           box-shadow: 0 0 0 2px var(--success), 0 0 24px rgba(74,222,128,0.15);
         }
 
-        .speaker-info {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .speaker-label {
+        .ptt-speaking-label {
           font-size: 10px;
           font-weight: 700;
           color: var(--text-tertiary);
           text-transform: uppercase;
           letter-spacing: 1px;
-          margin-bottom: 3px;
         }
 
-        .speaker-name {
-          font-size: 15px;
+        .ptt-speaking-name {
+          font-size: 16px;
           font-weight: 700;
+          color: var(--success);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+          max-width: 240px;
         }
 
-        .speaker-name.speaking {
-          color: var(--success);
-        }
-
-        .speaker-wave-wrap {
+        .ptt-status-label {
           display: flex;
           align-items: center;
-          gap: 3px;
-          height: 24px;
+          gap: 8px;
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--text-tertiary);
+          padding: 8px 18px;
+          background: var(--surface-card);
+          border: 1px solid var(--border);
+          border-radius: 100px;
+          backdrop-filter: blur(10px);
+        }
+
+        .ptt-status-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: var(--success);
+          animation: livePulse 1.2s ease-in-out infinite;
         }
 
         .speaker-wave {
@@ -931,16 +932,6 @@ export default function MemberListenPage() {
           0%, 100% { transform: scaleY(0.5); }
           50% { transform: scaleY(1); }
         }
-
-        .listening-label {
-          font-size: 12px;
-          color: var(--text-tertiary);
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-
-        .listening-label i { font-size: 10px; }
 
         /* ===== RAISED HANDS NOTIFICATION ===== */
         .hand-raise-notice {
@@ -1088,14 +1079,6 @@ export default function MemberListenPage() {
           flex: 0 0 auto;
         }
 
-        .bottom-center {
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 0 12px;
-        }
-
         .bottom-right {
           display: flex;
           align-items: center;
@@ -1130,72 +1113,232 @@ export default function MemberListenPage() {
           background: rgba(232,168,56,0.15);
           color: var(--primary);
           border-color: rgba(232,168,56,0.3);
-          animation: handPulse 1.5s ease-in-out infinite;
+          animation: pttHandPulse 1.5s ease-in-out infinite;
         }
 
-        @keyframes handPulse {
+        @keyframes pttHandPulse {
           0%, 100% { box-shadow: 0 0 0 0 rgba(232,168,56,0.2); }
           50% { box-shadow: 0 0 16px 4px rgba(232,168,56,0.1); }
         }
 
-        /* ===== PUSH-TO-TALK BUTTON ===== */
+        /* ===== PUSH-TO-TALK PREMIUM BUTTON ===== */
         .ptt-btn {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 12px 24px;
-          border-radius: 100px;
-          border: 1px solid var(--border);
-          background: var(--surface);
-          color: var(--text-secondary);
-          font-size: 15px;
-          font-weight: 700;
+          position: relative;
+          width: 80px;
+          height: 80px;
+          border-radius: 50%;
+          border: none;
+          background: var(--surface-card);
           cursor: pointer;
-          transition: all 0.15s ease;
           user-select: none;
           -webkit-user-select: none;
           -webkit-touch-callout: none;
           touch-action: manipulation;
-          min-width: 0;
-          flex: 0 1 auto;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+        }
+
+        /* Gradient ring border */
+        .ptt-btn::before {
+          content: '';
+          position: absolute;
+          inset: -2px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.04), rgba(255,255,255,0.1));
+          z-index: -1;
+          transition: all 0.4s ease;
+        }
+
+        /* Spinning conic ring (idle) */
+        .ptt-btn::after {
+          content: '';
+          position: absolute;
+          inset: -4px;
+          border-radius: 50%;
+          background: conic-gradient(from 0deg, transparent, rgba(59,130,246,0.15), transparent, rgba(139,92,246,0.15), transparent);
+          z-index: -2;
+          animation: pttRingSpin 4s linear infinite;
+          mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
+          -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
         }
 
         .ptt-btn:active {
-          transform: scale(0.96);
+          transform: scale(0.92);
         }
 
         .ptt-btn i {
-          font-size: 18px;
-          transition: all 0.15s ease;
+          font-size: 30px;
+          color: var(--text-secondary);
+          transition: all 0.3s ease;
+          position: relative;
+          z-index: 1;
         }
 
-        .ptt-btn .ptt-label {
-          font-size: 13px;
-          white-space: nowrap;
+        /* Idle pulse glow to attract attention */
+        .ptt-btn:not(.active):not(.blocked) {
+          box-shadow: 0 0 0 0 rgba(59,130,246,0.12);
+          animation: pttIdlePulse 2.2s ease-in-out infinite;
         }
 
+        /* ===== ACTIVE (SPEAKING) ===== */
         .ptt-btn.active {
-          background: rgba(74,222,128,0.15);
-          border-color: rgba(74,222,128,0.3);
-          color: var(--success);
-          box-shadow: 0 0 24px rgba(74,222,128,0.15);
+          transform: scale(1.05);
+          animation: pttActiveBreathe 1.2s ease-in-out infinite;
+        }
+
+        .ptt-btn.active::before {
+          background: linear-gradient(135deg, rgba(74,222,128,0.35), rgba(59,130,246,0.2));
+          inset: -3px;
+        }
+
+        .ptt-btn.active::after {
+          background: conic-gradient(from 0deg, transparent, rgba(74,222,128,0.45), transparent, rgba(59,130,246,0.35), transparent);
+          animation: pttRingSpin 2s linear infinite;
+          inset: -6px;
         }
 
         .ptt-btn.active i {
-          animation: pttPulse 0.8s ease-in-out infinite;
+          color: var(--success);
+          animation: pttMicActive 0.6s ease-in-out infinite;
         }
 
+        .ptt-btn.active .ptt-wave-ring {
+          opacity: 1;
+        }
+
+        .ptt-btn.active .ptt-wave-ring:nth-child(1) {
+          animation: pttWaveExpand 1.2s ease-out infinite;
+        }
+
+        .ptt-btn.active .ptt-wave-ring:nth-child(2) {
+          animation: pttWaveExpand 1.2s ease-out infinite 0.4s;
+        }
+
+        .ptt-btn.active .ptt-wave-ring:nth-child(3) {
+          animation: pttWaveExpand 1.2s ease-out infinite 0.8s;
+        }
+
+        .ptt-btn.active .ptt-dot {
+          background: var(--success);
+          box-shadow: 0 0 10px rgba(74,222,128,0.6);
+          animation: pttDotPulse 1s ease-in-out infinite;
+        }
+
+        /* ===== BLOCKED ===== */
         .ptt-btn.blocked {
-          background: rgba(255,165,0,0.1);
-          border-color: rgba(255,165,0,0.2);
-          color: #ffa500;
           cursor: not-allowed;
-          opacity: 0.7;
+          opacity: 0.85;
         }
 
-        @keyframes pttPulse {
+        .ptt-btn.blocked::before {
+          background: linear-gradient(135deg, rgba(255,165,0,0.15), rgba(255,100,0,0.1));
+          inset: -2px;
+        }
+
+        .ptt-btn.blocked::after {
+          background: conic-gradient(from 0deg, transparent, rgba(255,165,0,0.2), transparent, rgba(255,100,0,0.1), transparent);
+          animation: pttRingSpin 3s linear infinite reverse;
+        }
+
+        .ptt-btn.blocked i {
+          color: #ffa500;
+        }
+
+        .ptt-btn.blocked .ptt-dot {
+          background: #ffa500;
+          box-shadow: 0 0 8px rgba(255,165,0,0.4);
+          animation: pttDotPulse 1.5s ease-in-out infinite;
+        }
+
+        .ptt-btn.blocked .ptt-label {
+          color: #ffa500;
+        }
+
+        /* Wave ripple rings */
+        .ptt-wave-ring {
+          position: absolute;
+          inset: -8px;
+          border-radius: 50%;
+          border: 2px solid rgba(74,222,128,0.2);
+          opacity: 0;
+          pointer-events: none;
+        }
+
+        /* Status dot indicator */
+        .ptt-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          position: absolute;
+          top: 16px;
+          right: 16px;
+          transition: all 0.3s ease;
+          z-index: 2;
+        }
+
+        .ptt-btn:not(.active):not(.blocked) .ptt-dot {
+          background: var(--info);
+          box-shadow: 0 0 8px rgba(56,189,248,0.4);
+          animation: pttDotPulse 2s ease-in-out infinite;
+        }
+
+        /* PTT Label below button */
+        .ptt-label {
+          position: absolute;
+          bottom: -22px;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 10px;
+          font-weight: 800;
+          color: var(--text-tertiary);
+          white-space: nowrap;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+          transition: all 0.3s ease;
+        }
+
+        .ptt-btn.active .ptt-label {
+          color: var(--success);
+          bottom: -24px;
+        }
+
+        .ptt-btn.blocked .ptt-label {
+          color: #ffa500;
+          bottom: -24px;
+        }
+
+        /* ===== ANIMATIONS ===== */
+        @keyframes pttRingSpin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        @keyframes pttIdlePulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.1); }
+          50% { box-shadow: 0 0 24px 8px rgba(59,130,246,0.06); }
+        }
+
+        @keyframes pttActiveBreathe {
+          0%, 100% { transform: scale(1.05); }
+          50% { transform: scale(1.1); }
+        }
+
+        @keyframes pttMicActive {
           0%, 100% { transform: scale(1); }
           50% { transform: scale(1.15); }
+        }
+
+        @keyframes pttWaveExpand {
+          0% { transform: scale(1); opacity: 0.5; }
+          100% { transform: scale(2); opacity: 0; }
+        }
+
+        @keyframes pttDotPulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(1.4); }
         }
 
         .ctrl-btn.hangup {
@@ -1328,10 +1471,12 @@ export default function MemberListenPage() {
           .audio-icon-wrap i { font-size: 36px; }
           .meeting-title { font-size: 19px; }
           .top-bar { padding: 10px 14px; }
-          .bottom-controls { padding: 10px 12px; }
+          .bottom-controls { padding: 8px 12px; }
           .bottom-right { gap: 10px; }
-          .ptt-btn { padding: 10px 16px; }
-          .ptt-btn .ptt-label { font-size: 12px; }
+          .ptt-btn { width: 64px; height: 64px; }
+          .ptt-btn i { font-size: 24px; }
+          .ptt-btn .ptt-label { font-size: 9px; bottom: -18px; }
+          .ptt-dot { width: 6px; height: 6px; top: 12px; right: 12px; }
           .ctrl-btn { width: 40px; height: 40px; font-size: 14px; }
         }
       `}</style>
@@ -1495,65 +1640,31 @@ export default function MemberListenPage() {
               </div>
             )}
 
-            {/* Speaker card */}
-            {isAnyoneSpeaking ? (
-              <div className="speaker-card speaking">
-                <div className={`speaker-avatar speaking-ring`}
-                  style={{ background: "linear-gradient(135deg, #3B82F6, #2563EB)" }}>
-                  {activeSpeaker?.charAt(0).toUpperCase()}
-                </div>
-                <div className="speaker-info">
-                  <div className="speaker-label">Speaking Now</div>
-                  <div className="speaker-name speaking">{activeSpeaker}</div>
-                </div>
-                <div className="speaker-wave">
-                  <span></span><span></span><span></span><span></span><span></span>
-                </div>
-              </div>
-            ) : participants.length > 0 ? (
-              <div className="speaker-card">
-                <div className="speaker-avatar"
-                  style={{ background: "linear-gradient(135deg, #6B7280, #4B5563)" }}>
-                  <i className="fas fa-user" style={{ fontSize: 18, opacity: 0.6 }}></i>
-                </div>
-                <div className="speaker-info">
-                  <div className="speaker-label">In the Room</div>
-                  <div className="speaker-name">
-                    {participants.length} participant{participants.length !== 1 ? "s" : ""}
+            {/* PTT Button + Speaker Status */}
+            <div className="ptt-section">
+              {/* Speaker status indicator */}
+              {isAnyoneSpeaking ? (
+                <div className="ptt-speaking-indicator">
+                  <div className="ptt-speaking-avatar"
+                    style={{ background: "linear-gradient(135deg, #3B82F6, #2563EB)" }}>
+                    {activeSpeaker?.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="ptt-speaking-label">Speaking Now</div>
+                  <div className="ptt-speaking-name">{activeSpeaker}</div>
+                  <div className="speaker-wave">
+                    <span></span><span></span><span></span><span></span><span></span>
                   </div>
                 </div>
-                <div className="listening-label">
-                  <i className="fas fa-volume-low"></i>
-                  <span>Listening</span>
+              ) : (
+                <div className="ptt-status-label">
+                  <span className="ptt-status-dot"></span>
+                  {participants.length > 0
+                    ? `${participants.length + 1} in the room`
+                    : "Waiting for speakers..."}
                 </div>
-              </div>
-            ) : (
-              <div className="speaker-card">
-                <div className="speaker-avatar"
-                  style={{ background: "linear-gradient(135deg, #6B7280, #4B5563)" }}>
-                  <i className="fas fa-hourglass-half" style={{ fontSize: 18, opacity: 0.6 }}></i>
-                </div>
-                <div className="speaker-info">
-                  <div className="speaker-label">Status</div>
-                  <div className="speaker-name">Waiting for speakers...</div>
-                </div>
-                <div className="listening-label">
-                  <i className="fas fa-circle" style={{ color: "var(--success)", fontSize: 8 }}></i>
-                  <span>Connected</span>
-                </div>
-              </div>
-            )}
-          </div>
+              )}
 
-          {/* BOTTOM CONTROLS */}
-          <div className="bottom-controls">
-            <div className="bottom-left">
-              <div className="participant-chip">
-                <i className="fas fa-headphones"></i>
-                <span>{participants.length + 1}</span>
-              </div>
-            </div>
-            <div className="bottom-center">
+              {/* PTT Button */}
               <button
                 className={`ptt-btn ${adminMuted ? "blocked" : !isMuted ? "active" : ""}`}
                 onMouseDown={handlePTTDown}
@@ -1564,12 +1675,27 @@ export default function MemberListenPage() {
                 onTouchCancel={handlePTTUp}
                 title={adminMuted ? "Host closed your microphone" : "Hold to talk"}
               >
+                <div className="ptt-wave-ring"></div>
+                <div className="ptt-wave-ring"></div>
+                <div className="ptt-wave-ring"></div>
+                <div className="ptt-dot"></div>
                 <i className={`fas fa-${adminMuted ? "lock" : "microphone"}`}></i>
                 <span className="ptt-label">
-                  {adminMuted ? "Blocked" : !isMuted ? "Speaking..." : isDesktop ? "Hold to Talk [Space]" : "Hold to Talk"}
+                  {adminMuted ? "Blocked" : !isMuted ? "Speaking..." : "Hold to Talk"}
                 </span>
               </button>
             </div>
+          </div>
+
+          {/* BOTTOM CONTROLS */}
+          <div className="bottom-controls">
+            <div className="bottom-left">
+              <div className="participant-chip">
+                <i className="fas fa-headphones"></i>
+                <span>{participants.length + 1}</span>
+              </div>
+            </div>
+
             <div className="bottom-right">
               <ReactionsOverlay room={roomRef.current} identity={identity} />
               <button

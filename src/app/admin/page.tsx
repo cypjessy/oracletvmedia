@@ -138,11 +138,13 @@ export default function AdminPage() {
 
   // Play current video when it changes to a different one (initial mount, advancement, page switches).
   // Does NOT watch seek — avoids re-firing when saveTvProgress updates state.
+  // Guards against overriding an active live stream.
   useEffect(() => {
+    if (tvPlayer.isLive) return;
     if (tvCurrentVideo && tvPlayer.currentVideoId !== tvCurrentVideo.id) {
       tvPlayer.play(tvCurrentVideo.id, tvUserState?.currentSeek || 0);
     }
-  }, [tvCurrentVideo?.id, tvPlayer]);
+  }, [tvCurrentVideo?.id, tvPlayer, tvPlayer.isLive]);
 
   // Track current seek and index via refs for periodic Firestore saves
   const handleTvTimeUpdate = useCallback((time: number) => {
@@ -159,7 +161,9 @@ export default function AdminPage() {
   // Advance to next video when current ends
   const handleAdvanceToNext = useCallback(() => {
     if (!tvUserState || tvUserState.playlist.length === 0) return;
-    const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
+    // If on the last video, don't advance — playlist is complete
+    if (tvUserState.currentIndex >= tvUserState.playlist.length - 1) return;
+    const nextIndex = tvUserState.currentIndex + 1;
     const nextId = tvUserState.playlist[nextIndex];
     const uid = auth.currentUser?.uid;
     if (uid) updateUserTvProgress(uid, nextIndex, 0);
@@ -603,6 +607,31 @@ export default function AdminPage() {
         .dash-onair-badge.off .dash-onair-dot { background: var(--text-tertiary); }
 
         @keyframes livePulse { 0%,100% { opacity:1;transform:scale(1); } 50% { opacity:0.5;transform:scale(1.4); } }
+
+        /* ===== LIVE BANNER ===== */
+        .live-banner {
+            padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+            background: linear-gradient(135deg, rgba(239,68,68,0.1), rgba(239,68,68,0.04));
+            flex-shrink: 0;
+        }
+        .live-banner-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+        .live-banner-dot {
+            width: 10px; height: 10px; border-radius: var(--radius-full);
+            background: var(--error); flex-shrink: 0;
+            animation: livePulse 1.5s ease-in-out infinite;
+            box-shadow: 0 0 8px rgba(239,68,68,0.4);
+        }
+        .live-banner-info { min-width: 0; }
+        .live-banner-title { font-size: 13px; font-weight: 700; color: var(--error); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .live-banner-sub { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
+        .live-banner-btn {
+            flex-shrink: 0; padding: 8px 16px; border-radius: 20px;
+            background: var(--error); color: #fff; border: none;
+            font-size: 12px; font-weight: 700; cursor: pointer;
+            display: flex; align-items: center; gap: 6px;
+            transition: all 0.15s ease;
+        }
+        .live-banner-btn:active { transform: scale(0.95); opacity: 0.9; }
 
         .dash-listener-count {
             display: flex; align-items: center; gap: 4px;
@@ -1696,6 +1725,27 @@ export default function AdminPage() {
 
         {/* CONTENT SCROLL */}
         <div className="content-scroll">
+
+          {/* ─── TV LIVE STREAM BANNER ─── */}
+          {tvPlayer.isLive && tvPlayer.liveStatus?.liveVideoId && (
+            <div className="live-banner" style={{ borderTop: "1px solid rgba(239,68,68,0.1)", borderBottom: "1px solid rgba(239,68,68,0.1)" }}>
+              <div className="live-banner-left">
+                <div className="live-banner-dot"></div>
+                <div className="live-banner-info">
+                  <div className="live-banner-title" style={{ color: "#EF4444" }}>
+                    <i className="fab fa-youtube" style={{ marginRight: 4 }}></i>
+                    {tvPlayer.liveStatus.liveTitle || "Live Stream"}
+                  </div>
+                  <div className="live-banner-sub">
+                    Church TV · Watch the live broadcast now
+                  </div>
+                </div>
+              </div>
+              <button className="live-banner-btn" onClick={() => tvPlayer.play(tvPlayer.liveStatus!.liveVideoId!)}>
+                <i className="fas fa-play"></i> Watch Live
+              </button>
+            </div>
+          )}
 
           {/* ─── TV HERO CARD ─── */}
           <section className="feed-section">

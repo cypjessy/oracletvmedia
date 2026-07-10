@@ -480,14 +480,16 @@ export default function DashboardPage() {
 
   // Call play() when current video changes to a different one.
   // Does NOT watch seek — avoids re-firing when tvUserState updates.
+  // Guards against overriding an active live stream.
   useEffect(() => {
+    if (tvPlayer.isLive) return;
     if (tvCurrentVideo) {
       if (tvPlayer.currentVideoId === tvCurrentVideo.id && tvPlayer.visible) return;
       tvPlayer.play(tvCurrentVideo.id, tvUserState?.currentSeek || 0);
     } else {
       tvPlayer.hide();
     }
-  }, [tvCurrentVideo?.id, tvPlayer]);
+  }, [tvCurrentVideo?.id, tvPlayer, tvPlayer.isLive]);
 
   // Delay full content render to prevent ANR on Android WebView
   useEffect(() => {
@@ -499,9 +501,6 @@ export default function DashboardPage() {
   const audio = useAudio();
   const { config: playConfig } = usePlayConfig();
 
-  // Music controls plugin disabled due to native crash on Android
-  // const musicControls = useMusicControls({...});
-
   const contentRef = useRef<HTMLDivElement>(null);
   const [offline, setOffline] = useState(false);
 
@@ -512,7 +511,7 @@ export default function DashboardPage() {
     queueMicrotask(() => setIsPlaying(nowPlaying));
   }, [audio.isPlaying, audio.currentStationId, npData]);
 
-  // Push now-playing metadata to Android media notification when audio is playing
+  // Sync Android notification with now-playing metadata (keeps audio alive in background)
   useEffect(() => {
     if (audio.isPlaying) {
       const np = npData?.nowPlaying;
@@ -689,7 +688,8 @@ export default function DashboardPage() {
     if (nextId) tvPlayer.play(nextId, 0);
   }, [tvUserState, tvVideos, tvPlayer]);
 
-  /* Advance TV video when it ends — show end card with next video ready */
+  /* Advance TV video when it ends — show end card with next video ready.
+     Stops at the end — never wraps back to index 0. */
   const advanceTvVideo = useCallback(() => {
     if (!tvUserState || tvUserState.playlist.length === 0) return;
     // Save progress immediately before showing end card
@@ -697,8 +697,10 @@ export default function DashboardPage() {
     if (uid && lastTvSeekRef.current > 0) {
       updateUserTvProgress(uid, lastTvIndexRef.current, lastTvSeekRef.current);
     }
+    // If on the last video, don't show end card — playlist is complete
+    if (tvUserState.currentIndex >= tvUserState.playlist.length - 1) return;
     // Show end card with the next video info
-    const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
+    const nextIndex = tvUserState.currentIndex + 1;
     const nextVideo = tvVideos.find((v) => v.id === tvUserState.playlist[nextIndex]) ?? null;
     if (nextVideo) {
       setNextTvVideo(nextVideo);
@@ -706,10 +708,17 @@ export default function DashboardPage() {
     }
   }, [tvUserState, tvVideos]);
 
-  /* Called when user taps "Continue Watching" — advances and plays the next video */
+  /* Called when user taps "Continue Watching" — advances and plays the next video.
+     Stops at the end — never wraps back to index 0. */
   const handleContinueWatching = useCallback(() => {
     if (!tvUserState || tvUserState.playlist.length === 0) return;
-    const nextIndex = (tvUserState.currentIndex + 1) % tvUserState.playlist.length;
+    // If on the last video, don't advance — playlist is complete
+    if (tvUserState.currentIndex >= tvUserState.playlist.length - 1) {
+      setShowEndCard(false);
+      setNextTvVideo(null);
+      return;
+    }
+    const nextIndex = tvUserState.currentIndex + 1;
     const nextId = tvUserState.playlist[nextIndex];
     const uid = auth.currentUser?.uid;
     if (uid) {
@@ -904,6 +913,27 @@ export default function DashboardPage() {
             </div>
           </div>              <button className="live-banner-btn" onClick={() => { setIsPlaying(true); router.push("/radio"); }}>
             <i className="fas fa-play"></i> Tune In Now
+          </button>
+        </div>
+      )}
+
+      {/* ===== TV LIVE STREAM BANNER ===== */}
+      {tvPlayer.isLive && tvPlayer.liveStatus?.liveVideoId && (
+        <div className="live-banner" style={{ borderTop: "1px solid rgba(239,68,68,0.1)" }}>
+          <div className="live-banner-left">
+            <div className="live-banner-dot"></div>
+            <div className="live-banner-info">
+              <div className="live-banner-title" style={{ color: "#EF4444" }}>
+                <i className="fab fa-youtube" style={{ marginRight: 4 }}></i>
+                {tvPlayer.liveStatus.liveTitle || "Live Stream"}
+              </div>
+              <div className="live-banner-sub">
+                Church TV · Watch the live broadcast now
+              </div>
+            </div>
+          </div>
+          <button className="live-banner-btn" onClick={() => tvPlayer.play(tvPlayer.liveStatus!.liveVideoId!)}>
+            <i className="fas fa-play"></i> Watch Live
           </button>
         </div>
       )}
