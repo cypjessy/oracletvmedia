@@ -14,6 +14,7 @@ import {
   getR2Videos, getR2Video,
   getR2TvPlaylists, addR2TvPlaylist, deleteR2TvPlaylist, updateR2TvPlaylist,
   getTvBumperConfig,
+  getAdminTvState, saveAdminTvState,
   type R2Video, type R2TvPlaylist,
 } from "@/lib/r2Videos";
 import {
@@ -61,21 +62,9 @@ export default function AdminTVPage() {
   const [plDeletingId, setPlDeletingId] = useState<string | null>(null);
   const [editingPlaylist, setEditingPlaylist] = useState<R2TvPlaylist | null>(null);
 
-  // ─── Admin TV player resume state ───
+  // ─── Admin TV player resume state (Firestore-backed) ───
   const tvUid = auth.currentUser?.uid;
-  const ADMIN_TV_SEEK_KEY = tvUid ? `admin_tv_resume_seek_${tvUid}` : "admin_tv_resume_seek";
-  const ADMIN_TV_INDEX_KEY = tvUid ? `admin_tv_resume_index_${tvUid}` : "admin_tv_resume_index";
-
-  useEffect(() => {
-    if (tvUid && typeof window !== "undefined") {
-      localStorage.removeItem("admin_tv_resume_seek");
-      localStorage.removeItem("admin_tv_resume_index");
-    }
-  }, []);
-
-  const [currentTvIndex, setCurrentTvIndex] = useState(
-    () => typeof window !== "undefined" ? Number(localStorage.getItem(ADMIN_TV_INDEX_KEY)) || 0 : 0
-  );
+  const [currentTvIndex, setCurrentTvIndex] = useState(0);
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
   const [startTvCountdown, setStartTvCountdown] = useState<number | null>(null);
 
@@ -86,31 +75,38 @@ export default function AdminTVPage() {
       })
     );
   }
-  const cachedAdminSeek = typeof window !== "undefined" ? Number(localStorage.getItem(ADMIN_TV_SEEK_KEY)) || 0 : 0;
+  const savedAdminSeekRef = useRef(0);
   const lastAdminTvSeekRef = useRef(0);
   const lastAdminTvIndexRef = useRef(0);
 
-  // Load R2 videos + playlists on mount
+  // Load R2 videos + playlists + admin TV state from Firestore on mount
   useEffect(() => {
     let mounted = true;
     const load = async () => {
+      const uid = auth.currentUser?.uid;
       try {
-        const [videos, pls, bumperData] = await Promise.all([
+        const [videos, pls, bumperData, adminState] = await Promise.all([
           getR2Videos({ includeHidden: true }),
           getR2TvPlaylists(),
           getTvBumperConfig(),
+          uid ? getAdminTvState(uid) : Promise.resolve(null),
         ]);
         if (!mounted) return;
         setAllVideos(videos);
         setPlaylists(pls);
 
-        // Restore last active playlist and index from localStorage
-        const savedPlaylistId = localStorage.getItem(ADMIN_TV_INDEX_KEY.replace("index", "playlist"));
+        // Restore saved seek from Firestore
+        if (adminState) {
+          savedAdminSeekRef.current = adminState.currentSeek || 0;
+        }
+
+        // Restore last active playlist and index from Firestore (fallback: first playlist)
         let hasActivePlaylist = false;
+        const savedPlaylistId = adminState?.activePlaylistId;
         if (savedPlaylistId && pls.find(p => p.id === savedPlaylistId)) {
           setActivePlaylistId(savedPlaylistId);
           const pl = pls.find(p => p.id === savedPlaylistId)!;
-          const savedIndex = Number(localStorage.getItem(ADMIN_TV_INDEX_KEY)) || pl.currentIndex || 0;
+          const savedIndex = adminState?.currentIndex ?? pl.currentIndex ?? 0;
           setCurrentTvIndex(savedIndex < pl.videoIds.length ? savedIndex : 0);
           hasActivePlaylist = true;
         } else if (pls.length > 0) {
@@ -270,9 +266,12 @@ export default function AdminTVPage() {
   const handleActivatePlaylist = useCallback((pl: R2TvPlaylist) => {
     setActivePlaylistId(pl.id);
     setCurrentTvIndex(pl.currentIndex || 0);
-    localStorage.setItem(ADMIN_TV_INDEX_KEY.replace("index", "playlist"), pl.id);
-    localStorage.setItem(ADMIN_TV_INDEX_KEY, String(pl.currentIndex || 0));
-    localStorage.setItem(ADMIN_TV_SEEK_KEY, "0");
+    savedAdminSeekRef.current = 0;
+    // Save to Firestore
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      saveAdminTvState(uid, { activePlaylistId: pl.id, currentIndex: pl.currentIndex || 0, currentSeek: 0 });
+    }
     showToast("Playlist Active", `"${pl.title}" is now playing`, "success", 2500);
   }, []);
 
@@ -288,25 +287,24 @@ export default function AdminTVPage() {
     if (lastAdminTvIndexRef.current >= (activeVideos.length || 1) - 1) return;
     const nextIndex = lastAdminTvIndexRef.current + 1;
     setCurrentTvIndex(nextIndex);
-    localStorage.setItem(ADMIN_TV_SEEK_KEY, "0");
-    localStorage.setItem(ADMIN_TV_INDEX_KEY, String(nextIndex));
     // Update playlist's currentIndex in Firestore
     if (activePlaylistId) {
       updateR2TvPlaylist(activePlaylistId, { currentIndex: nextIndex });
     }
+    // Also save to Firestore per-user state
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      saveAdminTvState(uid, { activePlaylistId, currentIndex: nextIndex, currentSeek: 0 });
+    }
   }, [activeVideos.length, activePlaylistId]);
 
-  // Sync index ref + localStorage
+  // Sync index ref (no localStorage write needed)
   useEffect(() => {
     lastAdminTvIndexRef.current = currentTvIndex;
-    localStorage.setItem(ADMIN_TV_INDEX_KEY, String(currentTvIndex));
   }, [currentTvIndex]);
-
-  const adminTvInitialSeek = cachedAdminSeek > 0.1 ? cachedAdminSeek : undefined;
 
   const handleAdminTvTimeUpdate = useCallback((time: number) => {
     lastAdminTvSeekRef.current = time;
-    localStorage.setItem(ADMIN_TV_SEEK_KEY, String(time));
   }, []);
 
   // Play entry bumper when url is set
@@ -320,9 +318,11 @@ export default function AdminTVPage() {
   useEffect(() => {
     if (isEntryBumperPlaying) return;
     if (currentVideo) {
-      adminTvPlayer.playR2(currentVideo.url, adminTvInitialSeek);
+      const seek = savedAdminSeekRef.current > 0.1 ? savedAdminSeekRef.current : 0;
+      adminTvPlayer.playR2(currentVideo.url, seek);
+      savedAdminSeekRef.current = 0; // Use seek only once after restore
     }
-  }, [currentVideo?.id, adminTvInitialSeek, adminTvPlayer, isEntryBumperPlaying]);
+  }, [currentVideo?.id, adminTvPlayer, isEntryBumperPlaying]);
 
   // Keep callbacks in sync
   useEffect(() => {
@@ -345,13 +345,18 @@ export default function AdminTVPage() {
     });
   }, [advanceTvVideo, handleAdminTvTimeUpdate, adminTvPlayer, activeVideos.length, isEntryBumperPlaying]);
 
-  // Save progress
+  // Save progress to Firestore per-user
   const saveAdminTvProgress = useCallback(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
     const seek = lastAdminTvSeekRef.current;
     const index = lastAdminTvIndexRef.current;
-    localStorage.setItem(ADMIN_TV_SEEK_KEY, String(seek));
-    localStorage.setItem(ADMIN_TV_INDEX_KEY, String(index));
-  }, []);
+    saveAdminTvState(uid, {
+      activePlaylistId,
+      currentIndex: index,
+      currentSeek: seek,
+    });
+  }, [activePlaylistId]);
 
   useEffect(() => {
     const interval = setInterval(saveAdminTvProgress, 5000);

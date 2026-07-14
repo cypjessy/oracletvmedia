@@ -231,33 +231,24 @@ export default function TVPage() {
   // Portal target registered via callback ref above — no useEffect needed.
 
   // ─── Bumper entry logic ───
-  const bumperPlayedOnceRef = useRef(false);
-  const [bumperEntryReady, setBumperEntryReady] = useState(false);
+  const entryBumperStartedRef = useRef(false);
+  const [isEntryBumperPlaying, setIsEntryBumperPlaying] = useState(false);
 
+  // Play entry bumper via playR2() when loading + bumperConfig + video are ready
   useEffect(() => {
-    if (!loading && tvPlayer.bumperConfig && !bumperPlayedOnceRef.current) {
-      // Entry bumper: trigger bumper first, then play will resume after it ends
-      bumperPlayedOnceRef.current = true;
-      setBumperEntryReady(true);
-      // Small delay to ensure player is mounted
-      setTimeout(() => tvPlayer.triggerBumper(), 100);
+    if (!loading && tvPlayer.bumperConfig && currentVideo && !entryBumperStartedRef.current) {
+      entryBumperStartedRef.current = true;
+      setIsEntryBumperPlaying(true);
+      tvPlayer.playR2(tvPlayer.bumperConfig.r2VideoUrl, 0);
     }
-  }, [loading, tvPlayer.bumperConfig]);
+  }, [loading, tvPlayer.bumperConfig, currentVideo?.id]);
 
-  // When bumper finishes playing (entry bumper), start the main video
+  // Call play() when current video changes (skip during entry bumper)
   useEffect(() => {
-    if (bumperEntryReady && !tvPlayer.isBumperPlaying && currentVideo) {
-      setBumperEntryReady(false);
+    if (currentVideo && !isEntryBumperPlaying && !entryBumperStartedRef.current) {
       tvPlayer.play(currentVideo.id, currentSeek);
     }
-  }, [tvPlayer.isBumperPlaying, bumperEntryReady, currentVideo?.id, currentSeek]);
-
-  // Call play() when current video changes (skip if entry bumper is pending)
-  useEffect(() => {
-    if (currentVideo && !bumperEntryReady) {
-      tvPlayer.play(currentVideo.id, currentSeek);
-    }
-  }, [currentVideo?.id, currentSeek, tvPlayer, bumperEntryReady]);
+  }, [currentVideo?.id, currentSeek, tvPlayer, isEntryBumperPlaying]);
 
   // ─── Initial load: fetch channel + user's TV state + only playlist videos ───
   useEffect(() => {
@@ -424,6 +415,12 @@ export default function TVPage() {
     } else {
       tvPlayer.setCallbacks({
         onEnded: () => {
+          // Entry bumper finished — transition to actual video
+          if (isEntryBumperPlaying) {
+            setIsEntryBumperPlaying(false);
+            entryBumperStartedRef.current = false;
+            return;
+          }
           if (tvUserState && tvUserState.currentIndex >= tvUserState.playlist.length - 1) {
             // Last video finished — playlist complete, don't advance
             return;
@@ -437,7 +434,7 @@ export default function TVPage() {
         onTimeUpdate: handleTvTimeUpdate,
       });
     }
-  }, [advanceToNext, handleTvTimeUpdate, tvPlayer, liveStatus?.isLive]);
+  }, [advanceToNext, handleTvTimeUpdate, tvPlayer, liveStatus?.isLive, isEntryBumperPlaying]);
 
   /* Save current progress to Firestore + localStorage (used by interval + cleanup) */
   const saveTvProgress = useCallback(() => {

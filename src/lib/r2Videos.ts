@@ -158,3 +158,43 @@ export async function saveTvBumperConfig(
 export async function clearTvBumperConfig(): Promise<void> {
   await deleteDoc(BUMPER_DOC);
 }
+
+/* ─── Admin TV State (persistent per-user progress) ──────── */
+
+export interface AdminTvState {
+  activePlaylistId: string | null;
+  currentIndex: number;
+  currentSeek: number;
+  updatedAt: Date | null;
+}
+
+const ADMIN_TV_STATE_DOC = (uid: string) => doc(db, "users", uid, "admin_tv_state", "main");
+
+/**
+ * Load the admin TV state from Firestore for a specific admin user.
+ */
+export async function getAdminTvState(uid: string): Promise<AdminTvState | null> {
+  const snap = await getDoc(ADMIN_TV_STATE_DOC(uid));
+  if (!snap.exists()) return null;
+  const data = snap.data() as AdminTvState;
+  return {
+    activePlaylistId: data.activePlaylistId || null,
+    currentIndex: data.currentIndex || 0,
+    currentSeek: data.currentSeek || 0,
+    updatedAt: data.updatedAt || null,
+  };
+}
+
+/**
+ * Save the admin TV state to Firestore for a specific admin user.
+ */
+export async function saveAdminTvState(
+  uid: string,
+  state: Partial<AdminTvState>
+): Promise<void> {
+  await setDoc(
+    ADMIN_TV_STATE_DOC(uid),
+    { ...state, updatedAt: serverTimestamp() },
+    { merge: true }
+  );
+}
