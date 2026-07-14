@@ -4,16 +4,17 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useFullscreenToggle } from "@/lib/tv/fullscreen";
 import {
-  getChannel, getVideos, getVideosPage, saveChannel, saveVideos, clearAllVideos,
-  getPlaylists, addPlaylist, deletePlaylist,
-  generateBroadcast, getTodayBroadcast,
   getGivingConfig, saveGivingConfig,
   replyToPrayer,
-  getUserTvState, updateUserTvProgress, autoInitUserPlaylist,
   getLiveStatus, setLiveStream, endLiveStream,
 } from "@/lib/youtube";
 import type { LiveStatus } from "@/lib/youtube";
-import type { YouTubeChannel, YouTubeVideo, TVPlaylist, TVGivingConfig } from "@/lib/youtube";
+import type { TVGivingConfig } from "@/lib/youtube";
+import {
+  getR2Videos, getR2Video,
+  getR2TvPlaylists, addR2TvPlaylist, deleteR2TvPlaylist, updateR2TvPlaylist,
+  type R2Video, type R2TvPlaylist,
+} from "@/lib/r2Videos";
 import {
   getPaymentMethods, addPaymentMethod, updatePaymentMethod, deletePaymentMethod,
   getTransactions, updateTransactionStatus,
@@ -23,7 +24,6 @@ import { auth, db } from "@/lib/firebase";
 import {
   collection, collectionGroup, doc, query, orderBy, onSnapshot, limit, Timestamp,
 } from "firebase/firestore";
-import { churchConfig } from "@/lib/churchConfig";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
 import { useTvPlayer } from "@/lib/tv/TvPlayerProvider";
 import ToastBridge from "@/components/dashboard/ToastBridge";
@@ -32,14 +32,7 @@ import PremiumTopBar from "@/components/shared/PremiumTopBar";
 export default function AdminTVPage() {
   const router = useRouter();
   const { toggleFullscreen } = useFullscreenToggle();
-  const [channel, setChannel] = useState<YouTubeChannel | null>(null);
-  const [videoCount, setVideoCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [channelIdInput, setChannelIdInput] = useState(
-    churchConfig.youtube_channel_id || ""
-  );
-  const [lastSyncTime, setLastSyncTime] = useState<string>("");
 
   // ─── Global TvPlayerProvider (portal-based, survives page navigations) ───
   const adminTvPlayer = useTvPlayer();
@@ -48,36 +41,26 @@ export default function AdminTVPage() {
     adminTvPlayer.registerTarget(el);
   }, [adminTvPlayer]);
 
-  // ─── All synced videos (for playlist builder) ───
-  const [allVideos, setAllVideos] = useState<YouTubeVideo[]>([]);
+  // ─── R2 Videos state ───
+  const [allVideos, setAllVideos] = useState<R2Video[]>([]);
   const [videoSearch, setVideoSearch] = useState("");
 
-  // ─── Paginated video grid (channel tab, lazy loaded) ───
-  const [paginatedVideos, setPaginatedVideos] = useState<YouTubeVideo[]>([]);
-  const [paginatedLastPos, setPaginatedLastPos] = useState<number | null>(null);
-  const [paginatedHasMore, setPaginatedHasMore] = useState(false);
-  const [paginatedLoading, setPaginatedLoading] = useState(false);
-  const paginatedLoadedRef = useRef(false);
-
-  // ─── Playlist state ───
-  const [playlists, setPlaylists] = useState<TVPlaylist[]>([]);
+  // ─── Playlist state (ordered R2 TV playlists) ───
+  const [playlists, setPlaylists] = useState<R2TvPlaylist[]>([]);
   const [playlistsLoading, setPlaylistsLoading] = useState(true);
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
   const [plName, setPlName] = useState("");
-  const [plDate, setPlDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [plTime, setPlTime] = useState("09:00");
-  const [plRecurring, setPlRecurring] = useState(false);
-  const [plDay, setPlDay] = useState("0");
   const [plVideoIds, setPlVideoIds] = useState<string[]>([]);
+  const [plStartIndex, setPlStartIndex] = useState(0);
   const [plSaving, setPlSaving] = useState(false);
   const [plDeletingId, setPlDeletingId] = useState<string | null>(null);
-  // ─── Admin TV player resume state (for embedded player) ───
-  // Use UID-scoped localStorage keys for per-admin privacy (like member pages)
+  const [editingPlaylist, setEditingPlaylist] = useState<R2TvPlaylist | null>(null);
+
+  // ─── Admin TV player resume state ───
   const tvUid = auth.currentUser?.uid;
   const ADMIN_TV_SEEK_KEY = tvUid ? `admin_tv_resume_seek_${tvUid}` : "admin_tv_resume_seek";
   const ADMIN_TV_INDEX_KEY = tvUid ? `admin_tv_resume_index_${tvUid}` : "admin_tv_resume_index";
 
-  // One-time migration: clean up old non-UID-scoped keys so admins don't share progress
   useEffect(() => {
     if (tvUid && typeof window !== "undefined") {
       localStorage.removeItem("admin_tv_resume_seek");
@@ -85,18 +68,11 @@ export default function AdminTVPage() {
     }
   }, []);
 
-  // Firestore-backed TV progress (persists across browser sessions like member dashboard)
-  const [tvFirestoreLoaded, setTvFirestoreLoaded] = useState(false);
-
   const [currentTvIndex, setCurrentTvIndex] = useState(
     () => typeof window !== "undefined" ? Number(localStorage.getItem(ADMIN_TV_INDEX_KEY)) || 0 : 0
   );
+  const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
   const [startTvCountdown, setStartTvCountdown] = useState<number | null>(null);
-  const [broadcasting, setBroadcasting] = useState(false);
-  const [broadcastSlotCount, setBroadcastSlotCount] = useState(0);
-  // ─── External video paste ───
-  const [externalUrl, setExternalUrl] = useState("");
-  const [externalAdding, setExternalAdding] = useState(false);
 
   function showToast(title: string, message: string, type: string, duration: number) {
     window.dispatchEvent(
@@ -109,104 +85,60 @@ export default function AdminTVPage() {
   const lastAdminTvSeekRef = useRef(0);
   const lastAdminTvIndexRef = useRef(0);
 
-  // Load current channel data + restore Firestore TV state
+  // Load R2 videos + playlists on mount
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       try {
-        const [c, videos] = await Promise.all([getChannel(), getVideos({ max: 50, includeHidden: true })]);
+        const [videos, pls] = await Promise.all([
+          getR2Videos({ includeHidden: true }),
+          getR2TvPlaylists(),
+        ]);
         if (!mounted) return;
-        setChannel(c);
-        setVideoCount(videos.length);
         setAllVideos(videos);
-        if (c?.channelId) setChannelIdInput(c.channelId);
+        setPlaylists(pls);
 
-        // Restore TV progress from Firestore (like member dashboard)
-        const uid = auth.currentUser?.uid;
-        if (uid) {
-          const tvState = await getUserTvState(uid);
-          if (!mounted) return;
-          // Restore index if within range
-          if (tvState.currentIndex > 0 && tvState.currentIndex < videos.length) {
-            setCurrentTvIndex(tvState.currentIndex);
-          }
-          // Restore seek from Firestore (overrides localStorage for fresh session)
-          if (tvState.currentSeek > 0.1) {
-            if (typeof window !== "undefined") {
-              localStorage.setItem(ADMIN_TV_SEEK_KEY, String(tvState.currentSeek));
-            }
-            lastAdminTvSeekRef.current = tvState.currentSeek;
-          }
-          // Auto-init playlist if empty (fill with all synced videos)
-          if (tvState.playlist.length === 0 && videos.length > 0) {
-            await autoInitUserPlaylist(uid);
-          }
+        // Restore last active playlist and index from localStorage
+        const savedPlaylistId = localStorage.getItem(ADMIN_TV_INDEX_KEY.replace("index", "playlist"));
+        if (savedPlaylistId && pls.find(p => p.id === savedPlaylistId)) {
+          setActivePlaylistId(savedPlaylistId);
+          const pl = pls.find(p => p.id === savedPlaylistId)!;
+          const savedIndex = Number(localStorage.getItem(ADMIN_TV_INDEX_KEY)) || pl.currentIndex || 0;
+          setCurrentTvIndex(savedIndex < pl.videoIds.length ? savedIndex : 0);
+        } else if (pls.length > 0) {
+          setActivePlaylistId(pls[0].id);
+          setCurrentTvIndex(pls[0].currentIndex || 0);
         }
-        setTvFirestoreLoaded(true);
-      } catch {} finally {
-        if (mounted) setLoading(false);
-      }
+
+        setLoading(false);
+      } catch { if (mounted) setLoading(false); }
     };
     load();
     return () => { mounted = false; };
   }, []);
 
+  // Helper: get the currently active playlist's video IDs resolved to R2Video objects
+  const activePlaylist = activePlaylistId ? playlists.find(p => p.id === activePlaylistId) : null;
+  const activeVideoIds = activePlaylist?.videoIds || [];
+  const activeVideos: R2Video[] = activeVideoIds
+    .map(id => allVideos.find(v => v.id === id))
+    .filter((v): v is R2Video => !!v);
 
+  const currentVideo = activeVideos.length > 0
+    ? activeVideos[currentTvIndex >= activeVideos.length ? 0 : currentTvIndex]
+    : null;
 
-  // Load playlists
-  useEffect(() => {
-    let mounted = true;
-    const loadPl = async () => {
-      try {
-        const list = await getPlaylists();
-        if (mounted) setPlaylists(list);
-      } catch {} finally {
-        if (mounted) setPlaylistsLoading(false);
-      }
-    };
-    loadPl();
-    return () => { mounted = false; };
-  }, []);
-
-  // ─── Paginated video grid — load first page on mount ───
-  useEffect(() => {
-    if (paginatedLoadedRef.current) return;
-    paginatedLoadedRef.current = true;
-    (async () => {
-      setPaginatedLoading(true);
-      try {
-        const { videos: page, lastPosition } = await getVideosPage(12, undefined, true);
-        setPaginatedVideos(page);
-        setPaginatedLastPos(lastPosition);
-        setPaginatedHasMore(page.length === 12);
-      } catch {}
-      setPaginatedLoading(false);
-    })();
-  }, []);
-
-  const handleLoadMoreVideos = useCallback(async () => {
-    if (paginatedLoading || !paginatedHasMore) return;
-    setPaginatedLoading(true);
-    try {
-      const { videos: page, lastPosition } = await getVideosPage(12, paginatedLastPos ?? undefined, true);
-      setPaginatedVideos((prev) => [...prev, ...page]);
-      setPaginatedLastPos(lastPosition);
-      setPaginatedHasMore(page.length === 12);
-    } catch {}
-    setPaginatedLoading(false);
-  }, [paginatedLastPos, paginatedLoading, paginatedHasMore]);
-
-  // Add video to playlist
+  // Add R2 video to playlist builder
   const addVideoToPlaylist = useCallback((videoId: string) => {
     setPlVideoIds((prev) => (prev.includes(videoId) ? prev : [...prev, videoId]));
   }, []);
 
-  // Remove video from playlist
+  // Remove R2 video from playlist builder
   const removeVideoFromPlaylist = useCallback((videoId: string) => {
     setPlVideoIds((prev) => prev.filter((id) => id !== videoId));
   }, []);
 
-  // Move video up in playlist
+  // Move video up in playlist builder
   const moveVideoUp = useCallback((index: number) => {
     if (index === 0) return;
     setPlVideoIds((prev) => {
@@ -216,7 +148,7 @@ export default function AdminTVPage() {
     });
   }, []);
 
-  // Move video down in playlist
+  // Move video down in playlist builder
   const moveVideoDown = useCallback((index: number) => {
     setPlVideoIds((prev) => {
       if (index >= prev.length - 1) return prev;
@@ -226,204 +158,181 @@ export default function AdminTVPage() {
     });
   }, []);
 
-  // Add playlist handler
+  // Save a new R2 TV playlist
   const handleAddPlaylist = useCallback(async () => {
     if (!plName.trim()) {
       showToast("Name Required", "Enter a name for this playlist", "error", 3000);
       return;
     }
     if (plVideoIds.length === 0) {
-      showToast("No Videos", "Add at least one video to the playlist", "error", 3000);
-      return;
-    }
-    if (!plTime) {
-      showToast("Time Required", "Set a time for this playlist", "error", 3000);
+      showToast("No Videos", "Add at least one R2 video to the playlist", "error", 3000);
       return;
     }
     setPlSaving(true);
     try {
-      await addPlaylist({
+      const startIdx = plStartIndex < plVideoIds.length ? plStartIndex : 0;
+      await addR2TvPlaylist({
         title: plName.trim(),
         videoIds: plVideoIds,
-        scheduledDate: plRecurring ? "" : plDate,
-        scheduledTime: plTime,
-        dayOfWeek: plRecurring ? parseInt(plDay) : null,
-        isRecurring: plRecurring,
+        currentIndex: startIdx,
         isActive: true,
       });
-      const list = await getPlaylists();
-      setPlaylists(list);
+      const fresh = await getR2TvPlaylists();
+      setPlaylists(fresh);
       setShowAddPlaylist(false);
+      setEditingPlaylist(null);
       setPlName("");
       setPlVideoIds([]);
-      showToast("Playlist Created!", `"${plName.trim()}" will play at the scheduled time`, "success", 3000);
+      setPlStartIndex(0);
+      showToast("Playlist Created!", `"${plName.trim()}" — ${plVideoIds.length} videos`, "success", 3000);
     } catch {
       showToast("Error", "Could not save playlist", "error", 3000);
     }
     setPlSaving(false);
-  }, [plName, plVideoIds, plDate, plTime, plRecurring, plDay]);
+  }, [plName, plVideoIds, plStartIndex]);
 
-  // Delete playlist handler
+  // Update existing playlist
+  const handleUpdatePlaylist = useCallback(async () => {
+    if (!editingPlaylist) return;
+    if (!plName.trim()) {
+      showToast("Name Required", "Enter a name for this playlist", "error", 3000);
+      return;
+    }
+    if (plVideoIds.length === 0) {
+      showToast("No Videos", "Add at least one R2 video", "error", 3000);
+      return;
+    }
+    setPlSaving(true);
+    try {
+      const startIdx = plStartIndex < plVideoIds.length ? plStartIndex : 0;
+      await updateR2TvPlaylist(editingPlaylist.id, {
+        title: plName.trim(),
+        videoIds: plVideoIds,
+        currentIndex: startIdx,
+      });
+      const fresh = await getR2TvPlaylists();
+      setPlaylists(fresh);
+      setShowAddPlaylist(false);
+      setEditingPlaylist(null);
+      setPlName("");
+      setPlVideoIds([]);
+      setPlStartIndex(0);
+      showToast("Playlist Updated!", `"${plName.trim()}" saved`, "success", 3000);
+    } catch {
+      showToast("Error", "Could not update playlist", "error", 3000);
+    }
+    setPlSaving(false);
+  }, [editingPlaylist, plName, plVideoIds, plStartIndex]);
+
+  // Delete playlist
   const handleDeletePlaylist = useCallback(async (id: string) => {
     setPlDeletingId(id);
     try {
-      await deletePlaylist(id);
-      setPlaylists((prev) => prev.filter((p) => p.id !== id));
+      await deleteR2TvPlaylist(id);
+      const fresh = await getR2TvPlaylists();
+      setPlaylists(fresh);
+      if (activePlaylistId === id) {
+        setActivePlaylistId(fresh.length > 0 ? fresh[0].id : null);
+        setCurrentTvIndex(0);
+      }
       showToast("Removed", "Playlist deleted", "success", 2500);
     } catch {
       showToast("Error", "Could not delete playlist", "error", 3000);
     }
     setPlDeletingId(null);
+  }, [activePlaylistId]);
+
+  // Edit playlist — populate form
+  const handleEditPlaylist = useCallback((pl: R2TvPlaylist) => {
+    setEditingPlaylist(pl);
+    setPlName(pl.title);
+    setPlVideoIds(pl.videoIds);
+    setPlStartIndex(pl.currentIndex || 0);
+    setShowAddPlaylist(true);
   }, []);
 
-  // Sync channel from YouTube API
-  const handleSync = useCallback(async () => {
-    const channelId = channelIdInput.trim();
-    if (!channelId) {
-      showToast("Channel Required", "Enter a YouTube channel ID", "error", 3000);
-      return;
-    }
+  // Activate a playlist for playback
+  const handleActivatePlaylist = useCallback((pl: R2TvPlaylist) => {
+    setActivePlaylistId(pl.id);
+    setCurrentTvIndex(pl.currentIndex || 0);
+    localStorage.setItem(ADMIN_TV_INDEX_KEY.replace("index", "playlist"), pl.id);
+    localStorage.setItem(ADMIN_TV_INDEX_KEY, String(pl.currentIndex || 0));
+    localStorage.setItem(ADMIN_TV_SEEK_KEY, "0");
+    showToast("Playlist Active", `"${pl.title}" is now playing`, "success", 2500);
+  }, []);
 
-    setSyncing(true);
-    try {
-      const res = await fetch("/api/youtube/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channelId }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Sync failed");
-      }
-
-      const data = await res.json();
-
-      await saveChannel(data.channel);
-      setChannel(data.channel);
-
-      await clearAllVideos();
-      if (data.videos.length > 0) {
-        await saveVideos(data.videos);
-      }
-
-      setVideoCount(data.videos.length);
-      setAllVideos(data.videos);
-      setLastSyncTime(new Date().toLocaleTimeString());
-      showToast(
-        "Sync Complete",
-        `${data.videos.length} videos synced from "${data.channel.title}"`,
-        "success",
-        4000
-      );
-    } catch (err: any) {
-      showToast("Sync Failed", err.message || "Could not sync channel", "error", 4000);
-    } finally {
-      setSyncing(false);
-    }
-  }, [channelIdInput]);
-
-  // Helper: get YouTubeVideo for an id
+  // Helper: get R2Video by ID
   const getVideoById = useCallback(
     (id: string) => allVideos.find((v) => v.id === id),
     [allVideos]
   );
 
-  // Advance to next video in the admin embedded player (save to Firestore + localStorage)
+  // Advance to next video in the active playlist
   const advanceTvVideo = useCallback(() => {
     setStartTvCountdown(null);
-    // If on the last video, don't advance — playlist is complete
-    if (lastAdminTvIndexRef.current >= (allVideos.length || 1) - 1) return;
+    if (lastAdminTvIndexRef.current >= (activeVideos.length || 1) - 1) return;
     const nextIndex = lastAdminTvIndexRef.current + 1;
     setCurrentTvIndex(nextIndex);
-    // Reset seek cache
-    if (typeof window !== "undefined") {
-      localStorage.setItem(ADMIN_TV_SEEK_KEY, "0");
-      localStorage.setItem(ADMIN_TV_INDEX_KEY, String(nextIndex));
+    localStorage.setItem(ADMIN_TV_SEEK_KEY, "0");
+    localStorage.setItem(ADMIN_TV_INDEX_KEY, String(nextIndex));
+    // Update playlist's currentIndex in Firestore
+    if (activePlaylistId) {
+      updateR2TvPlaylist(activePlaylistId, { currentIndex: nextIndex });
     }
-    // Save to Firestore for cross-session persistence
-    const uid = auth.currentUser?.uid;
-    if (uid) {
-      updateUserTvProgress(uid, nextIndex, 0);
-    }
-  }, [allVideos.length]);
+  }, [activeVideos.length, activePlaylistId]);
 
-  const currentVideo = allVideos.length > 0 ? allVideos[currentTvIndex >= allVideos.length ? 0 : currentTvIndex] : null;
-
-  // Sync index ref when currentTvIndex changes + update localStorage
+  // Sync index ref + localStorage
   useEffect(() => {
     lastAdminTvIndexRef.current = currentTvIndex;
-    if (typeof window !== "undefined") {
-      localStorage.setItem(ADMIN_TV_INDEX_KEY, String(currentTvIndex));
-    }
+    localStorage.setItem(ADMIN_TV_INDEX_KEY, String(currentTvIndex));
   }, [currentTvIndex]);
 
-  // ─── Derive initial seek from localStorage ───
   const adminTvInitialSeek = cachedAdminSeek > 0.1 ? cachedAdminSeek : undefined;
 
-  // Track current seek for periodic saves
   const handleAdminTvTimeUpdate = useCallback((time: number) => {
     lastAdminTvSeekRef.current = time;
-    if (typeof window !== "undefined") {
-      localStorage.setItem(ADMIN_TV_SEEK_KEY, String(time));
-    }
+    localStorage.setItem(ADMIN_TV_SEEK_KEY, String(time));
   }, []);
 
-  // Call play() when current video changes
-  // NOTE: No else/hide branch — keeping the player alive across async loads
-  // prevents unnecessary destruction/recreation of the YouTube iframe.
-  // The player is restored from localStorage seek on mount.
+  // Call playR2() when current video changes
   useEffect(() => {
     if (currentVideo) {
-      adminTvPlayer.play(currentVideo.id, adminTvInitialSeek);
+      adminTvPlayer.playR2(currentVideo.url, adminTvInitialSeek);
     }
   }, [currentVideo?.id, adminTvInitialSeek, adminTvPlayer]);
 
-  // Keep callbacks in sync with latest versions
+  // Keep callbacks in sync
   useEffect(() => {
     adminTvPlayer.setCallbacks({
       onEnded: () => {
-            if (allVideos.length > 1) {
-              setStartTvCountdown(20);
-            } else {
-              advanceTvVideo();
-            }
-          },
+        if (activeVideos.length > 1) {
+          setStartTvCountdown(20);
+        } else {
+          advanceTvVideo();
+        }
+      },
       onTimeUpdate: handleAdminTvTimeUpdate,
     });
-  }, [advanceTvVideo, handleAdminTvTimeUpdate, adminTvPlayer]);
+  }, [advanceTvVideo, handleAdminTvTimeUpdate, adminTvPlayer, activeVideos.length]);
 
-  // Save current progress to Firestore + localStorage (used by interval + cleanup)
+  // Save progress
   const saveAdminTvProgress = useCallback(() => {
     const seek = lastAdminTvSeekRef.current;
     const index = lastAdminTvIndexRef.current;
-    // Always persist to localStorage for instant cross-page resume
-    if (typeof window !== "undefined") {
-      localStorage.setItem(ADMIN_TV_SEEK_KEY, String(seek));
-      localStorage.setItem(ADMIN_TV_INDEX_KEY, String(index));
-    }
-    // Persist to Firestore for cross-session resume
-    const uid = auth.currentUser?.uid;
-    if (uid) {
-      updateUserTvProgress(uid, index, seek);
-    }
+    localStorage.setItem(ADMIN_TV_SEEK_KEY, String(seek));
+    localStorage.setItem(ADMIN_TV_INDEX_KEY, String(index));
   }, []);
 
-  // Periodically save seek position (every 5s)
   useEffect(() => {
     const interval = setInterval(saveAdminTvProgress, 5000);
-    return () => {
-      clearInterval(interval);
-      saveAdminTvProgress();
-    };
+    return () => { clearInterval(interval); saveAdminTvProgress(); };
   }, [saveAdminTvProgress]);
 
-  // ─── Start TV countdown timer ───
+  // TV countdown timer
   useEffect(() => {
     if (startTvCountdown === null || startTvCountdown <= 0) return;
     const timer = setTimeout(() => {
       if (startTvCountdown <= 1) {
-        // Countdown reached 0 — auto-advance
         setStartTvCountdown(null);
         advanceTvVideo();
       } else {
@@ -433,7 +342,7 @@ export default function AdminTVPage() {
     return () => clearTimeout(timer);
   }, [startTvCountdown, advanceTvVideo]);
 
-  // Save on page unload / tab hide
+  // Save on page unload
   useEffect(() => {
     const handleUnload = () => saveAdminTvProgress();
     const handleVisibility = () => {
@@ -446,98 +355,6 @@ export default function AdminTVPage() {
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [saveAdminTvProgress]);
-
-  // Tab visibility — restore TV state from Firestore when tab becomes visible (web)
-  useEffect(() => {
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === "visible") {
-        const uid = auth.currentUser?.uid;
-        if (uid) {
-          // Re-fetch TV state from Firestore to pick up changes from other tabs/pages
-          try {
-            const state = await getUserTvState(uid);
-            if (state.currentIndex >= 0 && state.currentIndex < allVideos.length) {
-              setCurrentTvIndex(state.currentIndex);
-            }
-            if (state.currentSeek > 0.1) {
-              if (typeof window !== "undefined") {
-                localStorage.setItem(ADMIN_TV_SEEK_KEY, String(state.currentSeek));
-              }
-              lastAdminTvSeekRef.current = state.currentSeek;
-            }
-          } catch {}
-        }
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [allVideos.length]);
-
-  // ─── App resume — save on background, re-fetch on foreground (Android) ───
-  useEffect(() => {
-    let canceled = false;
-    import("@capacitor/core")
-      .then(({ Capacitor }) => {
-        if (canceled || !Capacitor.isNativePlatform()) return;
-        return import("@capacitor/app");
-      })
-      .then((AppModule) => {
-        if (canceled || !AppModule) return;
-        const { App } = AppModule;
-        App.addListener("appStateChange", (state) => {
-          if (!state.isActive) {
-            saveAdminTvProgress();
-          } else {
-            const uid = auth.currentUser?.uid;
-            if (uid) {
-              getUserTvState(uid).then((s) => {
-                if (s.currentIndex >= 0 && s.currentIndex < allVideos.length) {
-                  setCurrentTvIndex(s.currentIndex);
-                }
-                if (s.currentSeek > 0.1) {
-                  if (typeof window !== "undefined") {
-                    localStorage.setItem(ADMIN_TV_SEEK_KEY, String(s.currentSeek));
-                  }
-                  lastAdminTvSeekRef.current = s.currentSeek;
-                }
-              });
-            }
-          }
-        }).then((handler) => {
-          if (canceled) handler.remove();
-        });
-      });
-    return () => { canceled = true; };
-  }, [saveAdminTvProgress, allVideos.length]);
-
-  // Generate today's broadcast
-  const handleGenerateBroadcast = useCallback(async () => {
-    setBroadcasting(true);
-    try {
-      const count = await generateBroadcast();
-      setBroadcastSlotCount(count);
-      showToast(
-        "Broadcast Generated",
-        count > 0
-          ? `${count} scheduled slots created for today`
-          : "No active playlists scheduled for today",
-        count > 0 ? "success" : "info",
-        3500
-      );
-    } catch {
-      showToast("Error", "Could not generate broadcast", "error", 3000);
-    }
-    setBroadcasting(false);
-  }, []);
-
-  // Load broadcast status
-  useEffect(() => {
-    getTodayBroadcast().then((b) => {
-      if (b) setBroadcastSlotCount(b.slots.length);
-    });
-  }, []);
 
   // ─── Live stream state ───
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
@@ -598,42 +415,6 @@ export default function AdminTVPage() {
     setLiveSaving(false);
   }, []);
 
-  // ─── YouTube URL parser ───
-  function extractYouTubeId(input: string): string | null {
-    const trimmed = input.trim();
-    // Already a plain ID (11 chars, alphanumeric + -_)
-    if (/^[\w-]{11}$/.test(trimmed)) return trimmed;
-    // youtube.com/watch?v=ID
-    const match = trimmed.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
-    return match ? match[1] : null;
-  }
-
-  // Add external video
-  const handleAddExternalVideo = useCallback(async () => {
-    const id = extractYouTubeId(externalUrl);
-    if (!id) {
-      showToast("Invalid Link", "Enter a valid YouTube URL or video ID", "error", 3000);
-      return;
-    }
-    if (plVideoIds.includes(id)) {
-      showToast("Already Added", "This video is already in the playlist", "info", 2500);
-      setExternalUrl("");
-      return;
-    }
-    setExternalAdding(true);
-    // Try to fetch title from YouTube oEmbed (no API key needed)
-    try {
-      const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);
-      if (res.ok) {
-        const data = await res.json();
-        showToast("Video Found", `"${data.title}" added to playlist`, "success", 2500);
-      }
-    } catch {}
-    addVideoToPlaylist(id);
-    setExternalUrl("");
-    setExternalAdding(false);
-  }, [externalUrl, plVideoIds, addVideoToPlaylist]);
-
   // Filter videos by search
   const filteredVideos = videoSearch
     ? allVideos.filter(
@@ -643,9 +424,12 @@ export default function AdminTVPage() {
       )
     : allVideos;
 
+  // Videos not yet in the current playlist being built
+  const availableVideos = filteredVideos.filter(v => !plVideoIds.includes(v.id));
+
   // ─── LIVE DASHBOARD STATE ───
-  type AdminTabId = "channel" | "schedule" | "live";
-  const [activeAdminTab, setActiveAdminTab] = useState<AdminTabId>("channel");
+  type AdminTabId = "videos" | "playlist" | "live";
+  const [activeAdminTab, setActiveAdminTab] = useState<AdminTabId>("videos");
   type LiveSubTab = "dashboard" | "chat" | "prayers" | "giving" | "broadcast";
   const [liveSubTab, setLiveSubTab] = useState<LiveSubTab>("dashboard");
 
@@ -907,184 +691,176 @@ export default function AdminTVPage() {
 
   // ─── ADMIN TABS ───
   const ADMIN_TABS: { id: AdminTabId; label: string; icon: string }[] = [
-    { id: "channel", label: "Channel", icon: "fa-tv" },
-    { id: "schedule", label: "Schedule", icon: "fa-calendar" },
+    { id: "videos", label: "Videos", icon: "fa-video" },
+    { id: "playlist", label: "Playlist", icon: "fa-list-ol" },
     { id: "live", label: "Live", icon: "fa-chart-line" },
   ];
 
-  const renderChannelTab = () => (
-    <>
-      {/* ─── TV CARD (matches member dashboard `tv-hero`) ─── */}
-      {!channel && (
-        <div className="no-channel">
-          <i className="fab fa-youtube"></i>
-          <h3>No Channel Connected</h3>
-          <p>Enter a YouTube channel ID below to get started.</p>
-        </div>
-      )}
+  function formatDuration(seconds: number): string {
+    if (!seconds) return "--:--";
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
+  function formatFileSize(bytes: number): string {
+    if (bytes === 0) return "0 B";
+    const units = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, i)).toFixed(1) + " " + units[i];
+  }
+  function getVideoColor(cat: string): string {
+    const colors: Record<string, string> = {
+      sermon: "#E8A838", worship: "#8B5CF6", event: "#3B82F6",
+      announcement: "#4ADE80", teaching: "#EF4444", testimony: "#F59E0B",
+    };
+    return colors[cat] || "#6B6B6B";
+  }
+  function extractYouTubeId(url: string): string | null {
+    const match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    return match ? match[1] : (url.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(url) ? url : null);
+  }
 
-      {/* Channel ID Input */}
-      <div className="form-group">
-        <label className="form-label">
-          <i className="fas fa-link"></i>
-          YouTube Channel ID
-        </label>
-        <input
-          className="form-input"
-          type="text"
-          placeholder="UC_dQw4w9WgXcQ..."
-          value={channelIdInput}
-          onChange={(e) => setChannelIdInput(e.target.value)}
-        />
-        <span className="form-hint">
-          <i className="fas fa-circle-info"></i>
-          Find it in your YouTube channel URL: youtube.com/channel/<strong>UC...</strong>
-        </span>
-      </div>
-
-      {/* Sync Button */}
-      <button
-        className="btn-primary"
-        onClick={handleSync}
-        disabled={syncing || !channelIdInput.trim()}
-      >
-        {syncing ? (
-          <><span className="spinner"></span> Syncing...</>
-        ) : (
-          <><i className="fas fa-sync"></i> {channel ? "Sync Now" : "Connect Channel"}</>
-        )}
-      </button>
-
-      {/* Stats */}
-      {channel && (
+  const renderVideosTab = () => {
+    const sortedVideos = [...allVideos].sort((a, b) => {
+      const aTime = (a.uploadedAt as any)?.toMillis?.() || 0;
+      const bTime = (b.uploadedAt as any)?.toMillis?.() || 0;
+      return bTime - aTime;
+    });
+    const featuredCount = allVideos.filter(v => v.isFeatured).length;
+    return (
+      <>
+        {/* ─── Stats ─── */}
         <div className="stats-grid">
           <div className="stat-card">
-            <div className="stat-value" style={{ color: "var(--primary)" }}>{videoCount}</div>
-            <div className="stat-label">Videos</div>
+            <div className="stat-value" style={{ color: "var(--primary)" }}>{allVideos.length}</div>
+            <div className="stat-label">Total Videos</div>
           </div>
           <div className="stat-card">
-            <div className="stat-value" style={{ color: "#FF0000" }}>
-              {channel.subscriberCount ? (
-                parseInt(channel.subscriberCount) > 1000000
-                  ? `${(parseInt(channel.subscriberCount) / 1000000).toFixed(1)}M`
-                  : parseInt(channel.subscriberCount) > 1000
-                    ? `${(parseInt(channel.subscriberCount) / 1000).toFixed(1)}K`
-                    : channel.subscriberCount
-              ) : "0"}
-            </div>
-            <div className="stat-label">Subscribers</div>
+            <div className="stat-value" style={{ color: "#8B5CF6" }}>{featuredCount}</div>
+            <div className="stat-label">Featured</div>
           </div>
         </div>
-      )}
 
-      {/* ─── SYNCED VIDEOS GRID (paginated, lazy-loaded) ─── */}
-      {channel && (
-        <section>
-          <div className="section-title" style={{ marginTop: 8, marginBottom: 12 }}>
-            <i className="fas fa-video"></i>
-            Synced Videos
-            {paginatedVideos.length > 0 && (
-              <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 500, marginLeft: 4 }}>
-                ({paginatedVideos.length} loaded)
-              </span>
-            )}
+        {/* ─── Search ─── */}
+        <div className="pl-browse-search">
+          <i className="fas fa-search"></i>
+          <input className="form-input" type="text" placeholder="Search videos..." value={videoSearch} onChange={(e) => setVideoSearch(e.target.value)} style={{ paddingLeft: 36 }} />
+        </div>
+
+        {/* ─── R2 Video Library Grid ─── */}
+        {allVideos.length === 0 && !loading ? (
+          <div className="tv-grid-empty" style={{ marginTop: 12 }}>
+            <i className="fas fa-video-slash"></i>
+            <span>No videos uploaded yet. Upload videos in the Content page, then come back to schedule them.</span>
           </div>
-
-          {paginatedVideos.length === 0 && paginatedLoading ? (
-            <div className="tv-grid-skeleton">
-              {[1,2,3,4].map((i) => (
-                <div key={i} className="tv-grid-skeleton-card">
-                  <div className="tv-grid-skeleton-thumb"></div>
-                  <div className="tv-grid-skeleton-title"></div>
-                  <div className="tv-grid-skeleton-meta"></div>
+        ) : (
+          <>
+            <div className="tv-grid" style={{ marginTop: 12 }}>
+              {(videoSearch ? sortedVideos.filter(v =>
+                v.title.toLowerCase().includes(videoSearch.toLowerCase()) ||
+                v.category.toLowerCase().includes(videoSearch.toLowerCase())
+              ) : sortedVideos).map((video) => (
+                <div key={video.id} className="tv-grid-card">
+                  <div className="tv-grid-card-thumb">
+                    {video.thumbnail ? (
+                      <img src={video.thumbnail} alt={video.title} loading="lazy" />
+                    ) : (
+                      <div style={{
+                        width: "100%", height: "100%",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        background: "linear-gradient(135deg, rgba(232,168,56,0.08), rgba(232,168,56,0.02))",
+                        fontSize: 28, color: "var(--text-tertiary)", opacity: 0.5,
+                      }}>
+                        <i className="fas fa-video"></i>
+                      </div>
+                    )}
+                    {video.duration > 0 && (
+                      <div className="tv-grid-card-duration">{formatDuration(video.duration)}</div>
+                    )}
+                    {video.isFeatured && <div className="tv-grid-card-badge featured"><i className="fas fa-star"></i></div>}
+                    {video.isHidden && <div className="tv-grid-card-badge hidden"><i className="fas fa-eye-slash"></i></div>}
+                  </div>
+                  <div className="tv-grid-card-info">
+                    <div className="tv-grid-card-title">{video.title}</div>
+                    <div className="tv-grid-card-meta" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ color: getVideoColor(video.category), fontWeight: 600 }}>{video.category}</span>
+                      <span>·</span>
+                      <span>{formatFileSize(video.fileSize)}</span>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
-          ) : paginatedVideos.length === 0 ? (
-            <div className="tv-grid-empty">
-              <i className="fas fa-video-slash"></i>
-              <span>No videos synced yet. Connect a channel and sync.</span>
-            </div>
-          ) : (
-            <>
-              <div className="tv-grid">
-                {paginatedVideos.map((v) => (
-                  <div key={v.id} className="tv-grid-card">
-                    <div className="tv-grid-card-thumb">
-                      <img
-                        src={v.thumbnail || `https://i.ytimg.com/vi/${v.id}/default.jpg`}
-                        alt={v.title}
-                        loading="lazy"
-                      />
-                      <div className="tv-grid-card-duration">
-                        {v.duration > 0
-                          ? `${Math.floor(v.duration / 60)}:${String(v.duration % 60).padStart(2, "0")}`
-                          : ""}
-                      </div>
-                      {v.isFeatured && <div className="tv-grid-card-badge featured"><i className="fas fa-star"></i></div>}
-                      {v.isHidden && <div className="tv-grid-card-badge hidden"><i className="fas fa-eye-slash"></i></div>}
-                    </div>
-                    <div className="tv-grid-card-info">
-                      <div className="tv-grid-card-title">{v.title}</div>
-                      <div className="tv-grid-card-meta">{v.channelTitle}</div>
-                    </div>
-                  </div>
-                ))}
+            {videoSearch && sortedVideos.filter(v =>
+              v.title.toLowerCase().includes(videoSearch.toLowerCase()) ||
+              v.category.toLowerCase().includes(videoSearch.toLowerCase())
+            ).length === 0 && (
+              <div style={{ padding: "16px 0", textAlign: "center", fontSize: 13, color: "var(--text-tertiary)" }}>
+                No videos match your search
               </div>
-              {paginatedHasMore && (
-                <button
-                  className="tv-grid-load-more"
-                  onClick={handleLoadMoreVideos}
-                  disabled={paginatedLoading}
-                >
-                  {paginatedLoading ? (
-                    <><i className="fas fa-spinner fa-spin"></i> Loading...</>
-                  ) : (
-                    <><i className="fas fa-chevron-down"></i> Load More</>
-                  )}
-                </button>
-              )}
-              {paginatedLoading && paginatedVideos.length > 0 && (
-                <div style={{ textAlign: "center", padding: 12, color: "var(--text-tertiary)", fontSize: 12 }}>
-                  <i className="fas fa-spinner fa-spin"></i> Loading more...
-                </div>
-              )}
-            </>
-          )}
-        </section>
-      )}
-    </>
-  );
+            )}
+          </>
+        )}
+      </>
+    );
+  };
 
-  const renderScheduleTab = () => (
+  const renderPlaylistTab = () => (
     <>
-      {/* ─── BROADCAST GENERATOR ─── */}
+      {/* ─── Currently Playing ─── */}
       <div className="section-title" style={{ marginTop: 4 }}>
-        <i className="fas fa-tower-broadcast"></i>
-        TV Broadcast
-        {broadcastSlotCount > 0 && (
-          <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 500 }}>
-            ({broadcastSlotCount} slots)
-          </span>
-        )}
+        <i className="fas fa-play-circle"></i>
+        Now Playing
       </div>
-      <button
-        className="btn-primary"
-        onClick={handleGenerateBroadcast}
-        disabled={broadcasting}
-      >
-        {broadcasting ? (
-          <><span className="spinner"></span> Generating...</>
-        ) : (
-          <><i className="fas fa-calendar-day"></i> Generate Today's Broadcast</>
-        )}
-      </button>
+      {activePlaylist ? (
+        <div>
+          {/* TV Player */}
+          <div className="tv-player-container" ref={tvPlayerTargetRef} />
+          {/* Overlay info */}
+          <div className="preview-card" style={{ marginTop: 8, alignItems: "center" }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+              background: "linear-gradient(135deg, rgba(232,168,56,0.12), rgba(232,168,56,0.04))",
+              border: "1px solid rgba(232,168,56,0.12)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 16, color: "var(--primary)",
+            }}>
+              <i className="fas fa-play"></i>
+            </div>
+            <div className="preview-info" style={{ flex: 1 }}>
+              <div className="preview-title">{currentVideo?.title || activePlaylist.title}</div>
+              <div className="preview-meta">
+                <i className="fas fa-list-ol"></i> Video {currentTvIndex + 1} of {activeVideos.length}
+                {startTvCountdown !== null && (
+                  <span style={{ marginLeft: 8, color: "var(--primary)" }}>
+                    · Next in {startTvCountdown}s
+                  </span>
+                )}
+              </div>
+            </div>
+            <button style={{
+              padding: "8px 12px", borderRadius: 10, flexShrink: 0,
+              background: "var(--success)", color: "#fff", border: "none",
+              fontSize: 11, fontWeight: 700, cursor: "pointer",
+            }}>
+              <i className="fas fa-circle"></i> Playing
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="tv-grid-empty">
+          <i className="fas fa-play-circle"></i>
+          <span>Select a playlist below to start playing</span>
+        </div>
+      )}
 
-      {/* ─── SCHEDULED PLAYLISTS ─── */}
-      <div style={{ borderTop: "1px solid var(--border)", marginTop: 8 }}></div>
-      <div className="section-title" style={{ marginTop: 4 }}>
-        <i className="fas fa-list"></i>
-        Scheduled Playlists
+      {/* ─── CREATE / EDIT PLAYLIST ─── */}
+      <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 12 }}></div>
+      <div className="section-title">
+        <i className="fas fa-list-ol"></i>
+        Manage Playlists
         <span style={{ fontSize: 11, color: "var(--text-tertiary)", fontWeight: 500 }}>
           ({playlists.length})
         </span>
@@ -1092,10 +868,18 @@ export default function AdminTVPage() {
 
       <button
         className="btn-outline"
-        onClick={() => setShowAddPlaylist(!showAddPlaylist)}
+        onClick={() => {
+          setShowAddPlaylist(!showAddPlaylist);
+          if (!showAddPlaylist) {
+            setEditingPlaylist(null);
+            setPlName("");
+            setPlVideoIds([]);
+            setPlStartIndex(0);
+          }
+        }}
       >
         <i className={`fas fa-${showAddPlaylist ? "minus" : "plus"}`}></i>
-        {showAddPlaylist ? "Cancel" : "Create Scheduled Playlist"}
+        {editingPlaylist ? "Cancel Edit" : showAddPlaylist ? "Cancel" : "Create Playlist"}
       </button>
 
       {showAddPlaylist && (
@@ -1104,39 +888,35 @@ export default function AdminTVPage() {
             <label className="form-label"><i className="fas fa-tag"></i> Playlist Name</label>
             <input className="form-input" type="text" placeholder="e.g. Sunday Service" value={plName} onChange={(e) => setPlName(e.target.value)} />
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, color: "var(--text-secondary)" }}>
-              <input type="checkbox" checked={plRecurring} onChange={(e) => setPlRecurring(e.target.checked)} style={{ accentColor: "var(--primary)" }} />
-              Recurring weekly
-            </label>
-          </div>
-          {plRecurring ? (
-            <div className="form-group">
-              <label className="form-label"><i className="fas fa-calendar-week"></i> Day of Week</label>
-              <select className="form-input" value={plDay} onChange={(e) => setPlDay(e.target.value)}
-                style={{ appearance: "none", WebkitAppearance: "none", cursor: "pointer" }}
-              >
-                {["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"].map((d, i) => (
-                  <option key={i} value={i}>{d}</option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div className="form-group">
-              <label className="form-label"><i className="fas fa-calendar"></i> Date</label>
-              <input className="form-input" type="date" value={plDate} onChange={(e) => setPlDate(e.target.value)} />
-            </div>
-          )}
           <div className="form-group">
-            <label className="form-label"><i className="fas fa-clock"></i> Time</label>
-            <input className="form-input" type="time" value={plTime} onChange={(e) => setPlTime(e.target.value)} />
+            <label className="form-label"><i className="fas fa-play"></i> Start From</label>
+            <select
+              className="form-input"
+              value={plStartIndex}
+              onChange={(e) => setPlStartIndex(parseInt(e.target.value) || 0)}
+            >
+              {plVideoIds.length === 0 ? (
+                <option value={0}>Video #1 (add videos first)</option>
+              ) : (
+                plVideoIds.map((id, i) => {
+                  const v = allVideos.find((vid) => vid.id === id);
+                  return (
+                    <option key={id} value={i}>
+                      Video #{i + 1}{v ? `: ${v.title}` : ""}
+                    </option>
+                  );
+                })
+              )}
+            </select>
           </div>
+
+          {/* Selected videos */}
           <div className="pl-selected-header">
-            <span><i className="fas fa-video"></i> Videos in playlist ({plVideoIds.length})</span>
+            <span><i className="fas fa-video"></i> Videos ({plVideoIds.length})</span>
           </div>
           {plVideoIds.length === 0 ? (
             <div style={{ padding: "12px 0", textAlign: "center", fontSize: 12, color: "var(--text-tertiary)" }}>
-              No videos added yet. Browse synced videos below and tap <i className="fas fa-plus"></i> to add them.
+              No videos added. Tap videos below to add them.
             </div>
           ) : (
             <div className="pl-selected-list">
@@ -1144,8 +924,12 @@ export default function AdminTVPage() {
                 const v = getVideoById(id);
                 return (
                   <div key={id} className="pl-selected-item">
-                    <div className="pl-selected-thumb">
-                      <img src={v?.thumbnail || `https://img.youtube.com/vi/${id}/default.jpg`} alt="" />
+                    <div className="pl-selected-thumb" style={{
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: "linear-gradient(135deg, rgba(232,168,56,0.1), rgba(232,168,56,0.04))",
+                      fontSize: 14, color: "var(--primary)",
+                    }}>
+                      <i className="fas fa-video"></i>
                     </div>
                     <div className="pl-selected-title">{v?.title || id}</div>
                     <div className="pl-selected-pos">
@@ -1158,75 +942,139 @@ export default function AdminTVPage() {
               })}
             </div>
           )}
-          {/* External video paste */}
-          <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-            <div className="form-group" style={{ flex: 1, minWidth: 0 }}>
-              <label className="form-label"><i className="fas fa-link"></i> Paste YouTube Link or ID</label>
-              <input className="form-input" type="text" placeholder="youtube.com/watch?v=..." value={externalUrl} onChange={(e) => setExternalUrl(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && externalUrl.trim()) handleAddExternalVideo(); }} />
-            </div>
-            <button className="btn-primary small" style={{ width: "auto", padding: "14px 16px", whiteSpace: "nowrap", flexShrink: 0 }} onClick={handleAddExternalVideo} disabled={externalAdding || !externalUrl.trim()}>
-              {externalAdding ? <span className="spinner" style={{ width: 18, height: 18 }}></span> : <><i className="fas fa-plus"></i> Add</>}
-            </button>
-          </div>
-          {/* Browse videos */}
-          <div className="form-group">
-            <label className="form-label"><i className="fas fa-search"></i> Browse Synced Videos</label>
-            <div className="pl-browse-search">
-              <i className="fas fa-search"></i>
-              <input className="form-input" type="text" placeholder="Search videos..." value={videoSearch} onChange={(e) => setVideoSearch(e.target.value)} style={{ paddingLeft: 36 }} />
-            </div>
-          </div>
-          <div className="pl-browse-grid">
-              {filteredVideos.length === 0 ? (
-                <div style={{ padding: 16, textAlign: "center", fontSize: 12, color: "var(--text-tertiary)" }}>No videos found</div>
-              ) : (
-                filteredVideos.slice(0, 30).map((v) => {
+
+          {/* Browse R2 videos to add */}
+          {allVideos.length > 0 && (
+            <>
+              <div className="pl-selected-header" style={{ marginTop: 4 }}>
+                <span><i className="fas fa-list"></i> Browse Uploaded Videos</span>
+              </div>
+              <div className="pl-browse-grid">
+                {allVideos.map((v) => {
                   const isAdded = plVideoIds.includes(v.id);
                   return (
-                    <div key={v.id} className={`pl-browse-item ${isAdded ? "added" : ""}`} onClick={() => !isAdded && addVideoToPlaylist(v.id)}>
-                      <div className="pl-browse-thumb"><img src={v.thumbnail || ""} alt="" /></div>
+                    <div
+                      key={v.id}
+                      className={`pl-browse-item ${isAdded ? "added" : ""}`}
+                      onClick={() => !isAdded && addVideoToPlaylist(v.id)}
+                    >
+                      <div className="pl-browse-thumb" style={{
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        background: "linear-gradient(135deg, rgba(232,168,56,0.08), rgba(232,168,56,0.02))",
+                        fontSize: 16, color: "var(--text-tertiary)", opacity: 0.6,
+                      }}>
+                        <i className="fas fa-video"></i>
+                      </div>
                       <div className="pl-browse-info">
                         <div className="pl-browse-title">{v.title}</div>
-                        <div className="pl-browse-meta">{v.duration > 0 ? `${Math.floor(v.duration / 60)}:${String(v.duration % 60).padStart(2, "0")}` : ""}</div>
+                        <div className="pl-browse-meta">{formatDuration(v.duration)} · {v.category}</div>
                       </div>
-                      <div className={`pl-browse-add ${isAdded ? "added" : ""}`}><i className={`fas fa-${isAdded ? "check" : "plus"}`}></i></div>
+                      <div className={`pl-browse-add ${isAdded ? "added" : ""}`}>
+                        <i className={`fas fa-${isAdded ? "check" : "plus"}`}></i>
+                      </div>
                     </div>
                   );
-                })
-              )}
-            </div>
-          <button className="btn-primary" onClick={handleAddPlaylist} disabled={plSaving || !plName.trim() || plVideoIds.length === 0}>
-            {plSaving ? <><span className="spinner"></span> Saving...</> : <><i className="fas fa-save"></i> Save Playlist</>}
+                })}
+              </div>
+            </>
+          )}
+
+          <button
+            className="btn-primary small"
+            onClick={editingPlaylist ? handleUpdatePlaylist : handleAddPlaylist}
+            disabled={plSaving || !plName.trim() || plVideoIds.length === 0}
+          >
+            {plSaving ? (
+              <><i className="fas fa-spinner fa-spin"></i> Saving...</>
+            ) : editingPlaylist ? (
+              <><i className="fas fa-save"></i> Update Playlist</>
+            ) : (
+              <><i className="fas fa-save"></i> Save Playlist</>
+            )}
           </button>
         </div>
       )}
 
+      {/* ─── PLAYLISTS LIST ─── */}
       {playlistsLoading ? (
-        <div className="loading-state"><span className="spinner"></span></div>
+        <div className="loading-state" style={{ padding: "20px 0" }}><i className="fas fa-spinner fa-spin"></i></div>
       ) : playlists.length === 0 ? (
-        <div style={{ padding: 16, textAlign: "center", color: "var(--text-tertiary)", fontSize: 13 }}>
-          No scheduled playlists. Create one above to run at a specific time.
+        <div style={{ padding: "16px 0", textAlign: "center", fontSize: 13, color: "var(--text-tertiary)" }}>
+          No playlists yet. Create one above to arrange videos in playback order.
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
           {playlists.map((p) => {
-            const dayName = p.dayOfWeek !== null ? ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][p.dayOfWeek] : "";
+            const isActive = activePlaylistId === p.id;
             return (
               <div key={p.id} className="preview-card" style={{ alignItems: "center" }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0, background: `linear-gradient(135deg, rgba(232,168,56,0.12), rgba(232,168,56,0.04))`, border: "1px solid rgba(232,168,56,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "var(--primary)" }}>
-                  <i className="fas fa-list"></i>
+                <div style={{
+                  width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                  background: isActive
+                    ? "linear-gradient(135deg, rgba(34,197,94,0.15), rgba(34,197,94,0.05))"
+                    : "linear-gradient(135deg, rgba(232,168,56,0.12), rgba(232,168,56,0.04))",
+                  border: `1px solid ${isActive ? "rgba(34,197,94,0.2)" : "rgba(232,168,56,0.12)"}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 16, color: isActive ? "var(--success)" : "var(--primary)",
+                }}>
+                  <i className={`fas ${isActive ? "fa-play-circle" : "fa-list-ol"}`}></i>
                 </div>
                 <div className="preview-info" style={{ flex: 1 }}>
-                  <div className="preview-title">{p.title}</div>
+                  <div className="preview-title">
+                    {p.title}
+                    {isActive && <span style={{ fontSize: 10, color: "var(--success)", marginLeft: 6 }}>· Playing</span>}
+                  </div>
                   <div className="preview-meta">
-                    <i className="fas fa-clock"></i> {p.scheduledTime}
-                    {p.isRecurring ? ` every ${dayName}` : ` on ${p.scheduledDate}`}
+                    <i className="fas fa-play"></i> Start: Video #{p.currentIndex + 1}
                     <span style={{ marginLeft: 8 }}>· {p.videoIds.length} videos</span>
                   </div>
                 </div>
-                <button style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--error)", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} onClick={() => handleDeletePlaylist(p.id)} disabled={plDeletingId === p.id}>
-                  {plDeletingId === p.id ? <span className="spinner" style={{ width: 16, height: 16 }}></span> : <i className="fas fa-xmark"></i>}
-                </button>
+                <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                  {!isActive && (
+                    <button
+                      style={{
+                        width: 34, height: 34, borderRadius: 8,
+                        border: "none",
+                        background: "linear-gradient(135deg, var(--gradient-start), var(--gradient-end))",
+                        color: "#fff", fontSize: 13, cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                      onClick={() => handleActivatePlaylist(p)}
+                      title="Play"
+                    >
+                      <i className="fas fa-play"></i>
+                    </button>
+                  )}
+                  <button
+                    style={{
+                      width: 34, height: 34, borderRadius: 8,
+                      border: "1px solid var(--border)", background: "var(--surface)",
+                      color: "var(--primary)", fontSize: 12, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                    onClick={() => handleEditPlaylist(p)}
+                    title="Edit"
+                  >
+                    <i className="fas fa-pen"></i>
+                  </button>
+                  <button
+                    style={{
+                      width: 34, height: 34, borderRadius: 8,
+                      border: "1px solid var(--border)", background: "var(--surface)",
+                      color: "var(--error)", fontSize: 13, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                    onClick={() => handleDeletePlaylist(p.id)}
+                    disabled={plDeletingId === p.id}
+                    title="Delete"
+                  >
+                    {plDeletingId === p.id ? (
+                      <i className="fas fa-spinner fa-spin" style={{ fontSize: 12 }}></i>
+                    ) : (
+                      <i className="fas fa-trash"></i>
+                    )}
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -1751,8 +1599,8 @@ export default function AdminTVPage() {
   // ─── Render current tab ───
   const renderAdminTabContent = () => {
     switch (activeAdminTab) {
-      case "channel": return renderChannelTab();
-      case "schedule": return renderScheduleTab();
+      case "videos": return renderVideosTab();
+      case "playlist": return renderPlaylistTab();
       case "live": return renderLiveTab();
       default: return null;
     }
@@ -2742,7 +2590,7 @@ export default function AdminTVPage() {
             <i className="fas fa-chevron-left"></i>
           </button>
           <div className="tv-top-header-title">
-            {channel?.title ? `${channel.title} TV` : "TV Settings"}
+            "TV Settings"
           </div>
           <div className="tv-top-header-actions">
             <button
@@ -2779,60 +2627,6 @@ export default function AdminTVPage() {
         {/* CONTENT */}
         <div className="content-scroll">
             {/* TV CARD — outside section wrapper for edge-to-edge */}
-            {!loading && activeAdminTab === "channel" && channel && (
-              <section className="feed-section">
-                <div className="tv-top-wrap">
-                  <div className="tv-top">
-                    <div className="tv-station">
-                      <i className="fas fa-tv"></i>
-                      <span>Church TV</span>
-                    </div>
-                    <div className="tv-badges">
-                      <div className={`tv-live-badge ${currentVideo ? "live" : "off"}`}>
-                        <span className="tv-live-dot"></span>
-                        {currentVideo ? "On Air" : "Off Air"}
-                      </div>
-                      <div className="tv-sub-badge">
-                        <i className="fas fa-users"></i>
-                        {channel?.subscriberCount || "—"}
-                      </div>
-                    </div>
-                    {startTvCountdown !== null && (
-                      <button
-                        className="tv-start-badge"
-                        onClick={() => {
-                          setStartTvCountdown(null);
-                          advanceTvVideo();
-                        }}
-                      >
-                        <i className="fas fa-play"></i>
-                        Start TV
-                        <span className="tv-start-badge-count">{startTvCountdown}s</span>
-                      </button>
-                    )}
-                  </div>
-
-
-
-                  <div className="tv-channel-strip">
-                    <div className="tv-channel-avatar">
-                      {channel.thumbnail ? (
-                        <img src={channel.thumbnail.replace(/^http:/, 'https:')} alt={channel.title} referrerPolicy="no-referrer" crossOrigin="anonymous" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                      ) : (
-                        <i className="fab fa-youtube"></i>
-                      )}
-                    </div>
-                    <div className="tv-channel-info">
-                      <div className="tv-channel-name">{channel.title}</div>
-                      <div className="tv-channel-meta">{videoCount} videos</div>
-                    </div>
-                    <button className="tv-watch-btn" onClick={() => router.push("/tv")}>
-                      <i className="fas fa-expand"></i> Manage
-                    </button>
-                  </div>
-                </div>
-              </section>
-            )}
 
             {loading ? (
               <div className="tv-loading-screen">
