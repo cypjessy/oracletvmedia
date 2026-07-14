@@ -88,7 +88,10 @@ export async function getPresignedUploadUrl(
     Key: key,
     ContentType: contentType,
   });
-  return getSignedUrl(s3Client, command, { expiresIn: expiresInSeconds });
+  return getSignedUrl(s3Client, command, {
+    expiresIn: expiresInSeconds,
+    signableHeaders: new Set(["content-type", "host"]),
+  });
 }
 
 /**
