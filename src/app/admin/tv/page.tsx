@@ -13,6 +13,7 @@ import type { TVGivingConfig } from "@/lib/youtube";
 import {
   getR2Videos, getR2Video,
   getR2TvPlaylists, addR2TvPlaylist, deleteR2TvPlaylist, updateR2TvPlaylist,
+  getTvBumperConfig,
   type R2Video, type R2TvPlaylist,
 } from "@/lib/r2Videos";
 import {
@@ -44,6 +45,10 @@ export default function AdminTVPage() {
   // ─── R2 Videos state ───
   const [allVideos, setAllVideos] = useState<R2Video[]>([]);
   const [videoSearch, setVideoSearch] = useState("");
+
+  // ─── Entry bumper state (plays before first playlist video) ───
+  const [entryBumperUrl, setEntryBumperUrl] = useState<string | null>(null);
+  const [isEntryBumperPlaying, setIsEntryBumperPlaying] = useState(false);
 
   // ─── Playlist state (ordered R2 TV playlists) ───
   const [playlists, setPlaylists] = useState<R2TvPlaylist[]>([]);
@@ -90,9 +95,10 @@ export default function AdminTVPage() {
     let mounted = true;
     const load = async () => {
       try {
-        const [videos, pls] = await Promise.all([
+        const [videos, pls, bumperData] = await Promise.all([
           getR2Videos({ includeHidden: true }),
           getR2TvPlaylists(),
+          getTvBumperConfig(),
         ]);
         if (!mounted) return;
         setAllVideos(videos);
@@ -100,14 +106,23 @@ export default function AdminTVPage() {
 
         // Restore last active playlist and index from localStorage
         const savedPlaylistId = localStorage.getItem(ADMIN_TV_INDEX_KEY.replace("index", "playlist"));
+        let hasActivePlaylist = false;
         if (savedPlaylistId && pls.find(p => p.id === savedPlaylistId)) {
           setActivePlaylistId(savedPlaylistId);
           const pl = pls.find(p => p.id === savedPlaylistId)!;
           const savedIndex = Number(localStorage.getItem(ADMIN_TV_INDEX_KEY)) || pl.currentIndex || 0;
           setCurrentTvIndex(savedIndex < pl.videoIds.length ? savedIndex : 0);
+          hasActivePlaylist = true;
         } else if (pls.length > 0) {
           setActivePlaylistId(pls[0].id);
           setCurrentTvIndex(pls[0].currentIndex || 0);
+          hasActivePlaylist = true;
+        }
+
+        // Auto-play: if bumper config exists and a playlist is active, play entry bumper first
+        if (bumperData && hasActivePlaylist) {
+          setEntryBumperUrl(bumperData.r2VideoUrl);
+          setIsEntryBumperPlaying(true);
         }
 
         setLoading(false);
@@ -124,7 +139,7 @@ export default function AdminTVPage() {
     .map(id => allVideos.find(v => v.id === id))
     .filter((v): v is R2Video => !!v);
 
-  const currentVideo = activeVideos.length > 0
+  const currentVideo = !isEntryBumperPlaying && activeVideos.length > 0
     ? activeVideos[currentTvIndex >= activeVideos.length ? 0 : currentTvIndex]
     : null;
 
@@ -294,17 +309,32 @@ export default function AdminTVPage() {
     localStorage.setItem(ADMIN_TV_SEEK_KEY, String(time));
   }, []);
 
-  // Call playR2() when current video changes
+  // Play entry bumper when url is set
   useEffect(() => {
+    if (entryBumperUrl && isEntryBumperPlaying) {
+      adminTvPlayer.playR2(entryBumperUrl, 0);
+    }
+  }, [entryBumperUrl, isEntryBumperPlaying, adminTvPlayer]);
+
+  // Call playR2() when playlist video changes (skip during entry bumper)
+  useEffect(() => {
+    if (isEntryBumperPlaying) return;
     if (currentVideo) {
       adminTvPlayer.playR2(currentVideo.url, adminTvInitialSeek);
     }
-  }, [currentVideo?.id, adminTvInitialSeek, adminTvPlayer]);
+  }, [currentVideo?.id, adminTvInitialSeek, adminTvPlayer, isEntryBumperPlaying]);
 
   // Keep callbacks in sync
   useEffect(() => {
     adminTvPlayer.setCallbacks({
       onEnded: () => {
+        // Entry bumper finished — transition to playlist
+        if (isEntryBumperPlaying) {
+          setIsEntryBumperPlaying(false);
+          setEntryBumperUrl(null);
+          // Force re-render so the normal playlist video effect picks up currentVideo
+          return;
+        }
         if (activeVideos.length > 1) {
           setStartTvCountdown(20);
         } else {
@@ -313,7 +343,7 @@ export default function AdminTVPage() {
       },
       onTimeUpdate: handleAdminTvTimeUpdate,
     });
-  }, [advanceTvVideo, handleAdminTvTimeUpdate, adminTvPlayer, activeVideos.length]);
+  }, [advanceTvVideo, handleAdminTvTimeUpdate, adminTvPlayer, activeVideos.length, isEntryBumperPlaying]);
 
   // Save progress
   const saveAdminTvProgress = useCallback(() => {
@@ -820,6 +850,17 @@ export default function AdminTVPage() {
           <div className="tv-player-container" ref={tvPlayerTargetRef} />
           {/* Overlay info */}
           <div className="preview-card" style={{ marginTop: 8, alignItems: "center" }}>
+            {isEntryBumperPlaying && (
+              <div style={{
+                width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                background: "linear-gradient(135deg, rgba(59,130,246,0.15), rgba(59,130,246,0.05))",
+                border: "1px solid rgba(59,130,246,0.15)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 16, color: "#3B82F6",
+              }}>
+                <i className="fas fa-film"></i>
+              </div>
+            )}
             <div style={{
               width: 40, height: 40, borderRadius: 10, flexShrink: 0,
               background: "linear-gradient(135deg, rgba(232,168,56,0.12), rgba(232,168,56,0.04))",
@@ -830,7 +871,11 @@ export default function AdminTVPage() {
               <i className="fas fa-play"></i>
             </div>
             <div className="preview-info" style={{ flex: 1 }}>
-              <div className="preview-title">{currentVideo?.title || activePlaylist.title}</div>
+              <div className="preview-title">
+                {isEntryBumperPlaying ? (
+                  <><i className="fas fa-film" style={{ marginRight: 4, color: "#3B82F6" }}></i> TV Intro</>
+                ) : currentVideo?.title || activePlaylist.title}
+              </div>
               <div className="preview-meta">
                 <i className="fas fa-list-ol"></i> Video {currentTvIndex + 1} of {activeVideos.length}
                 {startTvCountdown !== null && (
@@ -845,7 +890,11 @@ export default function AdminTVPage() {
               background: "var(--success)", color: "#fff", border: "none",
               fontSize: 11, fontWeight: 700, cursor: "pointer",
             }}>
-              <i className="fas fa-circle"></i> Playing
+              {isEntryBumperPlaying ? (
+                <><i className="fas fa-film"></i> Intro</>
+              ) : (
+                <><i className="fas fa-circle"></i> Playing</>
+              )}
             </button>
           </div>
         </div>
