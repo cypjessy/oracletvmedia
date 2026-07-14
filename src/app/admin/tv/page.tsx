@@ -78,6 +78,12 @@ export default function AdminTVPage() {
   const savedAdminSeekRef = useRef(0);
   const lastAdminTvSeekRef = useRef(0);
   const lastAdminTvIndexRef = useRef(0);
+  const isEntryBumperPlayingRef = useRef(false);
+
+  // Sync ref with state for use inside interval callbacks
+  useEffect(() => {
+    isEntryBumperPlayingRef.current = isEntryBumperPlaying;
+  }, [isEntryBumperPlaying]);
 
   // Load R2 videos + playlists + admin TV state from Firestore on mount
   useEffect(() => {
@@ -352,10 +358,12 @@ export default function AdminTVPage() {
     });
   }, [advanceTvVideo, handleAdminTvTimeUpdate, adminTvPlayer, activeVideos.length, isEntryBumperPlaying]);
 
-  // Save progress to Firestore per-user
+  // Save progress to Firestore per-user (skips during entry bumper to avoid seek corruption)
   const saveAdminTvProgress = useCallback(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
+    // Don't save during entry bumper — would overwrite real progress with bumper's seek
+    if (isEntryBumperPlayingRef.current) return;
     const seek = lastAdminTvSeekRef.current;
     const index = lastAdminTvIndexRef.current;
     saveAdminTvState(uid, {

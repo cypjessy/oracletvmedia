@@ -233,6 +233,12 @@ export default function TVPage() {
   // ─── Bumper entry logic ───
   const entryBumperStartedRef = useRef(false);
   const [isEntryBumperPlaying, setIsEntryBumperPlaying] = useState(false);
+  const isEntryBumperPlayingRef = useRef(false);
+
+  // Sync ref with state for use inside interval callbacks
+  useEffect(() => {
+    isEntryBumperPlayingRef.current = isEntryBumperPlaying;
+  }, [isEntryBumperPlaying]);
 
   // Play entry bumper via playR2() when loading + bumperConfig + video are ready
   useEffect(() => {
@@ -439,6 +445,8 @@ export default function TVPage() {
   /* Save current progress to Firestore + localStorage (used by interval + cleanup) */
   const saveTvProgress = useCallback(() => {
     const uid = auth.currentUser?.uid;
+    // Don't save during entry bumper — would overwrite real progress with bumper's seek
+    if (isEntryBumperPlayingRef.current) return;
     if (uid && lastTvSeekRef.current > 0) {
       updateUserTvProgress(uid, lastTvIndexRef.current, lastTvSeekRef.current);
     }
