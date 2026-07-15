@@ -64,15 +64,15 @@ echo ""
 # ── Step 4: Build Android APK ────────────────────────────────────────────
 echo "[4/6] Compiling Android APK (this may take a while)..."
 cd "$PROJECT_DIR/android"
-./gradlew assembleDebug
+./gradlew assembleRelease
 cd "$PROJECT_DIR"
-echo "  ✅ APK compiled"
+echo "  ✅ APK compiled and signed with release keystore"
 echo ""
 
 # ── Step 5: Copy APK to public/ for Vercel ───────────────────────────────
 echo "[5/6] Copying APK to public/..."
 mkdir -p "$PROJECT_DIR/public"
-cp "$PROJECT_DIR/android/app/build/outputs/apk/debug/app-debug.apk" \
+cp "$PROJECT_DIR/android/app/build/outputs/apk/release/app-release.apk" \
    "$PROJECT_DIR/public/app-release.apk"
 echo "  ✅ APK copied to public/app-release.apk"
 

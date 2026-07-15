@@ -99,6 +99,62 @@ export default function TVPage() {
   // ─── Tabs ───
   const [activeTab, setActiveTab] = useState<TabId>("notes");
 
+  // ─── Notes state ───
+  const notesLoadedRef = useRef(false);
+  const [noteContent, setNoteContent] = useState("");
+  const noteChangedRef = useRef(false);
+  const noteSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteSavingExplicit, setNoteSavingExplicit] = useState(false);
+  const [noteLastSaved, setNoteLastSaved] = useState<Date | null>(null);
+  const [notesPreview, setNotesPreview] = useState(false);
+  const [notesSubTab, setNotesSubTab] = useState<"write" | "saved">("write");
+  const [allNotes, setAllNotes] = useState<TvNote[]>([]);
+  const [allNotesLoading, setAllNotesLoading] = useState(false);
+  const [selectedNote, setSelectedNote] = useState<TvNote | null>(null);
+  const [notesSearch, setNotesSearch] = useState("");
+
+  // ─── Chat state ───
+  const [chatInput, setChatInput] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const chatListRef = useRef<HTMLDivElement>(null!);
+  const chatEndRef = useRef<HTMLDivElement>(null!);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+  // ─── Prayer state ───
+  const [prayerName, setPrayerName] = useState("");
+  const [prayerRequest, setPrayerRequest] = useState("");
+  const [prayerSending, setPrayerSending] = useState(false);
+  const [prayers, setPrayers] = useState<PrayerEntry[]>([]);
+
+  // ─── Giving state ───
+  const [giveLoading, setGiveLoading] = useState(true);
+  const [giveSelectedAmount, setGiveSelectedAmount] = useState<number | null>(null);
+  const [giveCustomAmount, setGiveCustomAmount] = useState("");
+  const [giveMethods, setGiveMethods] = useState<PaymentMethod[]>([]);
+  const [giveSelectedMethod, setGiveSelectedMethod] = useState<string | null>(null);
+  const [giveConfirmationCode, setGiveConfirmationCode] = useState("");
+  const [giveSubmitting, setGiveSubmitting] = useState(false);
+  const [giveTxns, setGiveTxns] = useState<Transaction[]>([]);
+
+  // ─── Export notes ───
+  const handleExportNotes = useCallback(() => {
+    if (allNotes.length === 0) return;
+    let md = "# My Sermon Notes\n\n";
+    for (const n of allNotes) {
+      md += `## ${n.videoTitle || "Untitled"}\n`;
+      if (n.updatedAt) md += `*Saved: ${new Date(n.updatedAt as any).toLocaleDateString()}*\n\n`;
+      md += `${n.content}\n\n---\n\n`;
+    }
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sermon-notes-${new Date().toISOString().split("T")[0]}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [allNotes]);
+
   // Fetch R2 bumper config, playlists & videos on mount (saved state loaded by useTvProgress)
   useEffect(() => {
     let mounted = true;
