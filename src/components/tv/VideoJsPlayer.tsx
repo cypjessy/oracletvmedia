@@ -111,7 +111,6 @@ export default function VideoJsPlayer({
         muted={autoplay}
         playsInline
         preload="auto"
-        crossOrigin="anonymous"
         style={{
           width: "100%",
           height: "100%",

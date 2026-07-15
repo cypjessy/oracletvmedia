@@ -69,16 +69,24 @@ npx cap copy android
 echo "  ✅ Assets synced"
 echo ""
 
-# ── Step 4: Build Android APK ────────────────────────────────────────────
-echo "[5/7] Compiling Android APK (this may take a while)..."
+# ── Step 4: Clean Android build ────────────────────────────────────────────
+echo "[5/8] Cleaning Android build..."
+cd "$PROJECT_DIR/android"
+JAVA_HOME="$JAVA_HOME" ./gradlew clean --no-daemon -Dorg.gradle.jvmargs="-Xmx2048m -XX:MaxMetaspaceSize=512m" 2>&1 | tail -5
+cd "$PROJECT_DIR"
+echo "  ✅ Android build cleaned"
+echo ""
+
+# ── Step 5: Build Android APK ────────────────────────────────────────────
+echo "[6/8] Compiling Android APK (this may take a while)..."
 cd "$PROJECT_DIR/android"
 JAVA_HOME="$JAVA_HOME" ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx2048m -XX:MaxMetaspaceSize=512m"
 cd "$PROJECT_DIR"
 echo "  ✅ APK compiled and signed with release keystore"
 echo ""
 
-# ── Step 5: Copy APK to public/ for Vercel ───────────────────────────────
-echo "[6/7] Copying APK to public/..."
+# ── Step 6: Copy APK to public/ for Vercel ───────────────────────────────
+echo "[7/8] Copying APK to public/..."
 mkdir -p "$PROJECT_DIR/public"
 cp "$PROJECT_DIR/android/app/build/outputs/apk/release/app-release.apk" \
    "$PROJECT_DIR/public/app-release.apk"
@@ -90,8 +98,8 @@ APK_SIZE=$(stat --format=%s "$PROJECT_DIR/public/app-release.apk" 2>/dev/null ||
 echo "  📦 Size: $(numfmt --to=iec $APK_SIZE 2>/dev/null || echo "${APK_SIZE}B")"
 echo ""
 
-# ── Step 6: Record release in Firestore ──────────────────────────────────
-echo "[7/7] Recording release in Firestore..."
+# ── Step 7: Record release in Firestore ──────────────────────────────────
+echo "[8/8] Recording release in Firestore..."
 node scripts/version.mjs record
 echo ""
 
@@ -101,7 +109,7 @@ VERSION_CODE=$(grep 'versionCode' "$PROJECT_DIR/android/app/build.gradle" | grep
 
 # ── Commit and push to GitHub ────────────────────────────────
 echo ""
-echo "[7/7] Committing and pushing to GitHub..."
+echo "[8/8] Committing and pushing to GitHub..."
 
 git add android/app/build.gradle public/app-release.apk 2>/dev/null || true
 
