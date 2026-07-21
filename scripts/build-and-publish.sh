@@ -88,7 +88,7 @@ echo ""
 # ── Step 6: Copy APK to public/ for Vercel ───────────────────────────────
 echo "[7/8] Copying APK to public/..."
 mkdir -p "$PROJECT_DIR/public"
-cp "$PROJECT_DIR/android/app/build/outputs/apk/release/oracle-tv-app.apk" \
+cp "$PROJECT_DIR/android/app/build/outputs/apk/release/app-release.apk" \
    "$PROJECT_DIR/public/oracle-tv-app.apk"
 echo "  ✅ APK copied to public/oracle-tv-app.apk"
 

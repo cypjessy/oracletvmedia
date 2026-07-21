@@ -23,7 +23,7 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const BUILD_GRADLE = join(ROOT, "android", "app", "build.gradle");
-const APK_PATH = join(ROOT, "public", "app-release.apk");
+const APK_PATH = join(ROOT, "public", "oracle-tv-app.apk");
 const API_HOST = process.env.NEXT_PUBLIC_API_HOST || "http://localhost:3000";
 const BUILD_SECRET = process.env.BUILD_SECRET_TOKEN || "";
 
@@ -82,7 +82,7 @@ async function cmdRecord() {
     console.warn("⚠️  APK not found at public/app-release.apk — fileSize will be 0");
   }
 
-  const downloadUrl = `/app-release.apk`;
+  const downloadUrl = `/oracle-tv-app.apk`;
 
   if (!BUILD_SECRET) {
     console.error("❌ BUILD_SECRET_TOKEN environment variable is required");
