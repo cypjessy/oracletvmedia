@@ -227,7 +227,7 @@ export function RadioPlaylistsTab(props: RadioPlaylistsTabProps) {
   const scheduledPlaylists = playlists.filter((p) => p.type === "scheduled" && p.schedule);
   const playlistColors: Record<string, string> = {};
   scheduledPlaylists.forEach((pl, i) => {
-    const palette = ["#E8A838","#3B82F6","#8B5CF6","#10B981","#F43F5E","#14B8A6","#F97316"];
+    const palette = ["var(--primary)","#3B82F6","#8B5CF6","#10B981","#F43F5E","#14B8A6","#F97316"];
     playlistColors[pl.id] = palette[i % palette.length];
   });
 
@@ -313,10 +313,10 @@ export function RadioPlaylistsTab(props: RadioPlaylistsTabProps) {
         .pl-sv-grid { display: grid; grid-template-columns: 50px repeat(7, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; min-width: 600px; }
         .pl-sv-corner { background: var(--surface-card); }
         .pl-sv-day-header { background: var(--surface-card); padding: 8px 4px; text-align: center; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); }
-        .pl-sv-day-header.today { background: rgba(232,168,56,0.1); color: var(--primary); }
+        .pl-sv-day-header.today { background: rgba(112,72,232,0.1); color: var(--primary); }
         .pl-sv-time { background: var(--surface-card); padding: 2px 6px; font-size: 9px; color: var(--text-tertiary); font-weight: 500; text-align: right; display: flex; align-items: flex-start; justify-content: flex-end; }
         .pl-sv-cell { background: var(--surface-elevated); min-height: 24px; padding: 1px; position: relative; cursor: default; }
-        .pl-sv-cell.today { background: rgba(232,168,56,0.03); }
+        .pl-sv-cell.today { background: rgba(112,72,232,0.03); }
         .pl-sv-cell.has-block { padding: 1px; }
         .pl-sv-block { border-radius: 3px; padding: 1px 4px; font-size: 8px; font-weight: 700; color: #fff; margin-bottom: 1px; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.4; }
         .pl-sv-block:active { opacity: 0.8; }
@@ -329,7 +329,7 @@ export function RadioPlaylistsTab(props: RadioPlaylistsTabProps) {
         .pl-card-new:active { transform: scale(0.98); }
         .pl-card-new.selected { border-color: var(--primary); border-left: 3px solid var(--primary); padding-left: 12px; }
         .pl-card-new.now-playing { border-left: 3px solid var(--success); padding-left: 12px; }
-        .pl-card-new.default { background: rgba(232,168,56,0.03); }
+        .pl-card-new.default { background: rgba(112,72,232,0.03); }
         .pl-card-status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
         .pl-card-status-dot.active { background: var(--success); box-shadow: 0 0 6px var(--success); animation: livePulse 1.5s ease-in-out infinite; }
         .pl-card-status-dot.scheduled { background: var(--primary); }
@@ -340,7 +340,7 @@ export function RadioPlaylistsTab(props: RadioPlaylistsTabProps) {
         .pl-card-new-top { display: flex; align-items: center; gap: 8px; }
         .pl-card-new-name { font-size: 15px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .pl-card-new-meta { font-size: 12px; color: var(--text-tertiary); margin-top: 3px; }
-        .pl-card-new-tag { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: rgba(232,168,56,0.08); color: var(--primary); }
+        .pl-card-new-tag { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: rgba(112,72,232,0.08); color: var(--primary); }
         .pl-card-new-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
         .pl-card-edit-btn { width: 30px; height: 30px; border-radius: 50%; background: none; border: none; color: var(--text-tertiary); font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .pl-card-edit-btn:active { background: var(--surface-elevated); color: var(--text-primary); }
@@ -362,7 +362,7 @@ export function RadioPlaylistsTab(props: RadioPlaylistsTabProps) {
         .pl-detail-edit-btn { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; border: 1px solid var(--border); background: transparent; color: var(--text-secondary); cursor: pointer; }
         .pl-detail-edit-btn:active { background: var(--surface-elevated); }
         .pl-detail-section-title { font-size: 13px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
-        .pl-detail-schedule { background: rgba(232,168,56,0.04); border: 1px solid rgba(232,168,56,0.1); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+        .pl-detail-schedule { background: rgba(112,72,232,0.04); border: 1px solid rgba(112,72,232,0.1); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
         .pl-detail-schedule-body { display: flex; flex-direction: column; gap: 8px; }
         .pl-detail-days { display: flex; gap: 4px; flex-wrap: wrap; }
         .pl-detail-day-pill { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; background: var(--surface-elevated); color: var(--text-tertiary); }
@@ -372,7 +372,7 @@ export function RadioPlaylistsTab(props: RadioPlaylistsTabProps) {
         .pl-detail-songs { display: flex; flex-direction: column; gap: 10px; }
         .pl-detail-songs-header { display: flex; align-items: center; justify-content: space-between; }
         .pl-detail-add-songs-btn { display: flex; align-items: center; gap: 4px; padding: 8px 14px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; border: 1.5px dashed var(--border); background: transparent; color: var(--primary); cursor: pointer; }
-        .pl-detail-add-songs-btn:active { border-color: var(--primary); background: rgba(232,168,56,0.03); }
+        .pl-detail-add-songs-btn:active { border-color: var(--primary); background: rgba(112,72,232,0.03); }
         .pl-detail-empty-songs { text-align: center; padding: 30px 0; color: var(--text-tertiary); }
         .pl-detail-empty-songs i { font-size: 32px; opacity: 0.4; margin-bottom: 8px; display: block; }
         .pl-detail-empty-songs p { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
@@ -396,7 +396,7 @@ export function RadioPlaylistsTab(props: RadioPlaylistsTabProps) {
         .pl-empty-state p { font-size: 13px; margin: 0 0 16px; }
         .pl-type-badge { padding: 3px 10px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0; }
         .pl-type-badge.standard { background: rgba(59,130,246,0.12); color: #3B82F6; }
-        .pl-type-badge.scheduled { background: rgba(232,168,56,0.12); color: var(--primary); }
+        .pl-type-badge.scheduled { background: rgba(112,72,232,0.12); color: var(--primary); }
         .pl-type-badge.ondemand { background: rgba(139,92,246,0.12); color: #8B5CF6; }
         .pl-form-row { display: flex; flex-direction: column; gap: 6px; }
         .pl-form-row label { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
@@ -422,14 +422,14 @@ export function RadioPlaylistsTab(props: RadioPlaylistsTabProps) {
         .pl-type-options { display: flex; flex-direction: column; gap: 6px; }
         .pl-type-option { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s ease; }
         .pl-type-option:active { transform: scale(0.98); }
-        .pl-type-option.active { border-color: var(--primary); background: rgba(232,168,56,0.03); }
+        .pl-type-option.active { border-color: var(--primary); background: rgba(112,72,232,0.03); }
         .pl-type-option input { display: none; }
         .pl-type-option-label { font-size: 14px; font-weight: 600; }
         .pl-type-option-desc { font-size: 12px; color: var(--text-tertiary); }
         .pl-order-options { display: flex; gap: 8px; }
         .pl-order-option { display: flex; align-items: center; gap: 6px; padding: 10px 16px; border: 1.5px solid var(--border); border-radius: var(--radius-md); cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s ease; }
         .pl-order-option:active { transform: scale(0.95); }
-        .pl-order-option.active { border-color: var(--primary); background: rgba(232,168,56,0.03); }
+        .pl-order-option.active { border-color: var(--primary); background: rgba(112,72,232,0.03); }
         .pl-order-option input { display: none; }
         .pl-form-danger { padding: 10px 20px; background: rgba(239,68,68,0.1); border: none; border-radius: var(--radius-sm); color: var(--error); font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s ease; }
         .pl-form-danger:active { background: rgba(239,68,68,0.2); }
@@ -565,12 +565,12 @@ export function RadioPlaylistsTab(props: RadioPlaylistsTabProps) {
                     });
                     return (
                       <div key={`${d}-${hour}`} className={`pl-sv-cell ${isToday ? "today" : ""} ${blocks.length > 0 ? "has-block" : ""}`}
-                        style={blocks.length > 0 ? { background: `rgba(232,168,56,${Math.min(0.08 * blocks.length, 0.25)})` } : {}}>
+                        style={blocks.length > 0 ? { background: `rgba(112,72,232,${Math.min(0.08 * blocks.length, 0.25)})` } : {}}>
                         {blocks.map((pl) => (
                           <div
                             key={pl.id}
                             className="pl-sv-block"
-                            style={{ background: playlistColors[pl.id] || "#E8A838" }}
+                            style={{ background: playlistColors[pl.id] || "var(--primary)" }}
                             title={`${pl.name} (${pl.schedule!.startTime} - ${pl.schedule!.endTime})`}
                             onClick={() => setSelectedPlId(pl.id)}
                           >

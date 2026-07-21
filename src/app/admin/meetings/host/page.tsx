@@ -690,20 +690,20 @@ export default function AdminMeetingHostPage() {
           }}>
             <div style={{
               width: 80, height: 80, borderRadius: "50%",
-              background: "linear-gradient(135deg, #E8A838, #D4762A)",
+              background: "linear-gradient(135deg, var(--gradient-start), var(--gradient-end))",
               display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 0 40px rgba(232,168,56,0.3)", animation: "pulseLoad 1.5s ease-in-out infinite"
+              boxShadow: "0 0 40px rgba(112,72,232,0.3)", animation: "pulseLoad 1.5s ease-in-out infinite"
             }}>
               <i className="fas fa-broadcast-tower" style={{ fontSize: 32, color: "#fff" }}></i>
             </div>
-            <div style={{ color: "#E8A838", fontSize: 18, fontWeight: 700, letterSpacing: 1 }}>
+            <div style={{ color: "var(--primary)", fontSize: 18, fontWeight: 700, letterSpacing: 1 }}>
               {connecting ? "Connecting..." : "Loading..."}
             </div>
             <div style={{
               width: 200, height: 3, background: "#1A1A1A", borderRadius: 2, overflow: "hidden"
             }}>
               <div style={{
-                height: "100%", width: "40%", background: "linear-gradient(90deg, #E8A838, #D4762A)",
+                height: "100%", width: "40%", background: "linear-gradient(90deg, var(--gradient-start), var(--gradient-end))",
                 borderRadius: 2, animation: "slide 1.2s ease-in-out infinite"
               }}></div>
             </div>
@@ -737,10 +737,10 @@ export default function AdminMeetingHostPage() {
     <>
       <style>{`
         :root {
-          --primary: #E8A838;
-          --primary-light: #F5C76B;
-          --primary-dark: #C48A2A;
-          --bg: #0A0A0F;
+          --primary: #9775FA;
+          --primary-light: #B197FC;
+          --primary-dark: #7048E8;
+          --bg: #15111F;
           --surface: rgba(255,255,255,0.04);
           --surface-hover: rgba(255,255,255,0.08);
           --border: rgba(255,255,255,0.06);
@@ -750,11 +750,11 @@ export default function AdminMeetingHostPage() {
           --success: #4ADE80;
           --error: #FF6B6B;
           --info: #38BDF8;
-          --gradient-start: #E8A838;
-          --gradient-end: #D4762A;
+          --gradient-start: #7048E8;
+          --gradient-end: #9775FA;
           --gradient-blue: #3B82F6;
           --gradient-purple: #8B5CF6;
-          --shadow-glow: 0 0 30px rgba(232,168,56,0.15);
+          --shadow-glow: 0 0 30px rgba(112,72,232,0.15);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -774,7 +774,7 @@ export default function AdminMeetingHostPage() {
           inset: 0;
           z-index: 0;
           overflow: hidden;
-          background: radial-gradient(ellipse at 20% 50%, rgba(232,168,56,0.06) 0%, transparent 60%),
+          background: radial-gradient(ellipse at 20% 50%, rgba(112,72,232,0.06) 0%, transparent 60%),
                       radial-gradient(ellipse at 80% 20%, rgba(139,92,246,0.04) 0%, transparent 50%),
                       radial-gradient(ellipse at 50% 80%, rgba(59,130,246,0.04) 0%, transparent 50%);
         }
@@ -789,7 +789,7 @@ export default function AdminMeetingHostPage() {
 
         .bg-orb:nth-child(1) {
           width: 400px; height: 400px;
-          background: rgba(232,168,56,0.12);
+          background: rgba(112,72,232,0.12);
           top: -10%; left: -10%;
           animation-delay: 0s;
         }
@@ -1179,7 +1179,7 @@ export default function AdminMeetingHostPage() {
           font-size: 11px;
           font-weight: 600;
           color: var(--primary);
-          background: rgba(232,168,56,0.1);
+          background: rgba(112,72,232,0.1);
           padding: 2px 8px;
           border-radius: 6px;
         }
@@ -1431,7 +1431,7 @@ export default function AdminMeetingHostPage() {
 
         .host-chip {
           color: var(--primary);
-          background: rgba(232,168,56,0.1);
+          background: rgba(112,72,232,0.1);
         }
 
         .status-icon {
@@ -1697,7 +1697,7 @@ export default function AdminMeetingHostPage() {
           font-size: 11px;
           font-weight: 600;
           color: var(--primary);
-          background: rgba(232,168,56,0.1);
+          background: rgba(112,72,232,0.1);
           padding: 2px 8px;
           border-radius: 6px;
         }
@@ -1804,7 +1804,7 @@ export default function AdminMeetingHostPage() {
               width: 100, height: 100, borderRadius: "50%",
               background: "linear-gradient(135deg, var(--gradient-start), var(--gradient-end))",
               display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 0 50px rgba(232,168,56,0.3)",
+              boxShadow: "0 0 50px rgba(112,72,232,0.3)",
               animation: "pulseLoad 1.5s ease-in-out infinite"
             }}>
               <i className="fas fa-microphone" style={{ fontSize: 40, color: "#fff" }}></i>
@@ -1819,7 +1819,7 @@ export default function AdminMeetingHostPage() {
                 padding: "16px 48px", borderRadius: 100, border: "none",
                 background: "linear-gradient(135deg, var(--gradient-start), var(--gradient-end))",
                 color: "#fff", fontSize: 17, fontWeight: 800, cursor: "pointer",
-                boxShadow: "0 8px 32px rgba(232,168,56,0.35)",
+                boxShadow: "0 8px 32px rgba(112,72,232,0.35)",
                 display: "flex", alignItems: "center", gap: 10,
                 transition: "all 0.2s ease"
               }}
@@ -1852,8 +1852,8 @@ export default function AdminMeetingHostPage() {
                 <button
                   onClick={() => setShowAgenda(!showAgenda)}
                   style={{
-                    width: 36, height: 36, borderRadius: "50%", border: showAgenda ? "1px solid rgba(232,168,56,0.3)" : "1px solid var(--border)",
-                    background: showAgenda ? "rgba(232,168,56,0.1)" : "var(--surface)",
+                    width: 36, height: 36, borderRadius: "50%", border: showAgenda ? "1px solid rgba(112,72,232,0.3)" : "1px solid var(--border)",
+                    background: showAgenda ? "rgba(112,72,232,0.1)" : "var(--surface)",
                     color: showAgenda ? "var(--primary)" : "var(--text-secondary)",
                     fontSize: 13, cursor: "pointer", display: "flex",
                     alignItems: "center", justifyContent: "center",
@@ -2169,7 +2169,7 @@ export default function AdminMeetingHostPage() {
                             <span style={{
                               padding: "1px 6px", borderRadius: 4, fontSize: 9, fontWeight: 700,
                               background: item.priority === "high" ? "rgba(255,107,107,0.15)"
-                                : item.priority === "medium" ? "rgba(232,168,56,0.12)"
+                                : item.priority === "medium" ? "rgba(112,72,232,0.12)"
                                 : "rgba(255,255,255,0.06)",
                               color: item.priority === "high" ? "#FF6B6B"
                                 : item.priority === "medium" ? "var(--primary)"
@@ -2194,7 +2194,7 @@ export default function AdminMeetingHostPage() {
                     <button onClick={handleClearQueue}
                       style={{
                         padding: "4px 10px", borderRadius: 6, border: "none",
-                        background: "rgba(232,168,56,0.12)", color: "var(--primary)",
+                        background: "rgba(112,72,232,0.12)", color: "var(--primary)",
                         fontSize: 11, fontWeight: 600, cursor: "pointer",
                         display: "flex", alignItems: "center", gap: 4,
                       }}>

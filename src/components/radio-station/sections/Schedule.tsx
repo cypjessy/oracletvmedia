@@ -11,7 +11,7 @@ const HOURS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const SCHEDULE_COLORS = [
-  "linear-gradient(135deg, #E8A838, #D4762A)",
+  "linear-gradient(135deg, #7048E8, #9775FA)",
   "linear-gradient(135deg, #3B82F6, #60A5FA)",
   "linear-gradient(135deg, #8B5CF6, #A78BFA)",
   "linear-gradient(135deg, #22C55E, #4ADE80)",
@@ -61,12 +61,12 @@ export default function Schedule({ showToast }: Props) {
         .rs-sched-grid { display: grid; grid-template-columns: 60px repeat(7, minmax(100px, 1fr)); min-width: 760px; border: 1px solid var(--rs-border); border-radius: var(--rs-radius-lg); overflow: hidden; background: var(--rs-surface-card); }
         .rs-sched-header-cell { padding: 10px 6px; text-align: center; font-size: 12px; font-weight: 700; color: var(--rs-text-secondary); border-bottom: 1px solid var(--rs-border); border-right: 1px solid var(--rs-border); text-transform: uppercase; letter-spacing: 0.5px; }
         .rs-sched-header-cell:last-child { border-right: none; }
-        .rs-sched-header-cell.today { color: var(--rs-primary); background: rgba(232,168,56,0.08); }
+        .rs-sched-header-cell.today { color: var(--rs-primary); background: rgba(112,72,232,0.08); }
         .rs-sched-time-cell { padding: 8px 6px; text-align: center; font-size: 10px; color: var(--rs-text-tertiary); border-bottom: 1px solid var(--rs-border); border-right: 1px solid var(--rs-border); font-weight: 500; font-variant-numeric: tabular-nums; }
         .rs-sched-cell { position: relative; min-height: 32px; border-bottom: 1px solid var(--rs-border); border-right: 1px solid var(--rs-border); cursor: pointer; transition: all 0.15s ease; }
         .rs-sched-cell:last-child { border-right: none; }
         .rs-sched-cell:active { background: var(--rs-surface-elevated); }
-        .rs-sched-cell.today-col { background: rgba(232,168,56,0.03); }
+        .rs-sched-cell.today-col { background: rgba(112,72,232,0.03); }
         .rs-sched-block { position: absolute; left: 2px; right: 2px; border-radius: 6px; padding: 3px 6px; color: #fff; font-size: 10px; font-weight: 600; overflow: hidden; cursor: pointer; transition: all 0.15s ease; z-index: 2; min-height: 22px; display: flex; align-items: center; gap: 4px; }
         .rs-sched-block:active { transform: scale(0.97); opacity: 0.9; }
         .rs-sched-block i { font-size: 8px; }

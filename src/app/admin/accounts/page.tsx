@@ -175,30 +175,30 @@ export default function AdminAccountsPage() {
     <>
       <style>{`
         :root {
-            --primary: #E8A838;
-            --primary-light: #F5C76B;
-            --primary-dark: #C48A2A;
-            --bg: #0F0F0F;
-            --surface: #1A1A1A;
-            --surface-elevated: #242424;
-            --surface-card: #1E1E1E;
-            --surface-hover: #2A2A2A;
+            --primary: #9775FA;
+            --primary-light: #B197FC;
+            --primary-dark: #7048E8;
+            --bg: #15111F;
+            --surface: #1A1625;
+            --surface-elevated: #241E33;
+            --surface-card: #1E1A2A;
+            --surface-hover: #2A2438;
             --text-primary: #FFFFFF;
             --text-secondary: #A0A0A0;
             --text-tertiary: #6B6B6B;
-            --border: #2A2A2A;
+            --border: #2A2438;
             --error: #FF6B6B;
             --success: #4ADE80;
             --info: #38BDF8;
             --warning: #FBBF24;
-            --overlay: rgba(0,0,0,0.92);
-            --gradient-start: #E8A838;
-            --gradient-end: #D4762A;
+            --overlay: rgba(21,17,31,0.92);
+            --gradient-start: #7048E8;
+            --gradient-end: #9775FA;
             --gradient-purple: #8B5CF6;
             --gradient-blue: #3B82F6;
             --gradient-red: #EF4444;
             --gradient-green: #22C55E;
-            --shadow-soft: 0 4px 20px rgba(232,168,56,0.15);
+            --shadow-soft: 0 4px 20px rgba(112,72,232,0.15);
             --shadow-elevated: 0 8px 32px rgba(0,0,0,0.5);
             --radius-sm: 12px;
             --radius-md: 16px;
@@ -432,7 +432,7 @@ export default function AdminAccountsPage() {
             border-radius: 8px;
             font-size: 11px;
             font-weight: 700;
-            background: rgba(232,168,56,0.15);
+            background: rgba(112,72,232,0.15);
             color: var(--primary);
         }
 

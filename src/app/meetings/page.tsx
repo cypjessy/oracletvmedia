@@ -107,7 +107,7 @@ export default function MeetingsPage() {
   return (
     <>
       <style>{`
-        :root { --primary: #E8A838; --primary-light: #F5C76B; --primary-dark: #C48A2A; --bg: #0F0F0F; --surface: #1A1A1A; --surface-elevated: #242424; --surface-card: #1E1E1E; --surface-hover: #2A2A2A; --text-primary: #FFFFFF; --text-secondary: #A0A0A0; --text-tertiary: #6B6B6B; --border: #2A2A2A; --error: #FF6B6B; --success: #4ADE80; --info: #38BDF8; --gradient-start: #E8A838; --gradient-end: #D4762A; --gradient-blue: #3B82F6; --gradient-purple: #8B5CF6; --shadow-soft: 0 4px 20px rgba(232,168,56,0.15); --shadow-elevated: 0 8px 32px rgba(0,0,0,0.5); --radius-sm: 10px; --radius-md: 14px; --radius-lg: 18px; --radius-xl: 22px; --radius-full: 50%; }
+        :root { --primary: #9775FA; --primary-light: #B197FC; --primary-dark: #7048E8; --bg: #15111F; --surface: #1A1625; --surface-elevated: #241E33; --surface-card: #1E1A2A; --surface-hover: #2A2438; --text-primary: #FFFFFF; --text-secondary: #A0A0A0; --text-tertiary: #6B6B6B; --border: #2A2438; --error: #FF6B6B; --success: #4ADE80; --info: #38BDF8; --gradient-start: #7048E8; --gradient-end: #9775FA; --gradient-blue: #3B82F6; --gradient-purple: #8B5CF6; --shadow-soft: 0 4px 20px rgba(112,72,232,0.15); --shadow-elevated: 0 8px 32px rgba(0,0,0,0.5); --radius-sm: 10px; --radius-md: 14px; --radius-lg: 18px; --radius-xl: 22px; --radius-full: 50%; }
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif; }
         html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text-primary); }
         .app-container { height: 100%; display: flex; flex-direction: column; position: relative; overflow: hidden; }
@@ -434,7 +434,7 @@ export default function MeetingsPage() {
                               <span style={{
                                 padding: "1px 8px", borderRadius: 4, fontSize: 10, fontWeight: 700,
                                 background: item.priority === "high" ? "rgba(255,107,107,0.12)"
-                                  : item.priority === "medium" ? "rgba(232,168,56,0.12)"
+                                  : item.priority === "medium" ? "rgba(112,72,232,0.12)"
                                   : "rgba(107,107,107,0.12)",
                                 color: item.priority === "high" ? "var(--error)"
                                   : item.priority === "medium" ? "var(--primary)"
@@ -602,7 +602,7 @@ export default function MeetingsPage() {
               border: 2px solid var(--primary);
               display: flex; align-items: center; justify-content: center;
               font-size: 12px; font-weight: 800; color: var(--primary);
-              background: rgba(232,168,56,0.08);
+              background: rgba(112,72,232,0.08);
               flex-shrink: 0;
             }
             .agenda-item-num-circle.checked {
@@ -611,7 +611,7 @@ export default function MeetingsPage() {
             }
             .agenda-item-line {
               width: 2px; flex: 1; min-height: 20px;
-              background: rgba(232,168,56,0.12);
+              background: rgba(112,72,232,0.12);
             }
             .agenda-item-content {
               flex: 1; padding-bottom: 16px;

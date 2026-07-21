@@ -64,7 +64,7 @@ export default function AdminRadioPage() {
   useEffect(() => {
     getRadioConfig().then((config) => {
       if (config) setRadioConfig({
-        stationName: config.stationName || "MOD NAKURU Radio",
+        stationName: config.stationName || "ORACLE TV MEDIA Radio",
         description: config.description || "Radio Station",
         stationId: config.stationId || "4",
         embedUrl: config.embedUrl || "https://azuracast.histoview.co.ke/public/mountain_of_delivarance_church/embed?autoplay=1&rounded=1&allow_popup=1&continuous=1",
@@ -426,30 +426,30 @@ export default function AdminRadioPage() {
     <>
       <style>{`
         :root {
-          --primary: #E8A838;
-          --primary-light: #F5C76B;
-          --primary-dark: #C48A2A;
-          --bg: #0F0F0F;
-          --surface: #1A1A1A;
-          --surface-elevated: #242424;
-          --surface-card: #1E1E1E;
-          --surface-hover: #2A2A2A;
+          --primary: #9775FA;
+          --primary-light: #B197FC;
+          --primary-dark: #7048E8;
+          --bg: #15111F;
+          --surface: #1A1625;
+          --surface-elevated: #241E33;
+          --surface-card: #1E1A2A;
+          --surface-hover: #2A2438;
           --text-primary: #FFFFFF;
           --text-secondary: #A0A0A0;
           --text-tertiary: #6B6B6B;
-          --border: #2A2A2A;
+          --border: #2A2438;
           --error: #FF6B6B;
           --success: #4ADE80;
           --info: #38BDF8;
           --warning: #FBBF24;
-          --overlay: rgba(0,0,0,0.92);
-          --gradient-start: #E8A838;
-          --gradient-end: #D4762A;
+          --overlay: rgba(21,17,31,0.92);
+          --gradient-start: #7048E8;
+          --gradient-end: #9775FA;
           --gradient-purple: #8B5CF6;
           --gradient-blue: #3B82F6;
           --gradient-red: #EF4444;
           --gradient-green: #22C55E;
-          --shadow-soft: 0 4px 20px rgba(232,168,56,0.15);
+          --shadow-soft: 0 4px 20px rgba(112,72,232,0.15);
           --shadow-elevated: 0 8px 32px rgba(0,0,0,0.5);
           --radius-sm: 10px;
           --radius-md: 14px;
@@ -514,12 +514,12 @@ export default function AdminRadioPage() {
         /* ===== PREMIUM RADIO HERO CARD ===== */
         .rh-hero {
             position: relative;
-            background: linear-gradient(180deg, rgba(232,168,56,0.06) 0%, rgba(15,15,15,0.5) 100%);
-            border: 1px solid rgba(232,168,56,0.12);
+            background: linear-gradient(180deg, rgba(112,72,232,0.06) 0%, rgba(15,15,15,0.5) 100%);
+            border: 1px solid rgba(112,72,232,0.12);
             border-radius: var(--radius-xl);
             padding: 20px 18px 16px;
             overflow: hidden;
-            box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 0 80px rgba(232,168,56,0.04);
+            box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 0 80px rgba(112,72,232,0.04);
             animation: rhFadeIn 0.6s ease;
         }
         @keyframes rhFadeIn {
@@ -529,14 +529,14 @@ export default function AdminRadioPage() {
         .rh-glow-1 {
             position: absolute; top: -80px; left: 50%; transform: translateX(-50%);
             width: 300px; height: 300px;
-            background: radial-gradient(circle, rgba(232,168,56,0.12) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(112,72,232,0.12) 0%, transparent 70%);
             pointer-events: none;
             animation: rhGlowPulse 4s ease-in-out infinite;
         }
         .rh-glow-2 {
             position: absolute; bottom: -60px; right: -60px;
             width: 200px; height: 200px;
-            background: radial-gradient(circle, rgba(212,118,42,0.06) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(112,72,232,0.06) 0%, transparent 70%);
             pointer-events: none;
             animation: rhGlowPulse2 5s ease-in-out infinite reverse;
         }
@@ -589,7 +589,7 @@ export default function AdminRadioPage() {
         .rh-art-ring {
             position: absolute; inset: -4px;
             border-radius: 50%;
-            border: 2px solid rgba(232,168,56,0.2);
+            border: 2px solid rgba(112,72,232,0.2);
             animation: rhRingSpin 8s linear infinite;
         }
         @keyframes rhRingSpin {
@@ -600,12 +600,12 @@ export default function AdminRadioPage() {
             content: ''; position: absolute; top: -2px; left: 50%; transform: translateX(-50%);
             width: 8px; height: 8px; border-radius: 50%;
             background: var(--primary);
-            box-shadow: 0 0 12px rgba(232,168,56,0.6);
+            box-shadow: 0 0 12px rgba(112,72,232,0.6);
         }
         .rh-art {
             width: 100%; height: 100%;
             border-radius: 50%; overflow: hidden;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 2px rgba(232,168,56,0.1);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 2px rgba(112,72,232,0.1);
             transition: all 0.5s ease;
             position: relative;
         }
@@ -678,7 +678,7 @@ export default function AdminRadioPage() {
             position: absolute; right: 0; top: -2px;
             width: 8px; height: 8px; border-radius: 50%;
             background: var(--primary);
-            box-shadow: 0 0 12px rgba(232,168,56,0.6);
+            box-shadow: 0 0 12px rgba(112,72,232,0.6);
             opacity: 0;
             transition: opacity 0.3s;
         }
@@ -699,16 +699,16 @@ export default function AdminRadioPage() {
             border: none; color: #fff; font-size: 22px;
             display: flex; align-items: center; justify-content: center;
             cursor: pointer; position: relative;
-            box-shadow: 0 6px 24px rgba(232,168,56,0.35);
+            box-shadow: 0 6px 24px rgba(112,72,232,0.35);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .rh-play-btn:active { transform: scale(0.88); }
         .rh-play-btn.playing {
-            box-shadow: 0 6px 28px rgba(232,168,56,0.4), 0 0 40px rgba(232,168,56,0.1);
+            box-shadow: 0 6px 28px rgba(112,72,232,0.4), 0 0 40px rgba(112,72,232,0.1);
         }
         .rh-play-ring {
             position: absolute; inset: -6px; border-radius: 50%;
-            border: 1.5px solid rgba(232,168,56,0.15);
+            border: 1.5px solid rgba(112,72,232,0.15);
             animation: rhRingPulse 2s ease-in-out infinite;
         }
         .rh-play-btn.playing .rh-play-ring {
@@ -807,8 +807,8 @@ export default function AdminRadioPage() {
 
         /* Now Playing Card */
         .now-playing-card {
-          background: linear-gradient(135deg, rgba(232,168,56,0.08) 0%, rgba(139,92,246,0.04) 100%);
-          border: 1px solid rgba(232,168,56,0.1);
+          background: linear-gradient(135deg, rgba(112,72,232,0.08) 0%, rgba(139,92,246,0.04) 100%);
+          border: 1px solid rgba(112,72,232,0.1);
           border-radius: var(--radius-lg); padding: 16px;
           display: flex; align-items: center; gap: 14px;
         }
@@ -904,7 +904,7 @@ export default function AdminRadioPage() {
           width: 44px; height: 44px; border-radius: var(--radius-sm);
           display: flex; align-items: center; justify-content: center; font-size: 18px;
         }
-        .qab-icon.gold { background: rgba(232,168,56,0.12); color: var(--primary); }
+        .qab-icon.gold { background: rgba(112,72,232,0.12); color: var(--primary); }
         .qab-icon.blue { background: rgba(59,130,246,0.12); color: var(--gradient-blue); }
         .qab-icon.purple { background: rgba(139,92,246,0.12); color: var(--gradient-purple); }
 
@@ -921,7 +921,7 @@ export default function AdminRadioPage() {
         }
         .sparkline-fill {
           width: 100%; border-radius: 3px 3px 0 0;
-          background: linear-gradient(to top, rgba(232,168,56,0.3), var(--primary));
+          background: linear-gradient(to top, rgba(112,72,232,0.3), var(--primary));
           transition: height 0.3s ease; min-height: 2px;
         }
         .sparkline-labels {
@@ -999,7 +999,7 @@ export default function AdminRadioPage() {
         }
         .upload-zone:active { background: var(--surface-elevated); border-color: var(--primary); }
         .upload-zone.dragging {
-          background: rgba(232,168,56,0.06); border-color: var(--primary);
+          background: rgba(112,72,232,0.06); border-color: var(--primary);
           transform: scale(1.01);
         }
         .upload-zone i { font-size: 36px; color: var(--text-tertiary); transition: all 0.25s ease; }
@@ -1047,7 +1047,7 @@ export default function AdminRadioPage() {
           border-radius: var(--radius-md); color: var(--text-primary);
           font-size: 14px; font-weight: 500; outline: none;
         }
-        .media-search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(232,168,56,0.08); }
+        .media-search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(112,72,232,0.08); }
         .media-search-input::placeholder { color: var(--text-tertiary); font-weight: 400; }
         .media-search-clear {
           position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
@@ -1068,13 +1068,13 @@ export default function AdminRadioPage() {
           background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%236B6B6B' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
           background-repeat: no-repeat; background-position: right 14px center; padding-right: 40px;
         }
-        .media-filter-select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(232,168,56,0.08); }
+        .media-filter-select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(112,72,232,0.08); }
 
         /* Bulk Actions */
         .media-bulk-bar {
           display: flex; align-items: center; gap: 10px;
-          padding: 10px 14px; background: rgba(232,168,56,0.08);
-          border: 1px solid rgba(232,168,56,0.15);
+          padding: 10px 14px; background: rgba(112,72,232,0.08);
+          border: 1px solid rgba(112,72,232,0.15);
           border-radius: var(--radius-md);
           animation: fadeSlideUp 0.2s ease;
         }
@@ -1117,7 +1117,7 @@ export default function AdminRadioPage() {
           transition: background 0.2s ease; position: relative;
         }
         .media-file-item:last-child { border-bottom: none; }
-        .media-file-item.selected { background: rgba(232,168,56,0.04); }
+        .media-file-item.selected { background: rgba(112,72,232,0.04); }
 
         .media-checkbox {
           width: 22px; height: 22px; border-radius: 6px;
@@ -1153,7 +1153,7 @@ export default function AdminRadioPage() {
         .media-playlist-chip {
           padding: 2px 8px; border-radius: 4px;
           font-size: 10px; font-weight: 600;
-          background: rgba(232,168,56,0.1); color: var(--primary);
+          background: rgba(112,72,232,0.1); color: var(--primary);
         }
 
         /* File Menu */
@@ -1191,7 +1191,7 @@ export default function AdminRadioPage() {
           font-size: 15px; flex-shrink: 0;
         }
         .media-action-icon.blue { background: rgba(59,130,246,0.12); color: var(--gradient-blue); }
-        .media-action-icon.gold { background: rgba(232,168,56,0.12); color: var(--primary); }
+        .media-action-icon.gold { background: rgba(112,72,232,0.12); color: var(--primary); }
         .media-action-icon.red { background: rgba(239,68,68,0.12); color: var(--error); }
         .media-action-info { flex: 1; }
         .media-action-info h4 { font-size: 14px; font-weight: 600; }
@@ -1266,7 +1266,7 @@ export default function AdminRadioPage() {
         .media-pl-item:active { opacity: 0.6; }
         .media-pl-icon {
           width: 40px; height: 40px; border-radius: var(--radius-sm);
-          background: rgba(232,168,56,0.1); color: var(--primary);
+          background: rgba(112,72,232,0.1); color: var(--primary);
           display: flex; align-items: center; justify-content: center;
           font-size: 18px; flex-shrink: 0;
         }
@@ -1357,13 +1357,13 @@ export default function AdminRadioPage() {
         .pl-time-row label { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; }
         .pl-list { display: flex; flex-direction: column; gap: 8px; }
         .pl-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; transition: all 0.2s ease; }
-        .pl-card.expanded { border-color: rgba(232,168,56,0.2); }
+        .pl-card.expanded { border-color: rgba(112,72,232,0.2); }
         .pl-card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; cursor: pointer; transition: background 0.2s ease; }
         .pl-card-header:active { background: var(--surface-hover); }
         .pl-card-left { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
         .pl-type-badge { padding: 3px 10px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0; }
         .pl-type-badge.standard { background: rgba(59,130,246,0.12); color: #3B82F6; }
-        .pl-type-badge.scheduled { background: rgba(232,168,56,0.12); color: var(--primary); }
+        .pl-type-badge.scheduled { background: rgba(112,72,232,0.12); color: var(--primary); }
         .pl-type-badge.ondemand { background: rgba(139,92,246,0.12); color: #8B5CF6; }
         .pl-card-info { min-width: 0; }
         .pl-card-name { font-size: 15px; font-weight: 600; }
@@ -1390,8 +1390,8 @@ export default function AdminRadioPage() {
         .pl-song-remove { width: 28px; height: 28px; border-radius: 50%; background: none; border: none; color: var(--text-tertiary); cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; }
         .pl-song-remove:active { background: rgba(239,68,68,0.1); color: var(--error); }
         .pl-add-songs-btn { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px; border: 1.5px dashed var(--border); border-radius: var(--radius-sm); background: transparent; color: var(--primary); font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 4px; transition: all 0.2s ease; }
-        .pl-add-songs-btn:active { background: rgba(232,168,56,0.05); border-color: var(--primary); }
-        .pl-schedule-info { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(232,168,56,0.06); border-radius: var(--radius-sm); margin-top: 6px; font-size: 12px; color: var(--primary); }
+        .pl-add-songs-btn:active { background: rgba(112,72,232,0.05); border-color: var(--primary); }
+        .pl-schedule-info { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(112,72,232,0.06); border-radius: var(--radius-sm); margin-top: 6px; font-size: 12px; color: var(--primary); }
         .pl-schedule-info i { font-size: 14px; }
         .pl-schedule-time { margin-left: auto; font-weight: 600; }
         .pl-picker-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); cursor: pointer; transition: opacity 0.2s ease; }
@@ -1424,7 +1424,7 @@ export default function AdminRadioPage() {
         .pl-card-new:active { transform: scale(0.98); }
         .pl-card-new.selected { border-color: var(--primary); border-left: 3px solid var(--primary); padding-left: 12px; }
         .pl-card-new.now-playing { border-left: 3px solid var(--success); padding-left: 12px; }
-        .pl-card-new.default { background: rgba(232,168,56,0.03); }
+        .pl-card-new.default { background: rgba(112,72,232,0.03); }
         .pl-card-status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
         .pl-card-status-dot.active { background: var(--success); box-shadow: 0 0 6px var(--success); animation: livePulse 1.5s ease-in-out infinite; }
         .pl-card-status-dot.scheduled { background: var(--primary); }
@@ -1434,7 +1434,7 @@ export default function AdminRadioPage() {
         .pl-card-new-top { display: flex; align-items: center; gap: 8px; }
         .pl-card-new-name { font-size: 15px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .pl-card-new-meta { font-size: 12px; color: var(--text-tertiary); margin-top: 3px; }
-        .pl-card-new-tag { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: rgba(232,168,56,0.08); color: var(--primary); }
+        .pl-card-new-tag { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: rgba(112,72,232,0.08); color: var(--primary); }
         .pl-card-new-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
         .pl-card-edit-btn { width: 30px; height: 30px; border-radius: 50%; background: none; border: none; color: var(--text-tertiary); font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .pl-card-edit-btn:active { background: var(--surface-elevated); color: var(--text-primary); }
@@ -1455,7 +1455,7 @@ export default function AdminRadioPage() {
         .pl-detail-header-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
         .pl-detail-edit-btn { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; border: 1px solid var(--border); background: transparent; color: var(--text-secondary); cursor: pointer; }
         .pl-detail-edit-btn:active { background: var(--surface-elevated); }
-        .pl-detail-schedule { background: rgba(232,168,56,0.04); border: 1px solid rgba(232,168,56,0.1); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+        .pl-detail-schedule { background: rgba(112,72,232,0.04); border: 1px solid rgba(112,72,232,0.1); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
         .pl-detail-section-title { font-size: 13px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
         .pl-detail-schedule-body { display: flex; flex-direction: column; gap: 8px; }
         .pl-detail-days { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -1466,7 +1466,7 @@ export default function AdminRadioPage() {
         .pl-detail-songs { display: flex; flex-direction: column; gap: 10px; }
         .pl-detail-songs-header { display: flex; align-items: center; justify-content: space-between; }
         .pl-detail-add-songs-btn { display: flex; align-items: center; gap: 4px; padding: 8px 14px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; border: 1.5px dashed var(--border); background: transparent; color: var(--primary); cursor: pointer; }
-        .pl-detail-add-songs-btn:active { border-color: var(--primary); background: rgba(232,168,56,0.03); }
+        .pl-detail-add-songs-btn:active { border-color: var(--primary); background: rgba(112,72,232,0.03); }
         .pl-detail-empty-songs { text-align: center; padding: 30px 0; color: var(--text-tertiary); }
         .pl-detail-empty-songs i { font-size: 32px; opacity: 0.4; margin-bottom: 8px; display: block; }
         .pl-detail-empty-songs p { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
@@ -1496,10 +1496,10 @@ export default function AdminRadioPage() {
         .pl-sv-grid { display: grid; grid-template-columns: 50px repeat(7, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; min-width: 600px; }
         .pl-sv-corner { background: var(--surface-card); }
         .pl-sv-day-header { background: var(--surface-card); padding: 8px 4px; text-align: center; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); }
-        .pl-sv-day-header.today { background: rgba(232,168,56,0.1); color: var(--primary); }
+        .pl-sv-day-header.today { background: rgba(112,72,232,0.1); color: var(--primary); }
         .pl-sv-time { background: var(--surface-card); padding: 2px 6px; font-size: 9px; color: var(--text-tertiary); font-weight: 500; text-align: right; display: flex; align-items: flex-start; justify-content: flex-end; }
         .pl-sv-cell { background: var(--surface-elevated); min-height: 24px; padding: 1px; position: relative; cursor: default; }
-        .pl-sv-cell.today { background: rgba(232,168,56,0.03); }
+        .pl-sv-cell.today { background: rgba(112,72,232,0.03); }
         .pl-sv-cell.has-block { padding: 1px; }
         .pl-sv-block { border-radius: 3px; padding: 1px 4px; font-size: 8px; font-weight: 700; color: #fff; margin-bottom: 1px; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.4; }
         .pl-sv-block:active { opacity: 0.8; }
@@ -1510,14 +1510,14 @@ export default function AdminRadioPage() {
         .pl-type-options { display: flex; flex-direction: column; gap: 6px; }
         .pl-type-option { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s ease; }
         .pl-type-option:active { transform: scale(0.98); }
-        .pl-type-option.active { border-color: var(--primary); background: rgba(232,168,56,0.03); }
+        .pl-type-option.active { border-color: var(--primary); background: rgba(112,72,232,0.03); }
         .pl-type-option input { display: none; }
         .pl-type-option-label { font-size: 14px; font-weight: 600; }
         .pl-type-option-desc { font-size: 12px; color: var(--text-tertiary); }
         .pl-order-options { display: flex; gap: 8px; }
         .pl-order-option { display: flex; align-items: center; gap: 6px; padding: 10px 16px; border: 1.5px solid var(--border); border-radius: var(--radius-md); cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s ease; }
         .pl-order-option:active { transform: scale(0.95); }
-        .pl-order-option.active { border-color: var(--primary); background: rgba(232,168,56,0.03); }
+        .pl-order-option.active { border-color: var(--primary); background: rgba(112,72,232,0.03); }
         .pl-order-option input { display: none; }
         .pl-form-danger { padding: 10px 20px; background: rgba(239,68,68,0.1); border: none; border-radius: var(--radius-sm); color: var(--error); font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s ease; }
         .pl-form-danger:active { background: rgba(239,68,68,0.2); }
@@ -1705,7 +1705,7 @@ export default function AdminRadioPage() {
           }
           .gl-history-icon {
             width: 32px; height: 32px; border-radius: var(--radius-sm);
-            background: rgba(232,168,56,0.08); color: var(--primary);
+            background: rgba(112,72,232,0.08); color: var(--primary);
             display: flex; align-items: center; justify-content: center; flex-shrink: 0;
           }
           .gl-history-icon i { font-size: 14px; }
@@ -1717,8 +1717,8 @@ export default function AdminRadioPage() {
           .gl-form-row label { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
           .gl-form-note {
             display: flex; align-items: flex-start; gap: 6px;
-            padding: 10px 12px; background: rgba(232,168,56,0.04);
-            border: 1px solid rgba(232,168,56,0.1); border-radius: var(--radius-sm);
+            padding: 10px 12px; background: rgba(112,72,232,0.04);
+            border: 1px solid rgba(112,72,232,0.1); border-radius: var(--radius-sm);
             font-size: 12px; color: var(--text-secondary); line-height: 1.4;
           }
           .gl-form-note i { font-size: 13px; color: var(--primary); margin-top: 1px; flex-shrink: 0; }

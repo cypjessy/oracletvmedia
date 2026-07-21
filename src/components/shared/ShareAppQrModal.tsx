@@ -45,16 +45,16 @@ export default function ShareAppQrModal({ open, onClose }: ShareAppQrModalProps)
     try {
       const { Share } = await import("@capacitor/share");
       await Share.share({
-        title: "MOD NAKURU App",
-        text: "Download the MOD NAKURU church app",
+        title: "ORACLE TV MEDIA App",
+        text: "Download the ORACLE TV MEDIA church app",
         url: APP_DOWNLOAD_URL,
       });
     } catch {
       // Fallback to native share if available
       if (navigator.share) {
         await navigator.share({
-          title: "MOD NAKURU App",
-          text: "Download the MOD NAKURU church app",
+          title: "ORACLE TV MEDIA App",
+          text: "Download the ORACLE TV MEDIA church app",
           url: APP_DOWNLOAD_URL,
         });
       } else {
@@ -155,7 +155,7 @@ export default function ShareAppQrModal({ open, onClose }: ShareAppQrModalProps)
         }
         .qr-btn:active { transform: scale(0.97); }
         .qr-btn.primary {
-          background: linear-gradient(135deg, #E8A838, #D4762A);
+          background: linear-gradient(135deg, #7048E8, #9775FA);
           color: #fff;
         }
         .qr-btn.secondary {
@@ -188,11 +188,11 @@ export default function ShareAppQrModal({ open, onClose }: ShareAppQrModalProps)
       <div className="qr-overlay" onClick={onClose}>
         <div className="qr-modal" onClick={(e) => e.stopPropagation()}>
           <div className="qr-title">
-            <i className="fas fa-share-nodes" style={{ color: "#E8A838", marginRight: 8 }}></i>
+            <i className="fas fa-share-nodes" style={{ color: "#7048E8", marginRight: 8 }}></i>
             Share App
           </div>
           <div className="qr-sub">
-            Scan the QR code or share the link to download the MOD NAKURU app
+            Scan the QR code or share the link to download the ORACLE TV MEDIA app
           </div>
 
           <div className="qr-code-wrap">

@@ -44,7 +44,7 @@ function timeAgo(dateStr: string): string {
    ================================================================== */
 
 const church = {
-  name: "MOD NAKURU",
+  name: "ORACLE TV MEDIA",
   tagline: "Worship. Word. Community.",
   logoInitials: "TP",
 };
@@ -191,7 +191,7 @@ function RotatingGallery({
     };
   }, [displayAlbums, getAlbumImages, setGalleryIndices]);
 
-  const galleryAccents = ["#E8A838", "#8B5CF6", "#22C55E", "#3B82F6", "#EF4444", "#F59E0B", "#EC4899"];
+  const galleryAccents = ["var(--primary)", "#8B5CF6", "#22C55E", "#3B82F6", "#EF4444", "#F59E0B", "#EC4899"];
   const currentHero = heroImages[heroIdx];
 
   if (validAlbums.length === 0) return null;
@@ -325,9 +325,9 @@ interface ScheduleSlot {
 
 function getFallbackSchedule(): ScheduleSlot[] {
   const h = new Date().getHours();
-  if (h < 9) return [{ time: "9:00 AM", label: "Sunday Worship Service", isNow: false, hasContent: true, stationName: "MOD NAKURU Radio" }];
-  if (h < 12) return [{ time: "9:00 AM", label: "Sunday Worship Service", isNow: true, hasContent: true, stationName: "MOD NAKURU Radio" }];
-  return [{ time: "9:00 AM", label: "Sunday Worship Service", isNow: false, hasContent: true, stationName: "MOD NAKURU Radio" }];
+  if (h < 9) return [{ time: "9:00 AM", label: "Sunday Worship Service", isNow: false, hasContent: true, stationName: "ORACLE TV MEDIA Radio" }];
+  if (h < 12) return [{ time: "9:00 AM", label: "Sunday Worship Service", isNow: true, hasContent: true, stationName: "ORACLE TV MEDIA Radio" }];
+  return [{ time: "9:00 AM", label: "Sunday Worship Service", isNow: false, hasContent: true, stationName: "ORACLE TV MEDIA Radio" }];
 }
 
 function parseTimeToMinutes(t: string): number {
@@ -489,8 +489,8 @@ export default function DashboardPage() {
   useEffect(() => {
     if (audio.isPlaying) {
       const np = npData?.nowPlaying;
-      const title = np?.song?.title || "MOD NAKURU Radio";
-      const artist = np?.song?.artist || "MOD NAKURU";
+      const title = np?.song?.title || "ORACLE TV MEDIA Radio";
+      const artist = np?.song?.artist || "ORACLE TV MEDIA";
       const albumArt = np?.song?.albumArt;
       audio.updateMediaSession(title, artist, albumArt);
     }
@@ -895,7 +895,7 @@ export default function DashboardPage() {
                 <div className="st-time">{slot.time}</div>
                 <div className="st-body">
                   <div className={`st-label${slot.isNow ? "" : " upcoming"}`}>{slot.label}</div>
-                  <div className="st-station"><i className="fas fa-radio"></i> {slot.stationName || "MOD NAKURU Radio"}</div>
+                  <div className="st-station"><i className="fas fa-radio"></i> {slot.stationName || "ORACLE TV MEDIA Radio"}</div>
                 </div>
                 {slot.isNow && <span className="st-now-badge">NOW</span>}
               </div>
@@ -918,28 +918,28 @@ export default function DashboardPage() {
       {contentReady && <>
       <style>{`
         :root {
-            --primary: #E8A838;
-            --primary-light: #F5C76B;
-            --primary-dark: #C48A2A;
-            --bg: #0F0F0F;
-            --surface: #1A1A1A;
-            --surface-elevated: #242424;
-            --surface-card: #1E1E1E;
-            --surface-hover: #2A2A2A;
+            --primary: #9775FA;
+            --primary-light: #B197FC;
+            --primary-dark: #7048E8;
+            --bg: #15111F;
+            --surface: #1A1625;
+            --surface-elevated: #241E33;
+            --surface-card: #1E1A2A;
+            --surface-hover: #2A2438;
             --text-primary: #FFFFFF;
             --text-secondary: #A0A0A0;
             --text-tertiary: #6B6B6B;
-            --border: #2A2A2A;
+            --border: #2A2438;
             --error: #EF4444;
             --success: #22C55E;
             --info: #3B82F6;
-            --overlay: rgba(0,0,0,0.92);
-            --gradient-start: #E8A838;
-            --gradient-end: #D4762A;
+            --overlay: rgba(21,17,31,0.92);
+            --gradient-start: #7048E8;
+            --gradient-end: #9775FA;
             --gradient-purple: #8B5CF6;
             --gradient-blue: #3B82F6;
             --gradient-green: #22C55E;
-            --shadow-soft: 0 4px 20px rgba(232,168,56,0.15);
+            --shadow-soft: 0 4px 20px rgba(112,72,232,0.15);
             --shadow-elevated: 0 8px 32px rgba(0,0,0,0.45);
             --radius-sm: 12px;
             --radius-md: 16px;
@@ -1078,7 +1078,7 @@ export default function DashboardPage() {
             border: 1px solid var(--border);
             position: relative;
         }
-        .fv-card:hover { transform: translateY(-3px); border-color: rgba(232,168,56,0.2); box-shadow: 0 12px 40px rgba(0,0,0,0.3), 0 0 0 1px rgba(232,168,56,0.05); }
+        .fv-card:hover { transform: translateY(-3px); border-color: rgba(112,72,232,0.2); box-shadow: 0 12px 40px rgba(0,0,0,0.3), 0 0 0 1px rgba(112,72,232,0.05); }
         .fv-card:active { transform: scale(0.97); }
         .fv-thumb {
             position: relative; width: 100%; aspect-ratio: 16/9;
@@ -1086,7 +1086,7 @@ export default function DashboardPage() {
         }
         .fv-thumb-glow {
             position: absolute; inset: 0;
-            background: radial-gradient(ellipse at 50% 0%, rgba(232,168,56,0.08) 0%, transparent 70%);
+            background: radial-gradient(ellipse at 50% 0%, rgba(112,72,232,0.08) 0%, transparent 70%);
             z-index: 1; pointer-events: none; opacity: 0; transition: opacity 0.4s ease;
         }
         .fv-card:hover .fv-thumb-glow { opacity: 1; }
@@ -1127,10 +1127,10 @@ export default function DashboardPage() {
             background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
             display: flex; align-items: center; justify-content: center;
             font-size: 24px; color: #fff;
-            box-shadow: 0 4px 30px rgba(232,168,56,0.4), 0 0 0 4px rgba(255,255,255,0.1);
+            box-shadow: 0 4px 30px rgba(112,72,232,0.4), 0 0 0 4px rgba(255,255,255,0.1);
             transition: all 0.3s ease;
         }
-        .fv-card:hover .fv-play-btn { transform: scale(1.1); box-shadow: 0 6px 40px rgba(232,168,56,0.5), 0 0 0 6px rgba(255,255,255,0.08); }
+        .fv-card:hover .fv-play-btn { transform: scale(1.1); box-shadow: 0 6px 40px rgba(112,72,232,0.5), 0 0 0 6px rgba(255,255,255,0.08); }
         .fv-body { padding: 16px 18px 18px; }
         .fv-title { font-size: 16px; font-weight: 700; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .fv-meta-row { display: flex; align-items: center; gap: 16px; margin-top: 8px; }
@@ -1143,12 +1143,12 @@ export default function DashboardPage() {
             border: 1px solid var(--border); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             cursor: pointer; background: var(--surface-card); flex-shrink: 0;
         }
-        .sc-card:hover { transform: translateY(-4px); border-color: rgba(232,168,56,0.2); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .sc-card:hover { transform: translateY(-4px); border-color: rgba(112,72,232,0.2); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
         .sc-card:active { transform: scale(0.96); }
         .sc-cover { width: 100%; height: 130px; position: relative; overflow: hidden; background: var(--surface-elevated); }
         .sc-cover img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s ease; }
         .sc-card:hover .sc-cover img { transform: scale(1.1); }
-        .sc-cover-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(232,168,56,0.08), rgba(212,118,42,0.04)); color: var(--text-tertiary); font-size: 32px; }
+        .sc-cover-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(112,72,232,0.08), rgba(112,72,232,0.04)); color: var(--text-tertiary); font-size: 32px; }
         .sc-count {
             position: absolute; bottom: 8px; right: 8px;
             display: flex; align-items: center; gap: 4px;
@@ -1253,7 +1253,7 @@ export default function DashboardPage() {
             width: 20px;
             border-radius: 3px;
             background: var(--primary);
-            box-shadow: 0 0 8px rgba(232,168,56,0.4);
+            box-shadow: 0 0 8px rgba(112,72,232,0.4);
         }
 
         .pg-grid {
@@ -1440,7 +1440,7 @@ export default function DashboardPage() {
           padding: 4px 8px; border-radius: 8px;
           transition: all 0.2s;
         }
-        .live-tv-manage-btn:active { background: rgba(232,168,56,0.1); }
+        .live-tv-manage-btn:active { background: rgba(112,72,232,0.1); }
         .live-tv-embed-wrap {
           position: relative;
           width: 100%;
@@ -1460,23 +1460,23 @@ export default function DashboardPage() {
         /* ===== PREMIUM RADIO CARD (compact) ===== */
         .rh-hero {
             position: relative;
-            background: linear-gradient(180deg, rgba(232,168,56,0.06) 0%, rgba(15,15,15,0.5) 100%);
-            border: 1px solid rgba(232,168,56,0.12);
+            background: linear-gradient(180deg, rgba(112,72,232,0.06) 0%, rgba(15,15,15,0.5) 100%);
+            border: 1px solid rgba(112,72,232,0.12);
             border-radius: var(--radius-xl);
             padding: 14px 16px 12px;
             overflow: hidden;
-            box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 0 80px rgba(232,168,56,0.04);
+            box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 0 80px rgba(112,72,232,0.04);
         }
         .rh-glow-1 {
             position: absolute; top: -80px; left: 50%; transform: translateX(-50%);
             width: 300px; height: 300px;
-            background: radial-gradient(circle, rgba(232,168,56,0.12) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(112,72,232,0.12) 0%, transparent 70%);
             pointer-events: none;
         }
         .rh-glow-2 {
             position: absolute; bottom: -60px; right: -60px;
             width: 200px; height: 200px;
-            background: radial-gradient(circle, rgba(212,118,42,0.06) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(112,72,232,0.06) 0%, transparent 70%);
             pointer-events: none;
         }
         .rh-top {
@@ -1521,12 +1521,12 @@ export default function DashboardPage() {
         .rh-art-ring {
             position: absolute; inset: -3px;
             border-radius: 50%;
-            border: 1.5px solid rgba(232,168,56,0.2);
+            border: 1.5px solid rgba(112,72,232,0.2);
         }
         .rh-art {
             width: 100%; height: 100%;
             border-radius: 50%; overflow: hidden;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 0 1.5px rgba(232,168,56,0.1);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 0 1.5px rgba(112,72,232,0.1);
             position: relative;
         }
         .rh-art.spinning {
@@ -1583,16 +1583,16 @@ export default function DashboardPage() {
             border: none; color: #fff; font-size: 14px;
             display: flex; align-items: center; justify-content: center;
             cursor: pointer; position: relative; flex-shrink: 0;
-            box-shadow: 0 4px 16px rgba(232,168,56,0.3);
+            box-shadow: 0 4px 16px rgba(112,72,232,0.3);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .rh-play-btn:active { transform: scale(0.88); }
         .rh-play-btn.playing {
-            box-shadow: 0 4px 20px rgba(232,168,56,0.35);
+            box-shadow: 0 4px 20px rgba(112,72,232,0.35);
         }
         .rh-play-ring {
             position: absolute; inset: -4px; border-radius: 50%;
-            border: 1.5px solid rgba(232,168,56,0.15);
+            border: 1.5px solid rgba(112,72,232,0.15);
         }
         .rh-play-btn.playing .rh-play-ring {
             border-color: rgba(74,222,128,0.3);
@@ -1696,7 +1696,7 @@ export default function DashboardPage() {
             width: 120px; height: 120px; border-radius: 32px;
             display: flex; align-items: center; justify-content: center;
             font-size: 52px; color: #fff; margin-bottom: 28px;
-            box-shadow: 0 4px 30px rgba(232,168,56,0.2);
+            box-shadow: 0 4px 30px rgba(112,72,232,0.2);
         }
         .ob-slide h2 { font-size: 26px; font-weight: 800; margin-bottom: 8px; }
         .ob-slide p { font-size: 15px; color: var(--text-secondary); line-height: 1.5; }
@@ -1744,8 +1744,8 @@ export default function DashboardPage() {
         }
         .rp-card:active { transform: scale(0.98); }
         .rp-card.live {
-            border-color: rgba(232,168,56,0.25);
-            background: linear-gradient(135deg, rgba(232,168,56,0.08), rgba(232,168,56,0.02));
+            border-color: rgba(112,72,232,0.25);
+            background: linear-gradient(135deg, rgba(112,72,232,0.08), rgba(112,72,232,0.02));
         }
         .rp-accent {
             position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
@@ -1754,12 +1754,12 @@ export default function DashboardPage() {
             transition: opacity 0.3s ease;
         }
         .rp-card.live .rp-accent {
-            box-shadow: 0 0 12px rgba(232,168,56,0.4);
+            box-shadow: 0 0 12px rgba(112,72,232,0.4);
         }
         .rp-glow {
             position: absolute; top: -50%; right: -20%;
             width: 160px; height: 160px;
-            background: radial-gradient(circle, rgba(232,168,56,0.1) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(112,72,232,0.1) 0%, transparent 70%);
             pointer-events: none;
         }
         .rp-cover-wrap { position: relative; flex-shrink: 0; margin-left: 14px; }
@@ -1771,7 +1771,7 @@ export default function DashboardPage() {
             transition: all 0.3s ease;
         }
         .rp-card.live .rp-cover {
-            box-shadow: 0 4px 20px rgba(232,168,56,0.2);
+            box-shadow: 0 4px 20px rgba(112,72,232,0.2);
         }
         .rp-cover-fallback {
             display: flex; align-items: center; justify-content: center;
@@ -1816,7 +1816,7 @@ export default function DashboardPage() {
             background: var(--surface-card);
             border: 1px solid var(--border);
         }
-        .vg-card:hover { transform: translateY(-3px); border-color: rgba(232,168,56,0.15); box-shadow: 0 8px 25px rgba(0,0,0,0.2); }
+        .vg-card:hover { transform: translateY(-3px); border-color: rgba(112,72,232,0.15); box-shadow: 0 8px 25px rgba(0,0,0,0.2); }
         .vg-card:active { transform: scale(0.95); }
         .vg-thumb {
             position: relative;
@@ -1839,7 +1839,7 @@ export default function DashboardPage() {
             background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
             display: flex; align-items: center; justify-content: center;
             font-size: 14px; color: #fff;
-            box-shadow: 0 4px 20px rgba(232,168,56,0.3);
+            box-shadow: 0 4px 20px rgba(112,72,232,0.3);
         }
         .vg-duration {
             position: absolute; bottom: 8px; right: 8px;
@@ -1929,7 +1929,7 @@ export default function DashboardPage() {
           margin: "0 12px 8px",
           padding: "10px 14px",
           borderRadius: 12,
-          background: "linear-gradient(135deg, #E8A838, #D4762A)",
+          background: "linear-gradient(135deg, var(--gradient-start), var(--gradient-end))",
           display: "flex",
           alignItems: "center",
           gap: 10,

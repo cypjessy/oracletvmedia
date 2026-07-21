@@ -111,7 +111,7 @@ export default function Playlists({ showToast }: Props) {
         .rs-pl-card-header:active { background: var(--rs-surface-elevated); }
         .rs-pl-icon { width: 36px; height: 36px; border-radius: var(--rs-radius-sm); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
         .rs-pl-icon.standard { background: rgba(59,130,246,0.12); color: var(--rs-grad-blue); }
-        .rs-pl-icon.scheduled { background: rgba(232,168,56,0.12); color: var(--rs-primary); }
+        .rs-pl-icon.scheduled { background: rgba(112,72,232,0.12); color: var(--rs-primary); }
         .rs-pl-icon.on_demand { background: rgba(139,92,246,0.12); color: var(--rs-grad-purple); }
         .rs-pl-info { flex: 1; min-width: 0; }
         .rs-pl-name { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }

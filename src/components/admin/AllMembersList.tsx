@@ -13,7 +13,7 @@ interface Props {
 }
 
 const AVATAR_COLORS = [
-  "linear-gradient(135deg, #E8A838, #D4762A)",
+  "linear-gradient(135deg, #7048E8, #9775FA)",
   "linear-gradient(135deg, #8B5CF6, #A78BFA)",
   "linear-gradient(135deg, #3B82F6, #60A5FA)",
   "linear-gradient(135deg, #22C55E, #4ADE80)",

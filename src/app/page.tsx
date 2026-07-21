@@ -40,24 +40,24 @@ export default function LoginPage() {
     <>
       <style>{`
         :root {
-            --primary: #E8A838;
-            --primary-light: #F5C76B;
-            --primary-dark: #C48A2A;
-            --bg: #0F0F0F;
-            --surface: #1A1A1A;
-            --surface-elevated: #242424;
-            --surface-card: #1E1E1E;
+            --primary: #9775FA;
+            --primary-light: #B197FC;
+            --primary-dark: #7048E8;
+            --bg: #15111F;
+            --surface: #1A1625;
+            --surface-elevated: #241E33;
+            --surface-card: #1E1A2A;
             --text-primary: #FFFFFF;
             --text-secondary: #A0A0A0;
             --text-tertiary: #6B6B6B;
-            --border: #2A2A2A;
+            --border: #2A2438;
             --error: #FF6B6B;
             --success: #4ADE80;
-            --overlay: rgba(0,0,0,0.85);
-            --gradient-start: #E8A838;
-            --gradient-end: #D4762A;
-            --shadow-soft: 0 4px 20px rgba(232,168,56,0.15);
-            --shadow-elevated: 0 8px 32px rgba(0,0,0,0.4);
+            --overlay: rgba(21,17,31,0.92);
+            --gradient-start: #7048E8;
+            --gradient-end: #9775FA;
+            --shadow-soft: 0 4px 20px rgba(112,72,232,0.15);
+            --shadow-elevated: 0 8px 32px rgba(0,0,0,0.45);
         }
 
         * {
@@ -100,7 +100,7 @@ export default function LoginPage() {
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: var(--shadow-soft), 0 0 60px rgba(232,168,56,0.2);
+            box-shadow: var(--shadow-soft), 0 0 60px rgba(112,72,232,0.2);
             animation: splashPulse 2s ease-in-out infinite;
         }
 
@@ -138,8 +138,8 @@ export default function LoginPage() {
         }
 
         @keyframes splashPulse {
-            0%, 100% { transform: scale(1); box-shadow: var(--shadow-soft), 0 0 60px rgba(232,168,56,0.2); }
-            50% { transform: scale(1.05); box-shadow: var(--shadow-soft), 0 0 80px rgba(232,168,56,0.35); }
+            0%, 100% { transform: scale(1); box-shadow: var(--shadow-soft), 0 0 60px rgba(112,72,232,0.2); }
+            50% { transform: scale(1.05); box-shadow: var(--shadow-soft), 0 0 80px rgba(112,72,232,0.35); }
         }
 
         @keyframes spin {
@@ -181,7 +181,7 @@ export default function LoginPage() {
             transform: translateX(-50%);
             width: 400px;
             height: 400px;
-            background: radial-gradient(circle, rgba(232,168,56,0.12) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(112,72,232,0.12) 0%, transparent 70%);
             pointer-events: none;
         }
 
@@ -248,7 +248,7 @@ export default function LoginPage() {
         .input-wrapper:focus-within {
             border-color: var(--primary);
             background: var(--surface-elevated);
-            box-shadow: 0 0 0 4px rgba(232,168,56,0.08);
+            box-shadow: 0 0 0 4px rgba(112,72,232,0.08);
         }
 
         .input-wrapper.error {

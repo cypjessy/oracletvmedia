@@ -57,7 +57,7 @@ export function usePushNotifications() {
 
         const unsubReceived = await PushNotifications.addListener("pushNotificationReceived", (notification) => {
           const data = notification.data as PushNotificationData;
-          const title = notification.title || data?.title || "MOD NAKURU";
+          const title = notification.title || data?.title || "ORACLE TV MEDIA";
           const body = notification.body || data?.body || "";
           window.dispatchEvent(
             new CustomEvent("show-toast", {

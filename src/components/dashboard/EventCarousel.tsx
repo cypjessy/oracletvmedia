@@ -216,7 +216,7 @@ export default function EventCarousel({ redirectUrl = "/gallery" }: { redirectUr
           padding: 4px 8px; border-radius: 8px;
           transition: all 0.15s ease;
         }
-        .ec-see-all:active { background: rgba(232,168,56,0.1); }
+        .ec-see-all:active { background: rgba(112,72,232,0.1); }
 
         .ec-carousel {
           overflow: hidden;
@@ -241,11 +241,11 @@ export default function EventCarousel({ redirectUrl = "/gallery" }: { redirectUr
         }
         .ec-card:active { transform: scale(0.96); }
         .ec-card.active {
-          border-color: rgba(232,168,56,0.25);
-          box-shadow: 0 8px 32px rgba(232,168,56,0.08), 0 0 0 1px rgba(232,168,56,0.05);
+          border-color: rgba(112,72,232,0.25);
+          box-shadow: 0 8px 32px rgba(112,72,232,0.08), 0 0 0 1px rgba(112,72,232,0.05);
         }
         .ec-card.has-img.active {
-          box-shadow: 0 8px 40px rgba(232,168,56,0.12);
+          box-shadow: 0 8px 40px rgba(112,72,232,0.12);
         }
 
         /* Top accent glow bar */
@@ -282,7 +282,7 @@ export default function EventCarousel({ redirectUrl = "/gallery" }: { redirectUr
         .ec-img-placeholder {
           position: absolute; inset: 0;
           display: flex; align-items: center; justify-content: center;
-          background: linear-gradient(135deg, rgba(232,168,56,0.05), rgba(212,118,42,0.02));
+          background: linear-gradient(135deg, rgba(112,72,232,0.05), rgba(112,72,232,0.02));
           color: var(--text-tertiary);
           font-size: 48px;
           z-index: 0;
@@ -313,8 +313,8 @@ export default function EventCarousel({ redirectUrl = "/gallery" }: { redirectUr
         .ec-card:not(.has-img) .ec-date-day { color: var(--primary); }
         .ec-card:not(.has-img) .ec-date-month { color: var(--text-secondary); }
         .ec-card:not(.has-img) .ec-date-badge {
-          background: rgba(232,168,56,0.08);
-          border: 1px solid rgba(232,168,56,0.15);
+          background: rgba(112,72,232,0.08);
+          border: 1px solid rgba(112,72,232,0.15);
           backdrop-filter: none;
         }
 
@@ -323,7 +323,7 @@ export default function EventCarousel({ redirectUrl = "/gallery" }: { redirectUr
           position: absolute; top: 12px; right: 12px;
           z-index: 3;
           font-size: 11px; font-weight: 700; color: #fff;
-          background: rgba(232,168,56,0.85);
+          background: rgba(112,72,232,0.85);
           backdrop-filter: blur(4px);
           padding: 4px 10px; border-radius: 8px;
         }
@@ -368,7 +368,7 @@ export default function EventCarousel({ redirectUrl = "/gallery" }: { redirectUr
           position: absolute;
           top: -50%; right: -30%;
           width: 200px; height: 200px;
-          background: radial-gradient(circle, rgba(232,168,56,0.06) 0%, transparent 70%);
+          background: radial-gradient(circle, rgba(112,72,232,0.06) 0%, transparent 70%);
           pointer-events: none;
           opacity: 0;
           transition: opacity 0.5s ease;
@@ -390,7 +390,7 @@ export default function EventCarousel({ redirectUrl = "/gallery" }: { redirectUr
         .ec-dot.active {
           width: 24px; border-radius: 4px;
           background: var(--primary);
-          box-shadow: 0 0 8px rgba(232,168,56,0.3);
+          box-shadow: 0 0 8px rgba(112,72,232,0.3);
         }
         .ec-dot:active { transform: scale(0.8); }
       `}</style>

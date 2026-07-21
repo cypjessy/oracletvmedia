@@ -43,7 +43,7 @@ export const churchConfig: ChurchConfig = {
   name: process.env.NEXT_PUBLIC_CHURCH_NAME || "",
   tagline: process.env.NEXT_PUBLIC_CHURCH_TAGLINE || "",
   logo_url: process.env.NEXT_PUBLIC_CHURCH_LOGO_URL || undefined,
-  brand_color: process.env.NEXT_PUBLIC_BRAND_COLOR || "#E8A838",
+  brand_color: process.env.NEXT_PUBLIC_BRAND_COLOR || "#9775FA",
 
   azuracast_station_id: Number(process.env.NEXT_PUBLIC_STATION_ID) || 0,
   stream_url: process.env.NEXT_PUBLIC_STREAM_URL || "",

@@ -13,8 +13,12 @@ interface YtChannelStat {
   videoCount: string;
 }
 
+interface YtChannelContent {
+  relatedPlaylists: { uploads: string };
+}
+
 interface YtChannelResponse {
-  items?: { id: string; snippet: YtChannelSnippet; statistics: YtChannelStat }[];
+  items?: { id: string; snippet: YtChannelSnippet; statistics: YtChannelStat; contentDetails: YtChannelContent }[];
 }
 
 interface YtPlaylistItem {
@@ -66,8 +70,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "YOUTUBE_API_KEY not configured" }, { status: 500 });
     }
 
-    // Fetch channel info
-    const channelUrl = `${YT_API_BASE}/channels?part=snippet,statistics&id=${channelId}&key=${YT_API_KEY}`;
+    // Fetch channel info (include contentDetails for uploads playlist)
+    const channelUrl = `${YT_API_BASE}/channels?part=snippet,statistics,contentDetails&id=${channelId}&key=${YT_API_KEY}`;
     const channelRes = await fetch(channelUrl);
     if (!channelRes.ok) {
       const err = await channelRes.text().catch(() => "Unknown");
@@ -88,8 +92,8 @@ export async function POST(req: NextRequest) {
       videoCount: parseInt(ch.statistics.videoCount || "0"),
     };
 
-    // Fetch all uploaded videos via the uploads playlist (UU{channelId})
-    const uploadsPlaylistId = `UU${channelId}`;
+    // Fetch all uploaded videos via the uploads playlist
+    const uploadsPlaylistId = ch.contentDetails?.relatedPlaylists?.uploads || `UU${channelId}`;
     const allVideoIds: string[] = [];
     const videoMetaMap = new Map<string, { title: string; description: string; thumbnail: string; channelTitle: string; channelId: string; publishedAt: string; position: number }>();
 

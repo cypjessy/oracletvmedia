@@ -20,7 +20,7 @@ export default function RadioPage() {
   const [streamers, setStreamers] = useState<Streamer[]>([]);
   const [radioLoading, setRadioLoading] = useState(true);
 
-  const stationName = settings?.name || "MOD NAKURU Radio";
+  const stationName = settings?.name || "ORACLE TV MEDIA Radio";
 
   /* Poll AzuraCast now playing + history every 10 seconds */
   useEffect(() => {
@@ -100,25 +100,25 @@ export default function RadioPage() {
       <div id="ts-toast-bridge-data"></div>
       <style>{`
         :root {
-          --primary: #E8A838;
-          --primary-light: #F5C76B;
-          --primary-dark: #C48A2A;
-          --bg: #0F0F0F;
-          --surface: #1A1A1A;
-          --surface-elevated: #242424;
-          --surface-card: #1E1E1E;
-          --surface-hover: #2A2A2A;
+          --primary: #9775FA;
+          --primary-light: #B197FC;
+          --primary-dark: #7048E8;
+          --bg: #15111F;
+          --surface: #1A1625;
+          --surface-elevated: #241E33;
+          --surface-card: #1E1A2A;
+          --surface-hover: #2A2438;
           --text-primary: #FFFFFF;
           --text-secondary: #A0A0A0;
           --text-tertiary: #6B6B6B;
-          --border: #2A2A2A;
+          --border: #2A2438;
           --error: #FF6B6B;
           --success: #4ADE80;
           --warning: #FBBF24;
           --info: #38BDF8;
-          --gradient-start: #E8A838;
-          --gradient-end: #D4762A;
-          --shadow-soft: 0 4px 20px rgba(232,168,56,0.15);
+          --gradient-start: #7048E8;
+          --gradient-end: #9775FA;
+          --shadow-soft: 0 4px 20px rgba(112,72,232,0.15);
           --shadow-elevated: 0 8px 32px rgba(0,0,0,0.45);
           --radius-sm: 10px;
           --radius-md: 14px;
@@ -165,27 +165,27 @@ export default function RadioPage() {
 
         /* ===== NOW PLAYING CARD (premium hero) ===== */
         .np-glass {
-          background: linear-gradient(180deg, rgba(232,168,56,0.08) 0%, rgba(15,15,15,0.4) 100%);
-          border: 1px solid rgba(232,168,56,0.12);
+          background: linear-gradient(180deg, rgba(112,72,232,0.08) 0%, rgba(15,15,15,0.4) 100%);
+          border: 1px solid rgba(112,72,232,0.12);
           border-radius: 20px;
           padding: 28px 22px 22px;
           position: relative; overflow: hidden;
-          box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 60px rgba(232,168,56,0.04);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 60px rgba(112,72,232,0.04);
         }
         .np-glass::before {
           content: ''; position: absolute; top: -120px; left: 50%; transform: translateX(-50%);
           width: 400px; height: 400px;
-          background: radial-gradient(circle, rgba(232,168,56,0.10) 0%, transparent 70%);
+          background: radial-gradient(circle, rgba(112,72,232,0.10) 0%, transparent 70%);
           pointer-events: none;
         }
         .np-glass::after {
           content: ''; position: absolute; bottom: -60px; right: -60px;
           width: 200px; height: 200px;
-          background: radial-gradient(circle, rgba(212,118,42,0.06) 0%, transparent 70%);
+          background: radial-gradient(circle, rgba(112,72,232,0.06) 0%, transparent 70%);
           pointer-events: none;
         }
         .np-row { display: flex; align-items: center; gap: 20px; position: relative; z-index: 1; }
-        .np-art { width: 88px; height: 88px; border-radius: 16px; overflow: hidden; flex-shrink: 0; box-shadow: 0 12px 32px rgba(0,0,0,0.5), 0 0 0 2px rgba(232,168,56,0.15); transition: transform 0.3s ease; }
+        .np-art { width: 88px; height: 88px; border-radius: 16px; overflow: hidden; flex-shrink: 0; box-shadow: 0 12px 32px rgba(0,0,0,0.5), 0 0 0 2px rgba(112,72,232,0.15); transition: transform 0.3s ease; }
         .np-art:hover { transform: scale(1.03); }
         .np-art img { width: 100%; height: 100%; object-fit: cover; }
         .np-art-fallback { width: 88px; height: 88px; border-radius: 16px; background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); display: flex; align-items: center; justify-content: center; font-size: 34px; color: #fff; flex-shrink: 0; box-shadow: 0 12px 32px rgba(0,0,0,0.4); }
@@ -194,7 +194,7 @@ export default function RadioPage() {
         .np-artist { font-size: 14px; color: var(--primary-light); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
         .np-progress { margin-top: 14px; }
         .np-progress-bar { width: 100%; height: 4px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
-        .np-progress-fill { height: 100%; background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end)); border-radius: 3px; transition: width 0.5s ease; box-shadow: 0 0 8px rgba(232,168,56,0.3); }
+        .np-progress-fill { height: 100%; background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end)); border-radius: 3px; transition: width 0.5s ease; box-shadow: 0 0 8px rgba(112,72,232,0.3); }
         .np-progress-time { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: var(--text-tertiary); font-weight: 500; }
         .np-controls-row { display: flex; align-items: center; gap: 16px; margin-top: 18px; position: relative; z-index: 1; }
         .np-play-btn {
@@ -203,13 +203,13 @@ export default function RadioPage() {
           border: none; color: #fff; font-size: 22px;
           display: flex; align-items: center; justify-content: center;
           cursor: pointer; flex-shrink: 0;
-          box-shadow: 0 6px 24px rgba(232,168,56,0.35);
+          box-shadow: 0 6px 24px rgba(112,72,232,0.35);
           transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
         }
         .np-play-btn:active { transform: scale(0.92); }
         .np-play-btn.playing {
           background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
-          box-shadow: 0 6px 28px rgba(232,168,56,0.4), 0 0 40px rgba(232,168,56,0.1);
+          box-shadow: 0 6px 28px rgba(112,72,232,0.4), 0 0 40px rgba(112,72,232,0.1);
         }
         .np-vol-wrap { flex: 1; display: flex; align-items: center; gap: 10px; }
         .np-vol-wrap i { font-size: 14px; color: var(--text-tertiary); width: 16px; text-align: center; }
@@ -223,29 +223,29 @@ export default function RadioPage() {
           -webkit-appearance: none; appearance: none;
           width: 18px; height: 18px; border-radius: 50%;
           background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
-          cursor: pointer; box-shadow: 0 2px 8px rgba(232,168,56,0.3);
+          cursor: pointer; box-shadow: 0 2px 8px rgba(112,72,232,0.3);
           border: 2px solid var(--bg);
         }
         .np-vol-slider::-moz-range-thumb {
           width: 18px; height: 18px; border-radius: 50%;
           background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
-          cursor: pointer; box-shadow: 0 2px 8px rgba(232,168,56,0.3);
+          cursor: pointer; box-shadow: 0 2px 8px rgba(112,72,232,0.3);
           border: 2px solid var(--bg);
         }
         .np-embed-wrap { margin-top: 16px; position: relative; z-index: 1; }
         .np-embed-wrap iframe { width: 100%; height: 150px; border: none; border-radius: var(--radius-md); }
-        .np-bg-indicator { text-align: center; margin-top: 12px; padding: 6px 14px; background: rgba(232,168,56,0.06); border: 1px solid rgba(232,168,56,0.08); border-radius: 20px; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-tertiary); position: relative; z-index: 1; width: auto; }
+        .np-bg-indicator { text-align: center; margin-top: 12px; padding: 6px 14px; background: rgba(112,72,232,0.06); border: 1px solid rgba(112,72,232,0.08); border-radius: 20px; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-tertiary); position: relative; z-index: 1; width: auto; }
 
         /* ===== LIVE DJ CARD ===== */
         .dj-glass {
-          background: linear-gradient(135deg, rgba(239,68,68,0.06) 0%, rgba(232,168,56,0.04) 100%);
+          background: linear-gradient(135deg, rgba(239,68,68,0.06) 0%, rgba(112,72,232,0.04) 100%);
           border: 1px solid rgba(239,68,68,0.15);
           border-radius: var(--radius-lg);
           padding: 16px; display: flex; align-items: center; gap: 14px;
           animation: djPulse 3s ease-in-out infinite;
         }
         @keyframes djPulse { 0%, 100% { border-color: rgba(239,68,68,0.15); } 50% { border-color: rgba(239,68,68,0.3); } }
-        .dj-avatar { width: 48px; height: 48px; border-radius: var(--radius-full); background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); display: flex; align-items: center; justify-content: center; font-size: 20px; color: #fff; flex-shrink: 0; box-shadow: 0 0 20px rgba(232,168,56,0.2); }
+        .dj-avatar { width: 48px; height: 48px; border-radius: var(--radius-full); background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); display: flex; align-items: center; justify-content: center; font-size: 20px; color: #fff; flex-shrink: 0; box-shadow: 0 0 20px rgba(112,72,232,0.2); }
         .dj-info { flex: 1; }
         .dj-name { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
         .dj-name .dj-live { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: rgba(239,68,68,0.1); border-radius: 10px; font-size: 9px; font-weight: 700; color: var(--error); text-transform: uppercase; letter-spacing: 0.5px; }
@@ -279,7 +279,7 @@ export default function RadioPage() {
         .h-glow {
           position: absolute; top: -40px; right: -40px; width: 100px; height: 100px;
           border-radius: var(--radius-full);
-          background: radial-gradient(circle, rgba(232,168,56,0.06), transparent 70%);
+          background: radial-gradient(circle, rgba(112,72,232,0.06), transparent 70%);
           pointer-events: none; transition: opacity 0.4s ease; opacity: 0;
         }
         .h-card:hover .h-glow { opacity: 1; }
@@ -316,7 +316,7 @@ export default function RadioPage() {
         .timer-options { display: flex; flex-direction: column; gap: 8px; }
         .timer-option { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-radius: var(--radius-md); background: var(--surface); cursor: pointer; transition: background 0.2s; font-size: 15px; }
         .timer-option i { opacity: 0; color: var(--primary); font-size: 14px; }
-        .timer-option.selected { background: rgba(232,168,56,0.12); }
+        .timer-option.selected { background: rgba(112,72,232,0.12); }
         .timer-option.selected i { opacity: 1; }
         .modal-footer { margin-top: 16px; }
         .modal-footer .btn-primary { width: 100%; padding: 14px; border: none; border-radius: var(--radius-md); background: var(--primary); color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; }
@@ -329,7 +329,7 @@ export default function RadioPage() {
         <header className="header">
           <button className="header-back" onClick={() => window.history.back()}><i className="fas fa-arrow-left"></i></button>
           <div className="header-info">
-            <div className="header-name">MOD NAKURU</div>
+            <div className="header-name">ORACLE TV MEDIA</div>
             <div className="header-dj">
               <i className="fas fa-tower-cell"></i> {stationName}
             </div>

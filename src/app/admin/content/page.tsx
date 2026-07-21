@@ -730,9 +730,9 @@ export default function AdminContentPage() {
 
   function getCategoryColor(cat: string): string {
     const colors: Record<string, string> = {
-      events: "#E8A838", services: "#8B5CF6", community: "#4ADE80",
+      events: "#9775FA", services: "#8B5CF6", community: "#4ADE80",
       leadership: "#3B82F6", facility: "#EF4444", general: "#6B6B6B",
-      event: "#E8A838", prayer: "#8B5CF6", notice: "#3B82F6", urgent: "#EF4444",
+      event: "#9775FA", prayer: "#8B5CF6", notice: "#3B82F6", urgent: "#EF4444",
     };
     return colors[cat] || "#6B6B6B";
   }
@@ -1147,7 +1147,7 @@ export default function AdminContentPage() {
 
   function getVideoColor(cat: string): string {
     const colors: Record<string, string> = {
-      sermon: "#E8A838",
+      sermon: "#9775FA",
       worship: "#8B5CF6",
       event: "#3B82F6",
       announcement: "#4ADE80",
@@ -1201,7 +1201,7 @@ export default function AdminContentPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{
                   width: 48, height: 48, borderRadius: 10,
-                  background: "linear-gradient(135deg, rgba(232,168,56,0.12), rgba(232,168,56,0.04))",
+                  background: "linear-gradient(135deg, rgba(112,72,232,0.12), rgba(112,72,232,0.04))",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 20, color: "var(--primary)", flexShrink: 0,
                 }}>
@@ -1351,7 +1351,7 @@ export default function AdminContentPage() {
                       <div style={{
                         width: "100%", height: "100%",
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        background: "linear-gradient(135deg, rgba(232,168,56,0.08), rgba(232,168,56,0.02))",
+                        background: "linear-gradient(135deg, rgba(112,72,232,0.08), rgba(112,72,232,0.02))",
                         fontSize: 28, color: "var(--text-tertiary)", opacity: 0.5,
                       }}>
                         <i className="fas fa-video"></i>
@@ -1441,7 +1441,7 @@ export default function AdminContentPage() {
                       <div key={id} className="pl-selected-item">
                         <div className="pl-selected-thumb" style={{
                           display: "flex", alignItems: "center", justifyContent: "center",
-                          background: "linear-gradient(135deg, rgba(232,168,56,0.1), rgba(232,168,56,0.04))",
+                          background: "linear-gradient(135deg, rgba(112,72,232,0.1), rgba(112,72,232,0.04))",
                           fontSize: 14, color: "var(--primary)",
                         }}>
                           <i className="fas fa-video"></i>
@@ -1481,7 +1481,7 @@ export default function AdminContentPage() {
                         >
                           <div className="pl-browse-thumb" style={{
                             display: "flex", alignItems: "center", justifyContent: "center",
-                            background: "linear-gradient(135deg, rgba(232,168,56,0.08), rgba(232,168,56,0.02))",
+                            background: "linear-gradient(135deg, rgba(112,72,232,0.08), rgba(112,72,232,0.02))",
                             fontSize: 16, color: "var(--text-tertiary)", opacity: 0.6,
                           }}>
                             <i className="fas fa-video"></i>
@@ -1528,8 +1528,8 @@ export default function AdminContentPage() {
                   <div key={p.id} className="preview-card" style={{ alignItems: "center" }}>
                     <div style={{
                       width: 40, height: 40, borderRadius: 10, flexShrink: 0,
-                      background: "linear-gradient(135deg, rgba(232,168,56,0.12), rgba(232,168,56,0.04))",
-                      border: "1px solid rgba(232,168,56,0.12)",
+                      background: "linear-gradient(135deg, rgba(112,72,232,0.12), rgba(112,72,232,0.04))",
+                      border: "1px solid rgba(112,72,232,0.12)",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 16, color: "var(--primary)",
                     }}>
@@ -1586,11 +1586,11 @@ export default function AdminContentPage() {
                   <div style={{
                     display: "flex", alignItems: "center", gap: 12,
                     padding: 10, borderRadius: "var(--radius-sm)",
-                    background: "rgba(232,168,56,0.06)", border: "1px solid rgba(232,168,56,0.12)",
+                    background: "rgba(112,72,232,0.06)", border: "1px solid rgba(112,72,232,0.12)",
                   }}>
                     <div style={{
                       width: 40, height: 40, borderRadius: 8,
-                      background: "linear-gradient(135deg, rgba(232,168,56,0.12), rgba(232,168,56,0.04))",
+                      background: "linear-gradient(135deg, rgba(112,72,232,0.12), rgba(112,72,232,0.04))",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 18, color: "var(--primary)", flexShrink: 0,
                     }}>
@@ -1667,7 +1667,7 @@ export default function AdminContentPage() {
                         }}>
                           <div className="pl-selected-thumb" style={{
                             display: "flex", alignItems: "center", justifyContent: "center",
-                            background: "linear-gradient(135deg, rgba(232,168,56,0.1), rgba(232,168,56,0.04))",
+                            background: "linear-gradient(135deg, rgba(112,72,232,0.1), rgba(112,72,232,0.04))",
                             fontSize: 18, color: "var(--primary)", width: 48, height: 32,
                           }}>
                             <i className="fas fa-video"></i>
@@ -1835,13 +1835,13 @@ export default function AdminContentPage() {
     <>
       <style>{`
         :root {
-            --primary: #E8A838; --primary-light: #F5C76B; --primary-dark: #C48A2A;
-            --bg: #0F0F0F; --surface: #1A1A1A; --surface-elevated: #242424;
-            --surface-card: #1E1E1E; --surface-hover: #2A2A2A;
+            --primary: #9775FA; --primary-light: #B197FC; --primary-dark: #7048E8;
+            --bg: #15111F; --surface: #1A1625; --surface-elevated: #241E33;
+            --surface-card: #1E1A2A; --surface-hover: #2A2438;
             --text-primary: #FFFFFF; --text-secondary: #A0A0A0; --text-tertiary: #6B6B6B;
-            --border: #2A2A2A; --error: #FF6B6B; --success: #4ADE80; --info: #38BDF8;
-            --overlay: rgba(0,0,0,0.92); --gradient-start: #E8A838; --gradient-end: #D4762A;
-            --shadow-soft: 0 4px 20px rgba(232,168,56,0.15);
+            --border: #2A2438; --error: #FF6B6B; --success: #4ADE80; --info: #38BDF8;
+            --overlay: rgba(21,17,31,0.92); --gradient-start: #7048E8; --gradient-end: #9775FA;
+            --shadow-soft: 0 4px 20px rgba(112,72,232,0.15);
             --shadow-elevated: 0 8px 32px rgba(0,0,0,0.5);
             --radius-sm: 12px; --radius-md: 16px; --radius-lg: 20px; --radius-xl: 24px; --radius-full: 50%;
         }
@@ -1972,7 +1972,7 @@ export default function AdminContentPage() {
         .album-header-count { font-size: 12px; color: var(--text-tertiary); }
 
         .create-album-btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 18px; border: 2px dashed var(--border); border-radius: var(--radius-lg); color: var(--text-tertiary); font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; background: transparent; grid-column: 1 / -1; }
-        .create-album-btn:active { border-color: var(--primary); color: var(--primary); background: rgba(232,168,56,0.05); }
+        .create-album-btn:active { border-color: var(--primary); color: var(--primary); background: rgba(112,72,232,0.05); }
 
         .no-albums { padding: 40px 16px; text-align: center; color: var(--text-tertiary); }
         .no-albums i { font-size: 36px; margin-bottom: 10px; }
@@ -2047,17 +2047,17 @@ export default function AdminContentPage() {
         .form-group { margin-bottom: 16px; }
         .form-group label { display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
         .form-input { width: 100%; padding: 14px 16px; background: var(--surface-card); border: 1.5px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); font-size: 15px; font-weight: 500; outline: none; transition: all 0.2s; }
-        .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(232,168,56,0.08); }
+        .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(112,72,232,0.08); }
         .form-input::placeholder { color: var(--text-tertiary); font-weight: 400; }
         .form-textarea { width: 100%; padding: 14px 16px; background: var(--surface-card); border: 1.5px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); font-size: 15px; font-weight: 500; outline: none; transition: all 0.2s; min-height: 100px; resize: vertical; font-family: inherit; line-height: 1.5; }
-        .form-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(232,168,56,0.08); }
+        .form-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(112,72,232,0.08); }
         .form-select { width: 100%; padding: 14px 16px; background: var(--surface-card); border: 1.5px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); font-size: 15px; font-weight: 500; outline: none; transition: all 0.2s; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B6B6B' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 16px center; }
-        .form-select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(232,168,56,0.08); }
+        .form-select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(112,72,232,0.08); }
         .form-row { display: flex; gap: 12px; }
         .form-row > * { flex: 1; }
 
         .upload-zone { border: 2px dashed var(--border); border-radius: var(--radius-lg); padding: 32px; text-align: center; cursor: pointer; transition: all 0.3s; margin-bottom: 16px; }
-        .upload-zone:active { border-color: var(--primary); background: rgba(232,168,56,0.05); }
+        .upload-zone:active { border-color: var(--primary); background: rgba(112,72,232,0.05); }
         .upload-zone-icon { font-size: 40px; color: var(--text-tertiary); margin-bottom: 12px; }
         .upload-zone-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
         .upload-zone-sub { font-size: 13px; color: var(--text-secondary); }
@@ -2160,7 +2160,7 @@ export default function AdminContentPage() {
         }
         .event-image-upload-zone:active {
           border-color: var(--primary);
-          background: rgba(232,168,56,0.05);
+          background: rgba(112,72,232,0.05);
         }
         .event-image-preview {
           width: 100%; height: 100%;
@@ -2178,7 +2178,7 @@ export default function AdminContentPage() {
           justify-content: center; z-index: 2;
         }
 
-        /* ========== R2 VIDEO GRID ========== */\n        .tv-grid {\n          display: grid;\n          grid-template-columns: 1fr 1fr;\n          gap: 12px;\n        }\n        .tv-grid-card {\n          background: var(--surface-card);\n          border: 1px solid var(--border);\n          border-radius: var(--radius-md);\n          overflow: hidden;\n          transition: all 0.2s ease;\n        }\n        .tv-grid-card:active { transform: scale(0.97); background: var(--surface-elevated); }\n        .tv-grid-card-thumb {\n          position: relative;\n          aspect-ratio: 16 / 9;\n          background: var(--surface-elevated);\n          overflow: hidden;\n        }\n        .tv-grid-card-thumb img {\n          width: 100%; height: 100%; object-fit: cover;\n        }\n        .tv-grid-card-duration {\n          position: absolute; bottom: 6px; right: 6px;\n          padding: 2px 6px; border-radius: 4px;\n          background: rgba(0,0,0,0.8); color: #fff;\n          font-size: 10px; font-weight: 700;\n          letter-spacing: 0.3px;\n        }\n        .tv-grid-card-badge {\n          position: absolute; top: 6px; left: 6px;\n          width: 24px; height: 24px; border-radius: 50%;\n          display: flex; align-items: center; justify-content: center;\n          font-size: 10px; backdrop-filter: blur(4px);\n        }\n        .tv-grid-card-badge.featured {\n          background: rgba(232,168,56,0.85); color: #fff;\n        }\n        .tv-grid-card-badge.hidden {\n          background: rgba(107,107,107,0.85); color: #fff;\n        }\n        .tv-grid-card-info {\n          padding: 8px 10px 10px;\n        }\n        .tv-grid-card-title {\n          font-size: 12px; font-weight: 600;\n          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;\n          overflow: hidden; line-height: 1.4;\n        }\n        .tv-grid-card-meta {\n          font-size: 10px; color: var(--text-tertiary);\n          margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;\n        }
+        /* ========== R2 VIDEO GRID ========== */\n        .tv-grid {\n          display: grid;\n          grid-template-columns: 1fr 1fr;\n          gap: 12px;\n        }\n        .tv-grid-card {\n          background: var(--surface-card);\n          border: 1px solid var(--border);\n          border-radius: var(--radius-md);\n          overflow: hidden;\n          transition: all 0.2s ease;\n        }\n        .tv-grid-card:active { transform: scale(0.97); background: var(--surface-elevated); }\n        .tv-grid-card-thumb {\n          position: relative;\n          aspect-ratio: 16 / 9;\n          background: var(--surface-elevated);\n          overflow: hidden;\n        }\n        .tv-grid-card-thumb img {\n          width: 100%; height: 100%; object-fit: cover;\n        }\n        .tv-grid-card-duration {\n          position: absolute; bottom: 6px; right: 6px;\n          padding: 2px 6px; border-radius: 4px;\n          background: rgba(0,0,0,0.8); color: #fff;\n          font-size: 10px; font-weight: 700;\n          letter-spacing: 0.3px;\n        }\n        .tv-grid-card-badge {\n          position: absolute; top: 6px; left: 6px;\n          width: 24px; height: 24px; border-radius: 50%;\n          display: flex; align-items: center; justify-content: center;\n          font-size: 10px; backdrop-filter: blur(4px);\n        }\n        .tv-grid-card-badge.featured {\n          background: rgba(112,72,232,0.85); color: #fff;\n        }\n        .tv-grid-card-badge.hidden {\n          background: rgba(107,107,107,0.85); color: #fff;\n        }\n        .tv-grid-card-info {\n          padding: 8px 10px 10px;\n        }\n        .tv-grid-card-title {\n          font-size: 12px; font-weight: 600;\n          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;\n          overflow: hidden; line-height: 1.4;\n        }\n        .tv-grid-card-meta {\n          font-size: 10px; color: var(--text-tertiary);\n          margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;\n        }
         .event-image-clear-btn:active {
           background: rgba(255,255,255,0.2);
         }
@@ -2300,7 +2300,7 @@ export default function AdminContentPage() {
         .event-pcard-glow {
           position: absolute; top: -50%; right: -20%;
           width: 160px; height: 160px;
-          background: radial-gradient(circle, rgba(232,168,56,0.06) 0%, transparent 70%);
+          background: radial-gradient(circle, rgba(112,72,232,0.06) 0%, transparent 70%);
           pointer-events: none;
           opacity: 0;
           transition: opacity 0.4s;
@@ -2329,8 +2329,8 @@ export default function AdminContentPage() {
           flex-shrink: 0;
           position: relative;
           z-index: 1;
-          background: rgba(232,168,56,0.06);
-          border: 1px solid rgba(232,168,56,0.15);
+          background: rgba(112,72,232,0.06);
+          border: 1px solid rgba(112,72,232,0.15);
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -2378,7 +2378,7 @@ export default function AdminContentPage() {
           margin-top: 4px;
           font-size: 11px; font-weight: 700;
           color: var(--primary);
-          background: rgba(232,168,56,0.08);
+          background: rgba(112,72,232,0.08);
           padding: 2px 10px; border-radius: 6px;
           width: fit-content;
         }
@@ -2409,7 +2409,7 @@ export default function AdminContentPage() {
           background: var(--surface-elevated);
           transform: scale(0.88);
         }
-        .event-pcard-action-btn.edit:active { color: var(--primary); border-color: rgba(232,168,56,0.3); }
+        .event-pcard-action-btn.edit:active { color: var(--primary); border-color: rgba(112,72,232,0.3); }
         .event-pcard-action-btn.delete:active { color: var(--error); border-color: rgba(239,68,68,0.3); }
 
         /* ========== IMAGE VIEWER ========== */
@@ -2507,7 +2507,7 @@ export default function AdminContentPage() {
                 onClick={() => setShowUploadModal(true)}
                 style={{
                   padding: "6px 12px", borderRadius: 10,
-                  background: "linear-gradient(135deg, var(--gradient-start, #E8A838), var(--gradient-end, #D4762A))",
+                  background: "linear-gradient(135deg, var(--gradient-start, #7048E8), var(--gradient-end, #9775FA))",
                   border: "none", color: "#fff",
                   fontSize: 12, fontWeight: 700, cursor: "pointer",
                   display: "flex", alignItems: "center", gap: 5,

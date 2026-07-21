@@ -80,8 +80,8 @@ export default function PremiumTopBar({
           height: 32px;
           border-radius: 10px;
           flex-shrink: 0;
-          background: linear-gradient(135deg, var(--gradient-start, #E8A838), var(--gradient-end, #D4762A));
-          box-shadow: 0 2px 12px rgba(232,168,56,0.2);
+          background: linear-gradient(135deg, var(--gradient-start, #7048E8), var(--gradient-end, #9775FA));
+          box-shadow: 0 2px 12px rgba(112,72,232,0.2);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -156,7 +156,7 @@ export default function PremiumTopBar({
             )}
             <div className="ptb-info">
               <div className="ptb-title">
-                {title || "MOD NAKURU"}
+                {title || "ORACLE TV MEDIA"}
               </div>
               {subtitle && <div className="ptb-sub">{subtitle}</div>}
             </div>

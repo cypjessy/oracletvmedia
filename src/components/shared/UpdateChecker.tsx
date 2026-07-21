@@ -132,13 +132,13 @@ export default function UpdateChecker() {
           width: 80px;
           height: 80px;
           border-radius: 24px;
-          background: linear-gradient(135deg, rgba(232,168,56,0.12), rgba(232,168,56,0.04));
-          border: 1px solid rgba(232,168,56,0.15);
+          background: linear-gradient(135deg, rgba(112,72,232,0.12), rgba(112,72,232,0.04));
+          border: 1px solid rgba(112,72,232,0.15);
           display: flex;
           align-items: center;
           justify-content: center;
           font-size: 34px;
-          color: #E8A838;
+          color: var(--primary);
           margin-bottom: 24px;
         }
         .force-update-title {
@@ -162,11 +162,11 @@ export default function UpdateChecker() {
           gap: 6px;
           padding: 6px 14px;
           border-radius: 20px;
-          background: rgba(232,168,56,0.1);
-          border: 1px solid rgba(232,168,56,0.15);
+          background: rgba(112,72,232,0.1);
+          border: 1px solid rgba(112,72,232,0.15);
           font-size: 13px;
           font-weight: 700;
-          color: #E8A838;
+          color: var(--primary);
           margin: 16px 0 28px;
         }
         .force-update-btn {
@@ -177,7 +177,7 @@ export default function UpdateChecker() {
           font-size: 16px;
           font-weight: 700;
           border: none;
-          background: linear-gradient(135deg, #E8A838, #D4762A);
+          background: linear-gradient(135deg, var(--primary), var(--primary-dark));
           color: #fff;
           cursor: pointer;
           transition: all 0.2s;

@@ -23,7 +23,7 @@ export default function ChurchSelector() {
     <div className="church-selector">
       <div className="church-pill" id="churchPill">
         <i className="fas fa-church"></i>
-        <span>MOD NAKURU</span>
+        <span>ORACLE TV MEDIA</span>
         <i className="fas fa-chevron-down"></i>
       </div>
     </div>

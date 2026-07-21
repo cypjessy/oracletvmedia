@@ -181,14 +181,14 @@ export function RadioGoLiveTab(props: RadioGoLiveTabProps) {
         .gl-empty span { font-size: 13px; color: var(--text-tertiary); }
         .gl-history-list { display: flex; flex-direction: column; gap: 4px; }
         .gl-history-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--surface-card); border: 1px solid var(--border); border-radius: var(--radius-sm); }
-        .gl-history-icon { width: 32px; height: 32px; border-radius: var(--radius-sm); background: rgba(232,168,56,0.08); color: var(--primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .gl-history-icon { width: 32px; height: 32px; border-radius: var(--radius-sm); background: rgba(112,72,232,0.08); color: var(--primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .gl-history-icon i { font-size: 14px; }
         .gl-history-info { flex: 1; }
         .gl-history-date { font-size: 13px; font-weight: 600; }
         .gl-history-time { font-size: 11px; color: var(--text-tertiary); }
         .gl-form-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
         .gl-form-row label { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
-        .gl-form-note { display: flex; align-items: flex-start; gap: 6px; padding: 10px 12px; background: rgba(232,168,56,0.04); border: 1px solid rgba(232,168,56,0.1); border-radius: var(--radius-sm); font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+        .gl-form-note { display: flex; align-items: flex-start; gap: 6px; padding: 10px 12px; background: rgba(112,72,232,0.04); border: 1px solid rgba(112,72,232,0.1); border-radius: var(--radius-sm); font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
         .gl-form-note i { font-size: 13px; color: var(--primary); margin-top: 1px; flex-shrink: 0; }
         .skeleton-loading { background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 50%, var(--surface) 75%); background-size: 200% 100%; animation: shimmer 1.5s ease-in-out infinite; border-radius: var(--radius-md); }
         .skeleton-line { height: 14px; width: 100%; margin-bottom: 8px; }

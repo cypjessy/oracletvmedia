@@ -39,7 +39,7 @@ export default function Analytics({ showToast }: Props) {
         .rs-an-chart-title { font-size: 15px; font-weight: 700; margin-bottom: 14px; }
         .rs-an-chart-bars { display: flex; align-items: flex-end; gap: 4px; height: 140px; }
         .rs-an-chart-bar { flex: 1; display: flex; align-items: flex-end; height: 100%; }
-        .rs-an-chart-fill { width: 100%; border-radius: 3px 3px 0 0; background: linear-gradient(to top, rgba(232,168,56,0.3), var(--rs-primary)); transition: height 0.3s ease; min-height: 2px; cursor: pointer; position: relative; }
+        .rs-an-chart-fill { width: 100%; border-radius: 3px 3px 0 0; background: linear-gradient(to top, rgba(112,72,232,0.3), var(--rs-primary)); transition: height 0.3s ease; min-height: 2px; cursor: pointer; position: relative; }
         .rs-an-chart-fill:hover { opacity: 0.8; }
         .rs-an-chart-labels { display: flex; justify-content: space-between; padding: 6px 2px 0; }
         .rs-an-chart-labels span { font-size: 10px; color: var(--rs-text-tertiary); }

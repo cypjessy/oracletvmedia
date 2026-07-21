@@ -150,9 +150,9 @@ export default function GalleryPage() {
 
   function getCategoryColor(cat: string): string {
     const colors: Record<string, string> = {
-      events: "#E8A838", services: "#8B5CF6", community: "#4ADE80",
+      events: "#9775FA", services: "#8B5CF6", community: "#4ADE80",
       team: "#3B82F6", facility: "#EF4444", general: "#6B6B6B",
-      event: "#E8A838", prayer: "#8B5CF6", notice: "#3B82F6", urgent: "#EF4444",
+      event: "#9775FA", prayer: "#8B5CF6", notice: "#3B82F6", urgent: "#EF4444",
     };
     return colors[cat] || "#6B6B6B";
   }
@@ -184,13 +184,13 @@ export default function GalleryPage() {
     <>
       <style>{`
         :root {
-            --primary: #E8A838; --primary-light: #F5C76B; --primary-dark: #C48A2A;
-            --bg: #0F0F0F; --surface: #1A1A1A; --surface-elevated: #242424;
-            --surface-card: #1E1E1E; --surface-hover: #2A2A2A;
+            --primary: #9775FA; --primary-light: #B197FC; --primary-dark: #7048E8;
+            --bg: #15111F; --surface: #1A1625; --surface-elevated: #241E33;
+            --surface-card: #1E1A2A; --surface-hover: #2A2438;
             --text-primary: #FFFFFF; --text-secondary: #A0A0A0; --text-tertiary: #6B6B6B;
-            --border: #2A2A2A; --error: #FF6B6B; --success: #4ADE80; --info: #38BDF8;
-            --overlay: rgba(0,0,0,0.92); --gradient-start: #E8A838; --gradient-end: #D4762A;
-            --shadow-soft: 0 4px 20px rgba(232,168,56,0.15);
+            --border: #2A2438; --error: #FF6B6B; --success: #4ADE80; --info: #38BDF8;
+            --overlay: rgba(21,17,31,0.92); --gradient-start: #7048E8; --gradient-end: #9775FA;
+            --shadow-soft: 0 4px 20px rgba(112,72,232,0.15);
             --shadow-elevated: 0 8px 32px rgba(0,0,0,0.5);
             --radius-sm: 12px; --radius-md: 16px; --radius-lg: 20px; --radius-xl: 24px; --radius-full: 50%;
         }
@@ -201,7 +201,7 @@ export default function GalleryPage() {
 
         /* ========== HEADER — PREMIUM ========== */
         .header { padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; background: linear-gradient(180deg, rgba(15,15,15,0.98) 0%, rgba(15,15,15,0.92) 100%); backdrop-filter: blur(20px); z-index: 100; }
-        .header-logo { width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); display: flex; align-items: center; justify-content: center; font-size: 18px; color: #fff; flex-shrink: 0; box-shadow: 0 4px 16px rgba(232,168,56,0.25); }
+        .header-logo { width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); display: flex; align-items: center; justify-content: center; font-size: 18px; color: #fff; flex-shrink: 0; box-shadow: 0 4px 16px rgba(112,72,232,0.25); }
         .header-info { flex: 1; min-width: 0; }
         .header-church { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
         .header-sub { font-size: 11px; color: var(--text-tertiary); font-weight: 500; margin-top: 1px; }
@@ -214,7 +214,7 @@ export default function GalleryPage() {
         .tab-btn { flex: 1; padding: 14px 6px 12px; background: none; border: none; color: var(--text-tertiary); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; letter-spacing: 0.3px; }
         .tab-btn i { font-size: 14px; }
         .tab-btn.active { color: var(--primary); }
-        .tab-btn.active::after { content: ''; position: absolute; bottom: 0; left: 20%; right: 20%; height: 3px; background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end)); border-radius: 3px 3px 0 0; box-shadow: 0 0 12px rgba(232,168,56,0.3); }
+        .tab-btn.active::after { content: ''; position: absolute; bottom: 0; left: 20%; right: 20%; height: 3px; background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end)); border-radius: 3px 3px 0 0; box-shadow: 0 0 12px rgba(112,72,232,0.3); }
         .tab-btn:active { opacity: 0.7; transform: scale(0.97); }
 
         /* ========== CONTENT ========== */
@@ -233,11 +233,11 @@ export default function GalleryPage() {
         .hero-overlay { position: absolute; inset: 0; background: linear-gradient(135deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.2) 50%, transparent 80%); display: flex; flex-direction: column; justify-content: flex-end; padding: 24px; }
         .hero-overlay h2 { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 4px; line-height: 1.2; text-shadow: 0 2px 8px rgba(0,0,0,0.3); }
         .hero-overlay p { font-size: 13px; color: rgba(255,255,255,0.8); margin-bottom: 14px; max-width: 75%; line-height: 1.4; }
-        .hero-cta { display: inline-flex; padding: 10px 22px; background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); border: none; border-radius: 10px; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; width: fit-content; transition: all 0.2s; box-shadow: 0 4px 16px rgba(232,168,56,0.3); }
+        .hero-cta { display: inline-flex; padding: 10px 22px; background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); border: none; border-radius: 10px; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; width: fit-content; transition: all 0.2s; box-shadow: 0 4px 16px rgba(112,72,232,0.3); }
         .hero-cta:active { transform: scale(0.95); }
         .hero-dots { display: flex; justify-content: center; gap: 6px; margin-top: 14px; }
         .hero-dot { width: 6px; height: 6px; border-radius: var(--radius-full); background: var(--border); cursor: pointer; transition: all 0.3s cubic-bezier(0.4,0,0.2,1); }
-        .hero-dot.active { width: 28px; background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end)); border-radius: 3px; box-shadow: 0 0 8px rgba(232,168,56,0.3); }
+        .hero-dot.active { width: 28px; background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end)); border-radius: 3px; box-shadow: 0 0 8px rgba(112,72,232,0.3); }
         .hero-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: var(--radius-full); background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 14px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 5; transition: all 0.2s; }
         .hero-nav:active { background: rgba(0,0,0,0.7); transform: translateY(-50%) scale(0.9); }
         .hero-nav.prev { left: 10px; } .hero-nav.next { right: 10px; }
@@ -246,8 +246,8 @@ export default function GalleryPage() {
         .section-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 12px 14px; }
         .section-title { font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 10px; letter-spacing: -0.3px; }
         .section-title-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #fff; flex-shrink: 0; }
-        .section-see-all { font-size: 12px; color: var(--primary); font-weight: 700; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 6px 14px; border-radius: 20px; background: rgba(232,168,56,0.08); border: 1px solid rgba(232,168,56,0.15); transition: all 0.2s; }
-        .section-see-all:active { background: rgba(232,168,56,0.15); transform: scale(0.95); }
+        .section-see-all { font-size: 12px; color: var(--primary); font-weight: 700; background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 6px 14px; border-radius: 20px; background: rgba(112,72,232,0.08); border: 1px solid rgba(112,72,232,0.15); transition: all 0.2s; }
+        .section-see-all:active { background: rgba(112,72,232,0.15); transform: scale(0.95); }
 
         /* ========== HORIZONTAL SCROLL — PREMIUM ========== */
         .h-scroll { display: flex; gap: 12px; overflow-x: auto; padding: 0 12px 8px; -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; }
@@ -293,11 +293,11 @@ export default function GalleryPage() {
         .gallery-search { position: relative; }
         .gallery-search i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); font-size: 15px; }
         .gallery-search input { width: 100%; padding: 12px 14px 12px 42px; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); font-size: 14px; font-weight: 500; outline: none; transition: all 0.2s; }
-        .gallery-search input:focus { border-color: var(--primary); background: var(--surface-elevated); box-shadow: 0 0 0 3px rgba(232,168,56,0.08); }
+        .gallery-search input:focus { border-color: var(--primary); background: var(--surface-elevated); box-shadow: 0 0 0 3px rgba(112,72,232,0.08); }
         .gallery-search input::placeholder { color: var(--text-tertiary); font-weight: 400; }
         .gallery-chip { padding: 7px 16px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); color: var(--text-secondary); font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: all 0.2s; flex-shrink: 0; }
         .gallery-chip:active { transform: scale(0.95); }
-        .gallery-chip.active { background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); border-color: transparent; color: #fff; box-shadow: 0 4px 12px rgba(232,168,56,0.2); }
+        .gallery-chip.active { background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); border-color: transparent; color: #fff; box-shadow: 0 4px 12px rgba(112,72,232,0.2); }
         .gallery-count { font-size: 12px; color: var(--text-tertiary); padding: 0 12px 4px; font-weight: 500; }
 
         /* ========== ALBUM CARD — PREMIUM ========== */
@@ -364,7 +364,7 @@ export default function GalleryPage() {
       <ToastBridge />
 
       <div className="app-container">
-        <PremiumTopBar icon="fa-images" title="MOD NAKURU" subtitle="Photo Gallery" />
+        <PremiumTopBar icon="fa-images" title="ORACLE TV MEDIA" subtitle="Photo Gallery" />
 
         {/* ========== OFFLINE BANNER ========== */}
         {offline && (
@@ -456,7 +456,7 @@ export default function GalleryPage() {
                     <>
                       <div className="section-header">
                         <h2 className="section-title">
-                          <span className="section-title-icon" style={{ background: "linear-gradient(135deg, #E8A838, #F5C76B)" }}><i className="fas fa-star"></i></span>
+                          <span className="section-title-icon" style={{ background: "linear-gradient(135deg, #9775FA, #9775FA)" }}><i className="fas fa-star"></i></span>
                           Featured Photos
                         </h2>
                         <button className="section-see-all" onClick={() => { setActiveTab("albums"); setSelectedAlbum(null); setSelectedEntry(null); }}>Albums <i className="fas fa-chevron-right" style={{ fontSize: 9 }}></i></button>

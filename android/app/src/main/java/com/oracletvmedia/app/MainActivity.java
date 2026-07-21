@@ -1,4 +1,4 @@
-package com.mountainofdeliverance.church;
+package com.oracletvmedia.app;
 
 import android.app.PictureInPictureParams;
 import android.content.pm.PackageManager;

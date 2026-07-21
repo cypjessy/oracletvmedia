@@ -2,14 +2,12 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useFullscreenToggle } from "@/lib/tv/fullscreen";
 import {
   getChannel, getVideos, getVideosPage, saveChannel, saveVideos, clearAllVideos,
   getPlaylists, addPlaylist, deletePlaylist,
   generateBroadcast, getTodayBroadcast,
   getGivingConfig, saveGivingConfig,
   replyToPrayer,
-  getUserTvState, updateUserTvProgress, autoInitUserPlaylist,
   getLiveStatus, setLiveStream, endLiveStream,
 } from "@/lib/youtube";
 import type { LiveStatus } from "@/lib/youtube";
@@ -25,29 +23,11 @@ import {
 } from "firebase/firestore";
 import { churchConfig } from "@/lib/churchConfig";
 import AdminBottomNav from "@/components/admin/AdminBottomNav";
-import { useTvPlayer } from "@/lib/tv/TvPlayerProvider";
 import ToastBridge from "@/components/dashboard/ToastBridge";
 import PremiumTopBar from "@/components/shared/PremiumTopBar";
 
-/* ─── TV localStorage key helpers — read uid at call time for logout resilience ─── */
-function getAdminSeekKey(): string {
-  if (typeof window === "undefined") return "admin_tv_resume_seek";
-  const uid = auth.currentUser?.uid;
-  return uid ? `admin_tv_resume_seek_${uid}` : "admin_tv_resume_seek";
-}
-function getAdminIndexKey(): string {
-  if (typeof window === "undefined") return "admin_tv_resume_index";
-  const uid = auth.currentUser?.uid;
-  return uid ? `admin_tv_resume_index_${uid}` : "admin_tv_resume_index";
-}
-function getAdminCachedSeek(): number {
-  if (typeof window === "undefined") return 0;
-  return Number(localStorage.getItem(getAdminSeekKey())) || 0;
-}
-
 export default function AdminTVPage() {
   const router = useRouter();
-  const { toggleFullscreen } = useFullscreenToggle();
   const [channel, setChannel] = useState<YouTubeChannel | null>(null);
   const [videoCount, setVideoCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -56,13 +36,6 @@ export default function AdminTVPage() {
     churchConfig.youtube_channel_id || ""
   );
   const [lastSyncTime, setLastSyncTime] = useState<string>("");
-
-  // ─── Global TvPlayerProvider (portal-based, survives page navigations) ───
-  const adminTvPlayer = useTvPlayer();
-  // Callback ref fires on every mount/remount (handles tab switching correctly)
-  const tvPlayerTargetRef = useCallback((el: HTMLDivElement | null) => {
-    adminTvPlayer.registerTarget(el);
-  }, [adminTvPlayer]);
 
   // ─── All synced videos (for playlist builder) ───
   const [allVideos, setAllVideos] = useState<YouTubeVideo[]>([]);
@@ -87,16 +60,6 @@ export default function AdminTVPage() {
   const [plVideoIds, setPlVideoIds] = useState<string[]>([]);
   const [plSaving, setPlSaving] = useState(false);
   const [plDeletingId, setPlDeletingId] = useState<string | null>(null);
-  // ─── Admin TV player resume state (for embedded player) ───
-
-  // Firestore-backed TV progress (persists across browser sessions like member dashboard)
-  const [tvFirestoreLoaded, setTvFirestoreLoaded] = useState(false);
-
-  const [currentTvIndex, setCurrentTvIndex] = useState(
-    () => typeof window !== "undefined" ? Number(localStorage.getItem(getAdminIndexKey())) || 0 : 0
-  );
-  const [startTvCountdown, setStartTvCountdown] = useState<number | null>(null);
-  const [resumeCountdown, setResumeCountdown] = useState<number | null>(null);
   const [broadcasting, setBroadcasting] = useState(false);
   const [broadcastSlotCount, setBroadcastSlotCount] = useState(0);
   // ─── External video paste ───
@@ -110,12 +73,8 @@ export default function AdminTVPage() {
       })
     );
   }
-  const lastAdminTvSeekRef = useRef(0);
-  const lastAdminTvIndexRef = useRef(0);
-  // ─── Seek version — forces PlyrPlayer re-mount when Firestore loads a saved seek ───
-  const [seekVersion, setSeekVersion] = useState(0);
 
-  // Load current channel data + restore Firestore TV state
+  // Load current channel data
   useEffect(() => {
     let mounted = true;
     const load = async () => {
@@ -126,36 +85,6 @@ export default function AdminTVPage() {
         setVideoCount(videos.length);
         setAllVideos(videos);
         if (c?.channelId) setChannelIdInput(c.channelId);
-
-        // Restore TV progress from Firestore (like member dashboard)
-        const uid = auth.currentUser?.uid;
-        if (uid) {
-          const tvState = await getUserTvState(uid);
-          if (!mounted) return;
-          // Restore index if within range
-          if (tvState.currentIndex > 0 && tvState.currentIndex < videos.length) {
-            setCurrentTvIndex(tvState.currentIndex);
-          }
-          // Restore seek from Firestore (overrides localStorage for fresh session)
-          if (tvState.currentSeek > 0.1) {
-            const oldSeek = Number(localStorage.getItem(getAdminSeekKey())) || 0;
-            if (typeof window !== "undefined") {
-              localStorage.setItem(getAdminSeekKey(), String(tvState.currentSeek));
-            }
-            lastAdminTvSeekRef.current = tvState.currentSeek;
-            // If Firestore seek differs from localStorage, force PlyrPlayer to re-mount with new seek
-            if (Math.abs(tvState.currentSeek - oldSeek) > 1) {
-              setSeekVersion(v => v + 1);
-            }
-            // Give user time to resume — 5s countdown before Start TV button becomes active
-            setResumeCountdown(5);
-          }
-          // Auto-init playlist if empty (fill with all synced videos)
-          if (tvState.playlist.length === 0 && videos.length > 0) {
-            await autoInitUserPlaylist(uid);
-          }
-        }
-        setTvFirestoreLoaded(true);
       } catch {} finally {
         if (mounted) setLoading(false);
       }
@@ -323,6 +252,13 @@ export default function AdminTVPage() {
       setVideoCount(data.videos.length);
       setAllVideos(data.videos);
       setLastSyncTime(new Date().toLocaleTimeString());
+
+      // Reload paginated grid from Firestore
+      const { videos: freshPage, lastPosition: freshPos } = await getVideosPage(12, undefined, true);
+      setPaginatedVideos(freshPage);
+      setPaginatedLastPos(freshPos);
+      setPaginatedHasMore(freshPage.length === 12);
+
       showToast(
         "Sync Complete",
         `${data.videos.length} videos synced from "${data.channel.title}"`,
@@ -341,204 +277,6 @@ export default function AdminTVPage() {
     (id: string) => allVideos.find((v) => v.id === id),
     [allVideos]
   );
-
-  // Advance to next video in the admin embedded player (wraps around like dashboard)
-  const advanceTvVideo = useCallback(() => {
-    setStartTvCountdown(null);
-    if (allVideos.length === 0) return;
-    const nextIndex = (lastAdminTvIndexRef.current + 1) % allVideos.length;
-    setCurrentTvIndex(nextIndex);
-    // Reset seek cache
-    if (typeof window !== "undefined") {
-      localStorage.setItem(getAdminSeekKey(), "0");
-      localStorage.setItem(getAdminIndexKey(), String(nextIndex));
-    }
-    // Save to Firestore for cross-session persistence
-    const uid = auth.currentUser?.uid;
-    if (uid) {
-      updateUserTvProgress(uid, nextIndex, 0);
-    }
-  }, [allVideos.length]);
-
-  const currentVideo = allVideos.length > 0 ? allVideos[currentTvIndex >= allVideos.length ? 0 : currentTvIndex] : null;
-
-  // Sync index ref when currentTvIndex changes + update localStorage
-  useEffect(() => {
-    lastAdminTvIndexRef.current = currentTvIndex;
-    if (typeof window !== "undefined") {
-      localStorage.setItem(getAdminIndexKey(), String(currentTvIndex));
-    }
-  }, [currentTvIndex]);
-
-  // ─── Derive initial seek from localStorage ───
-  const adminTvInitialSeek = getAdminCachedSeek() > 0.1 ? getAdminCachedSeek() : undefined;
-
-  // Track current seek for periodic saves
-  const handleAdminTvTimeUpdate = useCallback((time: number) => {
-    lastAdminTvSeekRef.current = time;
-    if (typeof window !== "undefined") {
-      localStorage.setItem(getAdminSeekKey(), String(time));
-    }
-  }, []);
-
-  // Call play() when current video changes (also re-applies seek when Firestore
-  // loads a saved position via seekVersion — see TvPlayerProvider's same-video
-  // seek-delta logic that forces a fresh PlyrPlayer instance).
-  useEffect(() => {
-    if (currentVideo && adminTvPlayer) {
-      // Read the latest seek from localStorage (updated by Firestore load effect)
-      const seek = typeof window !== "undefined"
-        ? Number(localStorage.getItem(getAdminSeekKey())) || 0
-        : 0;
-      adminTvPlayer.play(currentVideo.id, seek > 0.1 ? seek : undefined);
-    }
-  }, [currentVideo?.id, adminTvPlayer, seekVersion]);
-
-  // Keep callbacks in sync with latest versions
-  useEffect(() => {
-    adminTvPlayer.setCallbacks({
-      onEnded: () => {
-            if (allVideos.length > 1) {
-              setStartTvCountdown(20);
-            } else {
-              advanceTvVideo();
-            }
-          },
-      onTimeUpdate: handleAdminTvTimeUpdate,
-    });
-  }, [advanceTvVideo, handleAdminTvTimeUpdate, adminTvPlayer]);
-
-  // Save current progress to Firestore + localStorage (used by interval + cleanup)
-  const saveAdminTvProgress = useCallback(() => {
-    const seek = lastAdminTvSeekRef.current;
-    const index = lastAdminTvIndexRef.current;
-    // Always persist to localStorage for instant cross-page resume
-    if (typeof window !== "undefined") {
-      localStorage.setItem(getAdminSeekKey(), String(seek));
-      localStorage.setItem(getAdminIndexKey(), String(index));
-    }
-    // Persist to Firestore for cross-session resume
-    const uid = auth.currentUser?.uid;
-    if (uid) {
-      updateUserTvProgress(uid, index, seek);
-    }
-  }, []);
-
-  // Periodically save seek position (every 5s)
-  useEffect(() => {
-    const interval = setInterval(saveAdminTvProgress, 5000);
-    return () => {
-      clearInterval(interval);
-      saveAdminTvProgress();
-    };
-  }, [saveAdminTvProgress]);
-
-  // ─── Start TV countdown timer (after video ends — auto-advances) ───
-  useEffect(() => {
-    if (startTvCountdown === null || startTvCountdown <= 0) return;
-    const timer = setTimeout(() => {
-      if (startTvCountdown <= 1) {
-        // Countdown reached 0 — auto-advance
-        setStartTvCountdown(null);
-        advanceTvVideo();
-      } else {
-        setStartTvCountdown(startTvCountdown - 1);
-      }
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [startTvCountdown, advanceTvVideo]);
-
-  // ─── Resume countdown timer (on page load with saved seek — just releases button) ───
-  useEffect(() => {
-    if (resumeCountdown === null || resumeCountdown <= 0) return;
-    const timer = setTimeout(() => {
-      if (resumeCountdown <= 1) {
-        setResumeCountdown(null); // button becomes active
-      } else {
-        setResumeCountdown(resumeCountdown - 1);
-      }
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [resumeCountdown]);
-
-  // Save on page unload / tab hide
-  useEffect(() => {
-    const handleUnload = () => saveAdminTvProgress();
-    const handleVisibility = () => {
-      if (document.visibilityState === "hidden") saveAdminTvProgress();
-    };
-    window.addEventListener("beforeunload", handleUnload);
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      window.removeEventListener("beforeunload", handleUnload);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [saveAdminTvProgress]);
-
-  // Tab visibility — restore TV state from Firestore when tab becomes visible (web)
-  useEffect(() => {
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === "visible") {
-        const uid = auth.currentUser?.uid;
-        if (uid) {
-          // Re-fetch TV state from Firestore to pick up changes from other tabs/pages
-          try {
-            const state = await getUserTvState(uid);
-            if (state.currentIndex >= 0 && state.currentIndex < allVideos.length) {
-              setCurrentTvIndex(state.currentIndex);
-            }
-            if (state.currentSeek > 0.1) {
-              if (typeof window !== "undefined") {
-                localStorage.setItem(getAdminSeekKey(), String(state.currentSeek));
-              }
-              lastAdminTvSeekRef.current = state.currentSeek;
-            }
-          } catch {}
-        }
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [allVideos.length]);
-
-  // ─── App resume — save on background, re-fetch on foreground (Android) ───
-  useEffect(() => {
-    let canceled = false;
-    import("@capacitor/core")
-      .then(({ Capacitor }) => {
-        if (canceled || !Capacitor.isNativePlatform()) return;
-        return import("@capacitor/app");
-      })
-      .then((AppModule) => {
-        if (canceled || !AppModule) return;
-        const { App } = AppModule;
-        App.addListener("appStateChange", (state) => {
-          if (!state.isActive) {
-            saveAdminTvProgress();
-          } else {
-            const uid = auth.currentUser?.uid;
-            if (uid) {
-              getUserTvState(uid).then((s) => {
-                if (s.currentIndex >= 0 && s.currentIndex < allVideos.length) {
-                  setCurrentTvIndex(s.currentIndex);
-                }
-                if (s.currentSeek > 0.1) {
-                if (typeof window !== "undefined") {
-                  localStorage.setItem(getAdminSeekKey(), String(s.currentSeek));
-                }
-                  lastAdminTvSeekRef.current = s.currentSeek;
-                }
-              });
-            }
-          }
-        }).then((handler) => {
-          if (canceled) handler.remove();
-        });
-      });
-    return () => { canceled = true; };
-  }, [saveAdminTvProgress, allVideos.length]);
 
   // Generate today's broadcast
   const handleGenerateBroadcast = useCallback(async () => {
@@ -1243,7 +981,7 @@ export default function AdminTVPage() {
             const dayName = p.dayOfWeek !== null ? ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][p.dayOfWeek] : "";
             return (
               <div key={p.id} className="preview-card" style={{ alignItems: "center" }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0, background: `linear-gradient(135deg, rgba(232,168,56,0.12), rgba(232,168,56,0.04))`, border: "1px solid rgba(232,168,56,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "var(--primary)" }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0, background: `linear-gradient(135deg, rgba(112,72,232,0.12), rgba(112,72,232,0.04))`, border: "1px solid rgba(112,72,232,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "var(--primary)" }}>
                   <i className="fas fa-list"></i>
                 </div>
                 <div className="preview-info" style={{ flex: 1 }}>
@@ -1300,7 +1038,7 @@ export default function AdminTVPage() {
                 {viewerCount > 0 ? "Watching now" : "No active viewers"}
               </div>
             </div>
-            <div className="live-stat-card" style={{ borderColor: "rgba(232,168,56,0.2)" }}>
+            <div className="live-stat-card" style={{ borderColor: "rgba(112,72,232,0.2)" }}>
               <div className="live-stat-value" style={{ color: "var(--primary)" }}>{liveChatMsgs.length}</div>
               <div className="live-stat-label">Chat Messages</div>
               <div className="live-stat-sub">{uniqueChatters} unique chatters</div>
@@ -1713,7 +1451,7 @@ export default function AdminTVPage() {
             <div className="live-giving-form">
               <div className="form-group">
                 <label className="form-label"><i className="fas fa-church"></i> Church Name</label>
-                <input className="form-input" type="text" value={gcChurchName} onChange={(e) => setGcChurchName(e.target.value)} placeholder="e.g. MOD NAKURU" />
+                <input className="form-input" type="text" value={gcChurchName} onChange={(e) => setGcChurchName(e.target.value)} placeholder="e.g. ORACLE TV MEDIA" />
               </div>
               <div className="form-group">
                 <label className="form-label"><i className="fas fa-align-left"></i> Description</label>
@@ -1792,12 +1530,13 @@ export default function AdminTVPage() {
     <>
       <style>{`
         :root {
-          --primary: #E8A838; --primary-light: #F5C76B; --bg: #0F0F0F;
-          --surface: #1A1A1A; --surface-elevated: #242424;
-          --surface-card: #1E1E1E; --surface-hover: #2A2A2A;
+          --primary: #9775FA; --primary-light: #B197FC; --primary-dark: #7048E8;
+          --bg: #15111F;
+          --surface: #1A1625; --surface-elevated: #241E33;
+          --surface-card: #1E1A2A; --surface-hover: #2A2438;
           --text-primary: #FFFFFF; --text-secondary: #A0A0A0; --text-tertiary: #6B6B6B;
-          --border: #2A2A2A; --error: #EF4444; --success: #22C55E;
-          --gradient-start: #E8A838; --gradient-end: #D4762A;
+          --border: #2A2438; --error: #FF6B6B; --success: #4ADE80;
+          --gradient-start: #7048E8; --gradient-end: #9775FA;
           --radius-sm: 12px; --radius-md: 16px; --radius-lg: 20px; --radius-xl: 24px;
           --radius-full: 50%;
         }
@@ -1835,7 +1574,7 @@ export default function AdminTVPage() {
           width: 56px; height: 56px; border-radius: 50%;
           overflow: hidden; flex-shrink: 0;
           background: var(--surface-elevated);
-          border: 2px solid rgba(232,168,56,0.15);
+          border: 2px solid rgba(112,72,232,0.15);
         }
         .channel-avatar img { width: 100%; height: 100%; object-fit: cover; }
         .channel-avatar-fallback {
@@ -1870,7 +1609,7 @@ export default function AdminTVPage() {
           font-size: 14px; font-weight: 500; outline: none;
           transition: all 0.2s;
         }
-        .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(232,168,56,0.08); }
+        .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(112,72,232,0.08); }
         .form-input::placeholder { color: var(--text-tertiary); font-weight: 400; }
         .form-hint { font-size: 11px; color: var(--text-tertiary); display: flex; align-items: center; gap: 4px; }
         .form-hint i { font-size: 10px; }
@@ -1972,7 +1711,7 @@ export default function AdminTVPage() {
           font-size: 10px; backdrop-filter: blur(4px);
         }
         .tv-grid-card-badge.featured {
-          background: rgba(232,168,56,0.85); color: #fff;
+          background: rgba(112,72,232,0.85); color: #fff;
         }
         .tv-grid-card-badge.hidden {
           background: rgba(107,107,107,0.85); color: #fff;
@@ -2048,25 +1787,25 @@ export default function AdminTVPage() {
         }
         .tv-loading-ring {
           width: 72px; height: 72px; border-radius: 50%;
-          border: 3px solid rgba(232,168,56,0.08);
-          border-top-color: #E8A838; border-right-color: #D4762A;
+          border: 3px solid rgba(112,72,232,0.08);
+          border-top-color: #9775FA; border-right-color: #9775FA;
           animation: tvLoadingSpin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
           display: flex; align-items: center; justify-content: center;
           position: relative;
         }
         .tv-loading-ring-inner {
           width: 48px; height: 48px; border-radius: 50%;
-          border: 2px solid rgba(232,168,56,0.06);
-          border-bottom-color: #E8A838; border-left-color: #D4762A;
+          border: 2px solid rgba(112,72,232,0.06);
+          border-bottom-color: #9775FA; border-left-color: #9775FA;
           animation: tvLoadingSpin 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite reverse;
         }
         .tv-loading-icon {
-          position: absolute; font-size: 20px; color: #E8A838;
+          position: absolute; font-size: 20px; color: #9775FA;
           animation: tvLoadingPulse 1.6s ease-in-out infinite;
         }
         .tv-loading-brand {
           margin-top: 24px; font-size: 15px; font-weight: 800;
-          letter-spacing: -0.3px; color: #E8A838;
+          letter-spacing: -0.3px; color: #9775FA;
           animation: tvLoadingFade 1.6s ease-in-out infinite;
         }
         .tv-loading-dots {
@@ -2074,7 +1813,7 @@ export default function AdminTVPage() {
         }
         .tv-loading-dot {
           width: 6px; height: 6px; border-radius: 50%;
-          background: #E8A838;
+          background: #9775FA;
           animation: tvLoadingBounce 1.2s ease-in-out infinite;
         }
         .tv-loading-dot:nth-child(2) { animation-delay: 0.2s; }
@@ -2236,272 +1975,6 @@ export default function AdminTVPage() {
         .feed-section { padding: 0 var(--section-px, 16px) 16px; }
         .feed-section { --section-px: 12px; }
 
-        .tv-top-wrap {
-          margin: 0 calc(-1 * var(--section-px, 16px));
-        }
-        .tv-top {
-          display: flex; align-items: center; justify-content: space-between;
-          padding: 8px 14px 0;
-        }
-        .tv-station {
-          display: flex; align-items: center; gap: 8px;
-          font-size: 13px; font-weight: 700;
-        }
-        .tv-station i { color: #3B82F6; font-size: 14px; }
-        .tv-badges { display: flex; align-items: center; gap: 8px; }
-        .tv-live-badge {
-          display: flex; align-items: center; gap: 5px;
-          padding: 4px 10px; border-radius: 20px;
-          font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-          transition: all 0.3s ease;
-        }
-        .tv-live-badge.live {
-          background: rgba(59,130,246,0.12); color: #3B82F6;
-        }
-        .tv-live-badge.off {
-          background: rgba(107,107,107,0.12); color: var(--text-tertiary);
-        }
-        .tv-live-dot {
-          width: 6px; height: 6px; border-radius: 50%;
-        }
-        .tv-live-badge.live .tv-live-dot {
-          background: #3B82F6;
-        }
-        .tv-live-badge.off .tv-live-dot {
-          background: var(--text-tertiary);
-        }
-        .tv-sub-badge {
-          display: flex; align-items: center; gap: 4px;
-          padding: 4px 10px; border-radius: 20px;
-          background: var(--surface); border: 1px solid var(--border);
-          font-size: 11px; font-weight: 600; color: var(--text-secondary);
-        }
-        .tv-sub-badge i { font-size: 10px; color: #3B82F6; }
-        .tv-start-badge {
-          display: flex; align-items: center; gap: 5px;
-          padding: 4px 12px;
-          border-radius: 20px;
-          border: none;
-          background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
-          color: #fff;
-          font-size: 10px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          cursor: pointer;
-          animation: tvStartIn 0.3s ease;
-          transition: all 0.2s;
-        }
-        .tv-start-badge:active { transform: scale(0.92); }
-        .tv-start-badge .tv-start-countdown {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          background: rgba(0,0,0,0.2);
-          font-size: 9px;
-          font-weight: 700;
-        }
-        .tv-player-container {
-          position: relative;
-          width: 100%;
-          aspect-ratio: 16 / 9;
-          background: #000;
-          overflow: hidden;
-          z-index: 1;
-        }
-        .tv-player-container .plyr { width: 100%; height: 100%; }
-        .tv-player-container .plyr__video-wrapper { height: 100%; }
-        .tv-player-container .plyr__video-embed { aspect-ratio: auto !important; }
-        .tv-player-container .plyr__video-embed,
-        .tv-player-container iframe { width: 100% !important; height: 100% !important; }
-        .tv-player-container .plyr__video-embed iframe { transform: scale(1.03); }
-        @media (max-width: 480px) {
-          .tv-player-container .plyr__controls { padding: 6px 4px !important; }
-          .tv-player-container .plyr__control { padding: 8px 6px !important; min-width: 36px; min-height: 36px; }
-          .tv-player-container .plyr__control svg { width: 18px; height: 18px; }
-          .tv-player-container .plyr__time { font-size: 11px; }
-          .tv-player-container { min-height: 240px; }
-        }
-        .tv-overlay {
-          position: absolute;
-          bottom: 0; left: 0; right: 0;
-          padding: 10px 14px;
-          display: flex;
-          align-items: flex-end;
-          justify-content: space-between;
-          gap: 8px;
-          background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, transparent 100%);
-          pointer-events: none;
-        }
-        .tv-overlay > * { pointer-events: auto; }
-        .tv-overlay-info { flex: 1; min-width: 0; }
-        .tv-overlay-now {
-          font-size: 10px;
-          color: #3B82F6;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          margin-bottom: 2px;
-        }
-        .tv-overlay-now i { font-size: 9px; }
-        .tv-overlay-title {
-          font-size: 15px;
-          font-weight: 700;
-          color: #fff;
-          text-shadow: 0 1px 4px rgba(0,0,0,0.5);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .tv-expand-btn {
-          width: 44px; height: 44px; border-radius: 12px;
-          background: rgba(255,255,255,0.12);
-          border: 1px solid rgba(255,255,255,0.12);
-          color: rgba(255,255,255,0.9);
-          font-size: 18px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-          transition: all 0.2s;
-          backdrop-filter: blur(4px);
-        }
-        .tv-expand-btn:active { background: rgba(255,255,255,0.2); transform: scale(0.9); }
-        .tv-start-btn {
-          display: flex; align-items: center; gap: 6px;
-          padding: 8px 14px;
-          border-radius: 10px;
-          border: none;
-          background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
-          color: #fff;
-          font-size: 12px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          backdrop-filter: blur(4px);
-          animation: tvStartIn 0.3s ease;
-          flex-shrink: 0;
-        }
-        .tv-start-btn:active { transform: scale(0.92); }
-        .tv-start-countdown {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 24px;
-          height: 24px;
-          border-radius: 50%;
-          background: rgba(0,0,0,0.2);
-          font-size: 11px;
-          font-weight: 700;
-        }
-        @keyframes tvStartIn {
-          from { opacity: 0; transform: scale(0.8); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .tv-no-video {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          padding: 32px;
-          border-radius: var(--radius-md);
-          background: var(--surface-card);
-          border: 1px dashed var(--border);
-          color: var(--text-tertiary);
-          font-size: 13px;
-          margin-bottom: 10px;
-          z-index: 1;
-          position: relative;
-        }
-        .tv-no-video i { font-size: 28px; opacity: 0.4; }
-        .tv-nextup {
-          display: flex; align-items: center; gap: 10px;
-          padding: 8px 12px;
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-sm);
-          cursor: pointer;
-          transition: all 0.2s ease;
-          margin-bottom: 8px;
-          position: relative;
-          z-index: 1;
-        }
-        .tv-nextup:active { background: var(--surface-elevated); transform: scale(0.98); }
-        .tv-nextup-thumb {
-          width: 60px; height: 36px; border-radius: 6px;
-          overflow: hidden; flex-shrink: 0;
-          background: var(--surface-elevated);
-          position: relative;
-        }
-        .tv-nextup-thumb img { width: 100%; height: 100%; object-fit: cover; }
-        .tv-nextup-play-icon {
-          position: absolute; inset: 0;
-          display: flex; align-items: center; justify-content: center;
-          background: rgba(0,0,0,0.3);
-          color: rgba(255,255,255,0.9);
-          font-size: 12px;
-        }
-        .tv-nextup-info { flex: 1; min-width: 0; }
-        .tv-nextup-label {
-          font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-          color: var(--primary); margin-bottom: 1px;
-        }
-        .tv-nextup-title {
-          font-size: 12px; font-weight: 600;
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-        .tv-nextup-btn {
-          width: 30px; height: 30px; border-radius: 8px;
-          background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
-          border: none; color: #fff; font-size: 12px;
-          display: flex; align-items: center; justify-content: center;
-          flex-shrink: 0;
-        }
-        .tv-channel-strip {
-          display: flex; align-items: center; gap: 12px;
-          padding: 10px 12px;
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-sm);
-          position: relative;
-          z-index: 1;
-        }
-        .tv-channel-avatar {
-          width: 36px; height: 36px; border-radius: 50%;
-          overflow: hidden; flex-shrink: 0;
-          background: var(--surface-elevated);
-          display: flex; align-items: center; justify-content: center;
-        }
-        .tv-channel-avatar img { width: 100%; height: 100%; object-fit: cover; }
-        .tv-channel-avatar i { font-size: 16px; color: #FF0000; }
-        .tv-channel-info { flex: 1; min-width: 0; }
-        .tv-channel-name { font-size: 13px; font-weight: 700; }
-        .tv-channel-meta { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
-        .tv-watch-btn {
-          flex-shrink: 0;
-          padding: 7px 14px;
-          border-radius: 8px;
-          background: linear-gradient(135deg, #3B82F6, #6366F1);
-          border: none;
-          color: #fff;
-          font-size: 11px;
-          font-weight: 700;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          transition: all 0.2s;
-        }
-        .tv-watch-btn:active { transform: scale(0.95); }
-
         /* ─── ADMIN TV TAB BAR (matches member TV page) ─── */
         .admin-tv-tab-bar {
           display: flex; flex-shrink: 0;
@@ -2542,7 +2015,7 @@ export default function AdminTVPage() {
           display: flex; align-items: center; gap: 6px;
           white-space: nowrap; flex-shrink: 0;
         }
-        .live-sub-tab.active { background: rgba(232,168,56,0.12); border-color: var(--primary); color: var(--primary); }
+        .live-sub-tab.active { background: rgba(112,72,232,0.12); border-color: var(--primary); color: var(--primary); }
         .live-sub-tab:active { transform: scale(0.95); }
         .live-sub-badge {
           position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; border-radius: 50%;
@@ -2701,7 +2174,7 @@ export default function AdminTVPage() {
           cursor: pointer; transition: all 0.15s ease; position: relative;
           display: flex; align-items: center; gap: 6px;
         }
-        .giving-sub-tab.active { background: rgba(232,168,56,0.12); border-color: var(--primary); color: var(--primary); }
+        .giving-sub-tab.active { background: rgba(112,72,232,0.12); border-color: var(--primary); color: var(--primary); }
         .giving-sub-tab:active { transform: scale(0.95); }
         .giving-sub-badge {
           position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; border-radius: 50%;
@@ -2712,7 +2185,7 @@ export default function AdminTVPage() {
         /* ─── Payment Method Cards ─── */
         .pm-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 8px; }
         .pm-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-        .pm-icon { width: 36px; height: 36px; border-radius: 10px; background: rgba(232,168,56,0.12); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+        .pm-icon { width: 36px; height: 36px; border-radius: 10px; background: rgba(112,72,232,0.12); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
         .pm-info { flex: 1; min-width: 0; }
         .pm-name { font-size: 14px; font-weight: 700; }
         .pm-type { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.2px; }
@@ -2723,7 +2196,7 @@ export default function AdminTVPage() {
         .pm-btn { padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; border: none; cursor: pointer; transition: all 0.15s ease; display: flex; align-items: center; gap: 4px; }
         .pm-btn:active { transform: scale(0.95); }
         .pm-btn.edit { background: var(--surface-elevated); color: var(--text-primary); border: 1px solid var(--border); }
-        .pm-btn.toggle { background: rgba(232,168,56,0.1); color: var(--primary); }
+        .pm-btn.toggle { background: rgba(112,72,232,0.1); color: var(--primary); }
         .pm-btn.danger { background: rgba(239,68,68,0.1); color: var(--error); }
 
         /* ─── Transaction Cards ─── */
@@ -2807,95 +2280,6 @@ export default function AdminTVPage() {
         </div>
 
         {/* CONTENT */}        <div className="content-scroll">
-          {/* ─── PLAYER SECTION (YouTube embed via TvPlayerProvider portal) ─── */}
-          <div className="tv-top-wrap">
-            <div className="tv-top" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px" }}>
-              <div className="tv-station" style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 700 }}>
-                <i className="fas fa-tv" style={{ color: "#3B82F6", fontSize: 14 }}></i>
-                <span>Church TV</span>
-              </div>
-              <div className="tv-badges" style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div className={`tv-live-badge ${currentVideo ? "live" : "off"}`} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 20, fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, background: currentVideo ? "rgba(59,130,246,0.12)" : "rgba(107,107,107,0.12)", color: currentVideo ? "#3B82F6" : "var(--text-tertiary)" }}>
-                  <span className="tv-live-dot" style={{ width: 6, height: 6, borderRadius: "50%", background: currentVideo ? "#3B82F6" : "var(--text-tertiary)", animation: currentVideo ? "livePulse 1.5s ease-in-out infinite" : "none" }}></span>
-                  {currentVideo ? "On Air" : "Off Air"}
-                </div>
-                {channel && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: "var(--text-tertiary)", fontWeight: 600 }}>
-                    <i className="fas fa-users" style={{ fontSize: 10 }}></i>
-                    {channel.subscriberCount || "—"}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Player container — ref passed so TvPlayerProvider portal can render PlyrPlayer here */}
-            {currentVideo ? (
-              <div ref={tvPlayerTargetRef} className="tv-player-container" style={{ position: "relative", width: "100%", aspectRatio: "16/9", background: "#000", overflow: "hidden", zIndex: 1 }}>
-                {/* Overlay when playing */}
-                <div className="tv-overlay" style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "10px 14px", background: "linear-gradient(transparent, rgba(0,0,0,0.7))", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 8, pointerEvents: "none", zIndex: 5 }}>
-                  <div className="tv-overlay-info" style={{ minWidth: 0 }}>
-                    <div className="tv-overlay-now" style={{ fontSize: 10, fontWeight: 700, color: "#3B82F6", textTransform: "uppercase", letterSpacing: 0.5, display: "flex", alignItems: "center", gap: 4 }}>
-                      <i className="fas fa-tv"></i> Now Playing
-                    </div>
-                    <div className="tv-overlay-title" style={{ fontSize: 13, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 2 }}>
-                      {currentVideo.title}
-                    </div>
-                  </div>
-                  <button className="tv-expand-btn" onClick={toggleFullscreen} title="Full screen" style={{ pointerEvents: "auto", width: 32, height: 32, borderRadius: 8, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.08)", color: "#fff", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, transition: "all 0.15s" }}>
-                    <i className="fas fa-expand"></i>
-                  </button>
-                </div>
-                {/* Start TV button — overlaid at bottom of player like member TV page */}
-                {currentVideo && (
-                  <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", justifyContent: "center", padding: "10px", zIndex: 15, pointerEvents: "none" }}>
-                    <button
-                      style={{ pointerEvents: "auto", opacity: startTvCountdown !== null || resumeCountdown !== null ? 0.6 : 1, cursor: startTvCountdown !== null || resumeCountdown !== null ? "not-allowed" : "pointer" }}
-                      className="tv-start-btn"
-                      disabled={startTvCountdown !== null || resumeCountdown !== null}
-                      onClick={() => {
-                        if (startTvCountdown === null && resumeCountdown === null) {
-                          setStartTvCountdown(null);
-                          advanceTvVideo();
-                        }
-                      }}
-                      title={resumeCountdown !== null ? `Resuming in ${resumeCountdown}s` : startTvCountdown !== null ? `Starting in ${startTvCountdown}s` : "Skip to next video"}
-                    >
-                      <i className="fas fa-play"></i>
-                      <span>{resumeCountdown !== null ? `Resuming in ${resumeCountdown}s` : startTvCountdown !== null ? `Starting in ${startTvCountdown}s` : "Start TV"}</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="tv-no-video" style={{ position: "relative", width: "100%", aspectRatio: "16/9", background: "radial-gradient(ellipse at 50% 50%, rgba(232,168,56,0.04) 0%, transparent 70%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                <i className="fas fa-video-slash" style={{ fontSize: 28, color: "var(--primary)", opacity: 0.4 }}></i>
-                <span style={{ fontSize: 13, color: "var(--text-tertiary)" }}>TV is off air</span>
-              </div>
-            )}
-
-            {/* Channel info strip */}
-            {channel && (
-              <div className="tv-channel-strip" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "var(--surface-card)", borderBottom: "1px solid var(--border)" }}>
-                <div className="tv-channel-avatar" style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,0,0,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: "#FF0000", flexShrink: 0, overflow: "hidden", position: "relative" }}>
-                  {channel.thumbnail ? (
-                    <img src={channel.thumbnail.replace(/^http:/, "https:")} alt="" referrerPolicy="no-referrer" crossOrigin="anonymous" style={{ width: "100%", height: "100%", objectFit: "cover", position: "absolute", inset: 0 }} />
-                  ) : (
-                    <i className="fab fa-youtube"></i>
-                  )}
-                </div>
-                <div className="tv-channel-info" style={{ flex: 1, minWidth: 0 }}>
-                  <div className="tv-channel-name" style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{channel.title}</div>
-                  <div className="tv-channel-meta" style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{allVideos.length} videos</div>
-                </div>
-                <button className="tv-watch-btn" onClick={() => router.push("/tv")} style={{ padding: "7px 14px", borderRadius: 8, background: "linear-gradient(135deg, var(--gradient-start, #E8A838), var(--gradient-end, #D4762A))", border: "none", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                  <i className="fas fa-play" style={{ fontSize: 10 }}></i> Watch
-                </button>
-              </div>
-            )}
-
-
-          </div>
-
           {loading ? (
               <div className="tv-loading-screen">
                 <div className="tv-loading-ring">

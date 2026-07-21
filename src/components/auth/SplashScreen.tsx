@@ -48,7 +48,7 @@ export default function SplashScreen() {
         </div>
 
         {/* Brand name */}
-        <h1 className="splash-brand">MOUNTAIN OF DELIVERANCE</h1>
+        <h1 className="splash-brand">ORACLE TV MEDIA</h1>
 
         {/* Tagline */}
         <p className="splash-tagline">Your Church, Everywhere</p>
@@ -62,8 +62,8 @@ export default function SplashScreen() {
       {/* Bottom decorative element */}
       <div className="splash-bottom">
         <svg viewBox="0 0 480 80" preserveAspectRatio="none" className="splash-wave">
-          <path d="M0,40 C80,20 160,60 240,40 C320,20 400,60 480,40 L480,80 L0,80 Z" fill="rgba(232,168,56,0.04)" />
-          <path d="M0,55 C120,35 200,75 320,55 C400,40 450,65 480,55 L480,80 L0,80 Z" fill="rgba(232,168,56,0.025)" />
+          <path d="M0,40 C80,20 160,60 240,40 C320,20 400,60 480,40 L480,80 L0,80 Z" fill="rgba(112,72,232,0.04)" />
+          <path d="M0,55 C120,35 200,75 320,55 C400,40 450,65 480,55 L480,80 L0,80 Z" fill="rgba(112,72,232,0.025)" />
         </svg>
       </div>
 
@@ -71,7 +71,7 @@ export default function SplashScreen() {
         .splash-screen {
           position: fixed;
           inset: 0;
-          background: #0A0A0A;
+          background: #15111F;
           z-index: 10000;
           display: flex;
           flex-direction: column;
@@ -101,7 +101,7 @@ export default function SplashScreen() {
         .splash-bg-orb-1 {
           width: 300px;
           height: 300px;
-          background: rgba(232,168,56,0.15);
+          background: rgba(112,72,232,0.15);
           top: -80px;
           right: -60px;
           animation-delay: 0s;
@@ -109,7 +109,7 @@ export default function SplashScreen() {
         .splash-bg-orb-2 {
           width: 250px;
           height: 250px;
-          background: rgba(212,118,42,0.1);
+          background: rgba(112,72,232,0.1);
           bottom: -40px;
           left: -80px;
           animation-delay: -2.5s;
@@ -117,7 +117,7 @@ export default function SplashScreen() {
         .splash-bg-orb-3 {
           width: 200px;
           height: 200px;
-          background: rgba(232,168,56,0.08);
+          background: rgba(112,72,232,0.08);
           top: 50%;
           left: 50%;
           transform: translate(-50%, -50%);
@@ -177,19 +177,19 @@ export default function SplashScreen() {
         .splash-ring-outer {
           width: 100px;
           height: 100px;
-          border-top-color: rgba(232,168,56,0.3);
-          border-right-color: rgba(232,168,56,0.1);
+          border-top-color: rgba(112,72,232,0.3);
+          border-right-color: rgba(112,72,232,0.1);
           border-bottom-color: transparent;
-          border-left-color: rgba(232,168,56,0.15);
+          border-left-color: rgba(112,72,232,0.15);
           animation: splashRingSpin 3s linear infinite;
         }
         .splash-ring-inner {
           width: 82px;
           height: 82px;
-          border-top-color: rgba(232,168,56,0.2);
-          border-right-color: rgba(212,118,42,0.1);
+          border-top-color: rgba(112,72,232,0.2);
+          border-right-color: rgba(112,72,232,0.1);
           border-bottom-color: transparent;
-          border-left-color: rgba(232,168,56,0.1);
+          border-left-color: rgba(112,72,232,0.1);
           animation: splashRingSpin 2.5s linear infinite reverse;
         }
         @keyframes splashRingSpin {
@@ -198,13 +198,13 @@ export default function SplashScreen() {
         .splash-logo {
           width: 64px;
           height: 64px;
-          background: linear-gradient(135deg, #E8A838, #D4762A);
+          background: linear-gradient(135deg, #7048E8, #9775FA);
           border-radius: 20px;
           display: flex;
           align-items: center;
           justify-content: center;
-          box-shadow: 0 8px 32px rgba(232,168,56,0.3),
-                      0 0 60px rgba(232,168,56,0.15);
+          box-shadow: 0 8px 32px rgba(112,72,232,0.3),
+                      0 0 60px rgba(112,72,232,0.15);
           position: relative;
           z-index: 1;
           animation: splashLogoFloat 3s ease-in-out infinite;
@@ -224,7 +224,7 @@ export default function SplashScreen() {
           font-size: 28px;
           font-weight: 800;
           letter-spacing: -0.5px;
-          background: linear-gradient(135deg, #E8A838 0%, #F5C76B 50%, #D4762A 100%);
+          background: linear-gradient(135deg, #7048E8 0%, #9775FA 50%, #B197FC 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
@@ -268,7 +268,7 @@ export default function SplashScreen() {
         .splash-progress-bar {
           height: 100%;
           width: 40%;
-          background: linear-gradient(90deg, #E8A838, #D4762A);
+          background: linear-gradient(90deg, #7048E8, #9775FA);
           border-radius: 2px;
           animation: splashProgressAnim 1.8s cubic-bezier(0.65, 0, 0.35, 1) infinite;
         }

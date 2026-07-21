@@ -18,9 +18,9 @@ export default function PremiumLoader() {
           width: 72px;
           height: 72px;
           border-radius: 50%;
-          border: 3px solid rgba(232,168,56,0.08);
-          border-top-color: #E8A838;
-          border-right-color: #D4762A;
+          border: 3px solid rgba(112,72,232,0.08);
+          border-top-color: var(--primary);
+          border-right-color: var(--primary-dark);
           animation: pl-spin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
           display: flex;
           align-items: center;
@@ -31,15 +31,15 @@ export default function PremiumLoader() {
           width: 48px;
           height: 48px;
           border-radius: 50%;
-          border: 2px solid rgba(232,168,56,0.06);
-          border-bottom-color: #E8A838;
-          border-left-color: #D4762A;
+          border: 2px solid rgba(112,72,232,0.06);
+          border-bottom-color: var(--primary);
+          border-left-color: var(--primary-dark);
           animation: pl-spin 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite reverse;
         }
         .pl-icon {
           position: absolute;
           font-size: 20px;
-          color: #E8A838;
+          color: var(--primary);
           animation: pl-pulse 1.6s ease-in-out infinite;
         }
         .pl-brand {
@@ -47,7 +47,7 @@ export default function PremiumLoader() {
           font-size: 15px;
           font-weight: 800;
           letter-spacing: -0.3px;
-          color: #E8A838;
+          color: var(--primary);
           animation: pl-fade 1.6s ease-in-out infinite;
         }
         .pl-dots {
@@ -59,7 +59,7 @@ export default function PremiumLoader() {
           width: 6px;
           height: 6px;
           border-radius: 50%;
-          background: #E8A838;
+          background: var(--primary);
           animation: pl-bounce 1.2s ease-in-out infinite;
         }
         .pl-dot:nth-child(2) { animation-delay: 0.2s; }
@@ -85,7 +85,7 @@ export default function PremiumLoader() {
           <div className="pl-ring-inner"></div>
           <i className="fas fa-cross pl-icon"></i>
         </div>
-        <div className="pl-brand">MOD NAKURU</div>
+        <div className="pl-brand">ORACLE TV MEDIA</div>
         <div className="pl-dots">
           <div className="pl-dot"></div>
           <div className="pl-dot"></div>

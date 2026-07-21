@@ -89,7 +89,7 @@ const SERVICES: ServiceStatus[] = [
   { name: "TV Streaming", icon: "fas fa-tv", status: "online", label: "Live Now", meta: "720p · 24 fps", color: "#EF4444" },
   { name: "LiveKit Server", icon: "fas fa-video", status: "online", label: "Connected", meta: "WebRTC · 8 rooms", color: "#8B5CF6" },
   { name: "Image Storage", icon: "fas fa-database", status: "online", label: "2.4 GB Used", meta: "BunnyCDN · 312 files", color: "#3B82F6" },
-  { name: "Radio Station", icon: "fas fa-radio", status: "online", label: "Broadcasting", meta: "AzuraCast · 128 kbps", color: "#E8A838" },
+  { name: "Radio Station", icon: "fas fa-radio", status: "online", label: "Broadcasting", meta: "AzuraCast · 128 kbps", color: "var(--primary)" },
 ];
 
 // ═══════════════════════════════════════════════
@@ -833,7 +833,7 @@ export default function SubscriptionsTab() {
           font-variant-numeric: tabular-nums;
         }
         .network-stat-value.in { color: #3B82F6; }
-        .network-stat-value.out { color: #E8A838; }
+        .network-stat-value.out { color: var(--primary); }
         .network-graph {
           height: 40px;
           display: flex;
@@ -913,8 +913,8 @@ export default function SubscriptionsTab() {
 
         /* ── VPS Specs ── */
         .vps-card {
-          background: linear-gradient(135deg, var(--surface-card) 0%, rgba(232,168,56,0.04) 100%);
-          border: 1px solid rgba(232,168,56,0.2);
+          background: linear-gradient(135deg, var(--surface-card) 0%, rgba(112,72,232,0.04) 100%);
+          border: 1px solid rgba(112,72,232,0.2);
           border-radius: var(--radius-lg);
           padding: 20px;
           margin-bottom: 20px;
@@ -952,15 +952,15 @@ export default function SubscriptionsTab() {
           align-items: center;
           gap: 10px;
           padding: 10px;
-          background: rgba(232,168,56,0.04);
-          border: 1px solid rgba(232,168,56,0.08);
+          background: rgba(112,72,232,0.04);
+          border: 1px solid rgba(112,72,232,0.08);
           border-radius: var(--radius-sm);
         }
         .vps-spec-icon {
           width: 36px;
           height: 36px;
           border-radius: var(--radius-sm);
-          background: rgba(232,168,56,0.1);
+          background: rgba(112,72,232,0.1);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1034,8 +1034,8 @@ export default function SubscriptionsTab() {
 
         {/* ════ Billing & Countdown (Firestore-backed) ════ */}
         <div className="billing-card" style={{
-          background: `linear-gradient(135deg, ${isPaid ? "rgba(74,222,128,0.08)" : isMissed ? "rgba(239,68,68,0.08)" : "rgba(232,168,56,0.08)"} 0%, var(--surface-card) 100%)`,
-          border: `1px solid ${isPaid ? "rgba(74,222,128,0.2)" : isMissed ? "rgba(239,68,68,0.2)" : "rgba(232,168,56,0.2)"}`,
+          background: `linear-gradient(135deg, ${isPaid ? "rgba(74,222,128,0.08)" : isMissed ? "rgba(239,68,68,0.08)" : "rgba(112,72,232,0.08)"} 0%, var(--surface-card) 100%)`,
+          border: `1px solid ${isPaid ? "rgba(74,222,128,0.2)" : isMissed ? "rgba(239,68,68,0.2)" : "rgba(112,72,232,0.2)"}`,
           borderRadius: "var(--radius-lg)",
           padding: "20px",
           marginBottom: 20,
@@ -1046,7 +1046,7 @@ export default function SubscriptionsTab() {
           <div style={{
             position: "absolute", top: "-40%", right: "-10%",
             width: 160, height: 160,
-            background: `radial-gradient(circle, ${isPaid ? "rgba(74,222,128,0.08)" : isMissed ? "rgba(239,68,68,0.08)" : "rgba(232,168,56,0.08)"} 0%, transparent 70%)`,
+            background: `radial-gradient(circle, ${isPaid ? "rgba(74,222,128,0.08)" : isMissed ? "rgba(239,68,68,0.08)" : "rgba(112,72,232,0.08)"} 0%, transparent 70%)`,
             pointerEvents: "none",
           }} />
 
@@ -1061,7 +1061,7 @@ export default function SubscriptionsTab() {
               borderRadius: 20,
               background: isTrial
                 ? "rgba(59,130,246,0.12)"
-                : isPaid ? "rgba(74,222,128,0.12)" : isMissed ? "rgba(239,68,68,0.12)" : isPartiallyPaid ? "rgba(251,191,36,0.12)" : "rgba(232,168,56,0.12)",
+                : isPaid ? "rgba(74,222,128,0.12)" : isMissed ? "rgba(239,68,68,0.12)" : isPartiallyPaid ? "rgba(251,191,36,0.12)" : "rgba(112,72,232,0.12)",
               color: isTrial
                 ? "#3B82F6"
                 : isPaid ? "#4ADE80" : isMissed ? "#EF4444" : isPartiallyPaid ? "#FBBF24" : "var(--primary)",
@@ -1290,7 +1290,7 @@ export default function SubscriptionsTab() {
                 letterSpacing: "0.5px",
                 background: paystackLiveMode
                   ? "rgba(74,222,128,0.12)"
-                  : "rgba(232,168,56,0.12)",
+                  : "rgba(112,72,232,0.12)",
                 color: paystackLiveMode
                   ? "#4ADE80"
                   : "var(--primary)",
@@ -1371,7 +1371,7 @@ export default function SubscriptionsTab() {
                       height: 36,
                       borderRadius: "var(--radius-full)",
                       background: isSimulation
-                        ? "rgba(232,168,56,0.12)"
+                        ? "rgba(112,72,232,0.12)"
                         : isTestPayment
                           ? "rgba(59,130,246,0.12)"
                           : "rgba(74,222,128,0.12)",
@@ -1401,7 +1401,7 @@ export default function SubscriptionsTab() {
                             fontWeight: 700,
                             padding: "1px 6px",
                             borderRadius: 4,
-                            background: "rgba(232,168,56,0.15)",
+                            background: "rgba(112,72,232,0.15)",
                             color: "var(--primary)",
                           }}>SIM</span>
                         )}
@@ -1456,9 +1456,9 @@ export default function SubscriptionsTab() {
 
         <div className="server-grid">
           {servers.map((srv, i) => {
-            const cpuColor = srv.cpu > 70 ? "#EF4444" : srv.cpu > 50 ? "#E8A838" : "#4ADE80";
-            const ramColor = srv.ram > 70 ? "#EF4444" : srv.ram > 50 ? "#E8A838" : "#4ADE80";
-            const tempColor = srv.temp > 60 ? "#EF4444" : srv.temp > 50 ? "#E8A838" : "#4ADE80";
+            const cpuColor = srv.cpu > 70 ? "#EF4444" : srv.cpu > 50 ? "var(--primary)" : "#4ADE80";
+            const ramColor = srv.ram > 70 ? "#EF4444" : srv.ram > 50 ? "var(--primary)" : "#4ADE80";
+            const tempColor = srv.temp > 60 ? "#EF4444" : srv.temp > 50 ? "var(--primary)" : "#4ADE80";
             return (
               <div
                 key={i}
@@ -1561,7 +1561,7 @@ export default function SubscriptionsTab() {
               return (
                 <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
                   <div className="network-bar" style={{ height: `${inH}%`, background: "#3B82F6", opacity: 0.7 }} />
-                  <div className="network-bar" style={{ height: `${outH}%`, background: "#E8A838", opacity: 0.7 }} />
+                  <div className="network-bar" style={{ height: `${outH}%`, background: "var(--primary)", opacity: 0.7 }} />
                 </div>
               );
             })}
@@ -1647,7 +1647,7 @@ export default function SubscriptionsTab() {
               {!isUpgraded && (
                 <span style={{
                   fontSize: 9, padding: "2px 6px", borderRadius: 4,
-                  background: "rgba(232,168,56,0.15)",
+                  background: "rgba(112,72,232,0.15)",
                   color: "var(--primary)",
                 }}>NEW</span>
               )}
@@ -1667,7 +1667,7 @@ export default function SubscriptionsTab() {
 
           {/* Specs */}
           <div className="vps-grid" style={{ opacity: showUpgrade && !isUpgraded ? 0.6 : 1, transition: "opacity 0.3s" }}>
-            <div className="vps-spec" style={{ borderColor: showUpgrade && !isUpgraded ? "rgba(232,168,56,0.2)" : undefined }}>
+            <div className="vps-spec" style={{ borderColor: showUpgrade && !isUpgraded ? "rgba(112,72,232,0.2)" : undefined }}>
               <div className="vps-spec-icon"><i className="fas fa-microchip"></i></div>
               <div className="vps-spec-info">
                 <div className="vps-spec-label">vCPU</div>
@@ -1756,7 +1756,7 @@ export default function SubscriptionsTab() {
                   <div style={{
                     width: 56, height: 56,
                     borderRadius: "50%",
-                    background: "rgba(232,168,56,0.12)",
+                    background: "rgba(112,72,232,0.12)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1794,7 +1794,7 @@ export default function SubscriptionsTab() {
                   <div style={{
                     marginTop: 10,
                     padding: "10px 12px",
-                    background: "rgba(232,168,56,0.1)",
+                    background: "rgba(112,72,232,0.1)",
                     borderRadius: "var(--radius-sm)",
                     display: "flex",
                     justifyContent: "space-between",
@@ -1870,8 +1870,8 @@ export default function SubscriptionsTab() {
               <div style={{
                 marginTop: 14,
                 padding: 12,
-                background: "rgba(232,168,56,0.06)",
-                border: "1px solid rgba(232,168,56,0.15)",
+                background: "rgba(112,72,232,0.06)",
+                border: "1px solid rgba(112,72,232,0.15)",
                 borderRadius: "var(--radius-sm)",
                 display: "flex",
                 flexDirection: "column",
@@ -1942,7 +1942,7 @@ export default function SubscriptionsTab() {
           <div style={{
             marginTop: 16,
             paddingTop: 14,
-            borderTop: "1px solid rgba(232,168,56,0.12)",
+            borderTop: "1px solid rgba(112,72,232,0.12)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

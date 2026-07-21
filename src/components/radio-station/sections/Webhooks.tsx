@@ -79,7 +79,7 @@ export default function Webhooks({ showToast }: Props) {
         .rs-wh-events-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
         .rs-wh-event-btn { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--rs-radius-sm); border: 1.5px solid var(--rs-border); background: var(--rs-surface); color: var(--rs-text-secondary); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
         .rs-wh-event-btn:active { transform: scale(0.97); }
-        .rs-wh-event-btn.selected { border-color: var(--rs-primary); background: rgba(232,168,56,0.08); color: var(--rs-primary); }
+        .rs-wh-event-btn.selected { border-color: var(--rs-primary); background: rgba(112,72,232,0.08); color: var(--rs-primary); }
         .rs-wh-event-btn i { font-size: 12px; }
         .rs-wh-form-actions { display: flex; gap: 10px; justify-content: flex-end; }
       `}</style>

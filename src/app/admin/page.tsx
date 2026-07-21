@@ -95,10 +95,10 @@ export default function AdminPage() {
     name: storeChurchConfig?.name || "Church",
     shortName: (() => {
       const full = storeChurchConfig?.name || "Church";
-      // e.g., "Mountain of Deliverance Nakuru Church" -> "MOD Nakuru"
       const words = full.split(" ").filter((w:string) => w.length > 0);
+      if (words.length <= 3) return full;
       const initials = words.map((w:string) => w[0]).join("").toUpperCase();
-      const city = words.length >= 4 ? words[words.length - 2] : words[words.length - 1];
+      const city = words[words.length - 2];
       return `${initials.slice(0, 3)} ${city}`.trim();
     })(),
     tagline: storeChurchConfig?.tagline || "",
@@ -355,29 +355,29 @@ export default function AdminPage() {
     <>
       <style>{`
         :root {
-            --primary: #E8A838;
-            --primary-light: #F5C76B;
-            --primary-dark: #C48A2A;
-            --bg: #0F0F0F;
-            --surface: #1A1A1A;
-            --surface-elevated: #242424;
-            --surface-card: #1E1E1E;
-            --surface-hover: #2A2A2A;
+            --primary: #9775FA;
+            --primary-light: #B197FC;
+            --primary-dark: #7048E8;
+            --bg: #15111F;
+            --surface: #1A1625;
+            --surface-elevated: #241E33;
+            --surface-card: #1E1A2A;
+            --surface-hover: #2A2438;
             --text-primary: #FFFFFF;
             --text-secondary: #A0A0A0;
             --text-tertiary: #6B6B6B;
-            --border: #2A2A2A;
-            --error: #EF4444;
-            --success: #22C55E;
+            --border: #2A2438;
+            --error: #FF6B6B;
+            --success: #4ADE80;
             --info: #3B82F6;
             --warning: #F59E0B;
-            --overlay: rgba(0,0,0,0.92);
-            --gradient-start: #E8A838;
-            --gradient-end: #D4762A;
+            --overlay: rgba(21,17,31,0.92);
+            --gradient-start: #7048E8;
+            --gradient-end: #9775FA;
             --gradient-purple: #8B5CF6;
             --gradient-blue: #3B82F6;
             --gradient-green: #22C55E;
-            --shadow-soft: 0 4px 20px rgba(232,168,56,0.15);
+            --shadow-soft: 0 4px 20px rgba(112,72,232,0.15);
             --shadow-elevated: 0 8px 32px rgba(0,0,0,0.45);
             --radius-sm: 12px;
             --radius-md: 16px;
@@ -530,7 +530,7 @@ export default function AdminPage() {
         .dash-np-info { flex: 1; min-width: 0; }
         .dash-np-title { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .dash-np-artist { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .dash-np-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 8px; border-radius: 8px; background: rgba(232,168,56,0.12); color: var(--primary); flex-shrink: 0; }
+        .dash-np-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 8px; border-radius: 8px; background: rgba(112,72,232,0.12); color: var(--primary); flex-shrink: 0; }
 
         /* ========== STAT CARDS ========== */
         .stats-grid {
@@ -656,7 +656,7 @@ export default function AdminPage() {
         }
         .chart-bar {
             flex: 1; border-radius: 3px 3px 0 0;
-            background: linear-gradient(180deg, var(--gradient-start), rgba(232,168,56,0.3));
+            background: linear-gradient(180deg, var(--gradient-start), rgba(112,72,232,0.3));
             transition: height 0.5s ease; position: relative; min-height: 4px;
         }
         .chart-bar.today { background: linear-gradient(180deg, var(--gradient-blue), rgba(59,130,246,0.3)); }
@@ -684,7 +684,7 @@ export default function AdminPage() {
         .glance-np-artist { font-size:12px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
         .glance-np-source { flex-shrink:0; }
         .source-badge { font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;padding:3px 8px;border-radius:8px; }
-        .source-badge.auto { background:rgba(232,168,56,0.12);color:var(--primary); }
+        .source-badge.auto { background:rgba(112,72,232,0.12);color:var(--primary); }
         .source-badge.off { background:rgba(107,107,107,0.12);color:var(--text-tertiary); }
 
         .glance-queue { margin-bottom:10px; }
@@ -720,7 +720,7 @@ export default function AdminPage() {
             background: var(--surface); border: 1px solid var(--border); color: var(--text-tertiary);
             cursor: pointer; transition: all 0.15s ease;
         }
-        .chart-period-btn.active { background: rgba(232,168,56,0.12); border-color: var(--primary); color: var(--primary); }
+        .chart-period-btn.active { background: rgba(112,72,232,0.12); border-color: var(--primary); color: var(--primary); }
         .chart-period-btn:active { transform: scale(0.95); }
 
         /* ========== ACTIVITY FEED ========== */
@@ -749,7 +749,7 @@ export default function AdminPage() {
         .act-thumb { width: 32px; height: 32px; border-radius: 9px; object-fit: cover; }
         .act-count {
           margin-left: auto; font-size: 10px; font-weight: 700; text-transform: none; letter-spacing: 0;
-          background: rgba(232,168,56,0.12); color: var(--primary);
+          background: rgba(112,72,232,0.12); color: var(--primary);
           padding: 1px 8px; border-radius: 10px;
         }
         .act-empty {
@@ -757,7 +757,7 @@ export default function AdminPage() {
           display: flex; flex-direction: column; align-items: center; gap: 2px;
         }
         .act-empty p { font-size: 13px; color: var(--text-secondary); }
-        .activity-icon.gold { background: rgba(232,168,56,0.12); color: var(--primary); }
+        .activity-icon.gold { background: rgba(112,72,232,0.12); color: var(--primary); }
         .activity-icon.green { background: rgba(34,197,94,0.12); color: var(--success); }
         .activity-icon.blue { background: rgba(59,130,246,0.12); color: var(--info); }
         .activity-icon.purple { background: rgba(139,92,246,0.12); color: var(--gradient-purple); }
@@ -839,7 +839,7 @@ export default function AdminPage() {
             font-size: 11px; font-weight: 600; color: var(--primary);
             background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: 6px;
         }
-        .status-action:active { background: rgba(232,168,56,0.1); }
+        .status-action:active { background: rgba(112,72,232,0.1); }
 
         .status-uptime { font-size: 12px; color: var(--text-tertiary); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 
@@ -962,7 +962,7 @@ export default function AdminPage() {
             display: flex; align-items: center; justify-content: center; font-size: 14px;
         }
         .cs-icon.blue { background: rgba(59,130,246,0.12); color: var(--info); }
-        .cs-icon.gold { background: rgba(232,168,56,0.12); color: var(--primary); }
+        .cs-icon.gold { background: rgba(112,72,232,0.12); color: var(--primary); }
         .cs-icon.purple { background: rgba(139,92,246,0.12); color: var(--gradient-purple); }
         .cs-info { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; }
         .cs-label { font-size: 13px; font-weight: 600; }
@@ -1099,7 +1099,7 @@ export default function AdminPage() {
         .toast-icon { width: 32px; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .toast-icon.success { background: rgba(74,222,128,0.15); color: var(--success); }
         .toast-icon.error { background: rgba(255,107,107,0.15); color: var(--error); }
-        .toast-icon.info { background: rgba(232,168,56,0.15); color: var(--primary); }
+        .toast-icon.info { background: rgba(112,72,232,0.15); color: var(--primary); }
         .toast-content { flex: 1; }
         .toast-content .title { font-size: 14px; font-weight: 600; }
         .toast-content .message { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
@@ -1121,7 +1121,7 @@ export default function AdminPage() {
           padding: 4px 8px; border-radius: 8px;
           transition: all 0.2s;
         }
-        .live-tv-manage-btn:active { background: rgba(232,168,56,0.1); }
+        .live-tv-manage-btn:active { background: rgba(112,72,232,0.1); }
         .live-tv-embed-wrap {
           position: relative;
           width: 100%;
@@ -1141,23 +1141,23 @@ export default function AdminPage() {
                 /* ===== PREMIUM RADIO CARD (compact) ===== */
         .rh-hero {
             position: relative;
-            background: linear-gradient(180deg, rgba(232,168,56,0.06) 0%, rgba(15,15,15,0.5) 100%);
-            border: 1px solid rgba(232,168,56,0.12);
+            background: linear-gradient(180deg, rgba(112,72,232,0.06) 0%, rgba(15,15,15,0.5) 100%);
+            border: 1px solid rgba(112,72,232,0.12);
             border-radius: var(--radius-xl);
             padding: 14px 16px 12px;
             overflow: hidden;
-            box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 0 80px rgba(232,168,56,0.04);
+            box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 0 80px rgba(112,72,232,0.04);
         }
         .rh-glow-1 {
             position: absolute; top: -80px; left: 50%; transform: translateX(-50%);
             width: 300px; height: 300px;
-            background: radial-gradient(circle, rgba(232,168,56,0.12) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(112,72,232,0.12) 0%, transparent 70%);
             pointer-events: none;
         }
         .rh-glow-2 {
             position: absolute; bottom: -60px; right: -60px;
             width: 200px; height: 200px;
-            background: radial-gradient(circle, rgba(212,118,42,0.06) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(112,72,232,0.06) 0%, transparent 70%);
             pointer-events: none;
         }
         .rh-top {
@@ -1202,12 +1202,12 @@ export default function AdminPage() {
         .rh-art-ring {
             position: absolute; inset: -3px;
             border-radius: 50%;
-            border: 1.5px solid rgba(232,168,56,0.2);
+            border: 1.5px solid rgba(112,72,232,0.2);
         }
         .rh-art {
             width: 100%; height: 100%;
             border-radius: 50%; overflow: hidden;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 0 1.5px rgba(232,168,56,0.1);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4), 0 0 0 1.5px rgba(112,72,232,0.1);
             position: relative;
         }
         .rh-art.spinning {
@@ -1264,16 +1264,16 @@ export default function AdminPage() {
             border: none; color: #fff; font-size: 14px;
             display: flex; align-items: center; justify-content: center;
             cursor: pointer; position: relative; flex-shrink: 0;
-            box-shadow: 0 4px 16px rgba(232,168,56,0.3);
+            box-shadow: 0 4px 16px rgba(112,72,232,0.3);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .rh-play-btn:active { transform: scale(0.88); }
         .rh-play-btn.playing {
-            box-shadow: 0 4px 20px rgba(232,168,56,0.35);
+            box-shadow: 0 4px 20px rgba(112,72,232,0.35);
         }
         .rh-play-ring {
             position: absolute; inset: -4px; border-radius: 50%;
-            border: 1.5px solid rgba(232,168,56,0.15);
+            border: 1.5px solid rgba(112,72,232,0.15);
         }
         .rh-play-btn.playing .rh-play-ring {
             border-color: rgba(74,222,128,0.3);
@@ -1321,16 +1321,16 @@ export default function AdminPage() {
             transition: all 0.15s ease;
         }
         .section-link i { font-size: 10px; }
-        .section-link:active { background: rgba(232,168,56,0.1); }
+        .section-link:active { background: rgba(112,72,232,0.1); }
       `}</style>
 
       {updateNotif && (
         <div style={{
-          padding: "10px 16px", background: "linear-gradient(135deg, rgba(232,168,56,0.12), rgba(212,118,42,0.06))",
-          borderBottom: "1px solid rgba(232,168,56,0.15)", display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
+          padding: "10px 16px", background: "linear-gradient(135deg, rgba(112,72,232,0.12), rgba(112,72,232,0.04))",
+          borderBottom: "1px solid rgba(112,72,232,0.15)", display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#E8A838" }}>📲 App Update Available</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>📲 App Update Available</div>
             <div style={{ fontSize: 11, color: "#A0A0A0", marginTop: 1 }}>Tap to download the latest version</div>
           </div>
           <a
@@ -1338,7 +1338,7 @@ export default function AdminPage() {
             target="_blank"
             rel="noopener noreferrer"
             style={{
-              padding: "7px 16px", borderRadius: 10, background: "linear-gradient(135deg, #E8A838, #D4762A)",
+              padding: "7px 16px", borderRadius: 10, background: "linear-gradient(135deg, var(--gradient-start), var(--gradient-end))",
               color: "#fff", fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer",
               textDecoration: "none", whiteSpace: "nowrap",
             }}

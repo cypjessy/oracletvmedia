@@ -125,7 +125,7 @@ export function RadioOverviewTab(props: RadioOverviewTabProps) {
         .broadcast-ctrl-btn:active { transform: scale(0.97); }
         .broadcast-ctrl-btn.stop { background: rgba(239,68,68,0.12); color: var(--error); }
         .broadcast-ctrl-btn.start { background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); color: #fff; box-shadow: var(--shadow-soft); }
-        .now-playing-card { background: linear-gradient(135deg, rgba(232,168,56,0.08) 0%, rgba(139,92,246,0.04) 100%); border: 1px solid rgba(232,168,56,0.1); border-radius: var(--radius-lg); padding: 16px; display: flex; align-items: center; gap: 14px; }
+        .now-playing-card { background: linear-gradient(135deg, rgba(112,72,232,0.08) 0%, rgba(139,92,246,0.04) 100%); border: 1px solid rgba(112,72,232,0.1); border-radius: var(--radius-lg); padding: 16px; display: flex; align-items: center; gap: 14px; }
         .now-playing-cover { width: 72px; height: 72px; border-radius: var(--radius-md); overflow: hidden; position: relative; flex-shrink: 0; border: 1px solid var(--border); }
         .now-playing-cover img { width: 100%; height: 100%; object-fit: cover; }
         .now-playing-equalizer { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); display: flex; gap: 2px; align-items: flex-end; height: 16px; }

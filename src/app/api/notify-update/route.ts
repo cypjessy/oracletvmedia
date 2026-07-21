@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     } catch {}
 
     const notificationTitle = body.title || "📲 App Update Available";
-    const notificationMessage = body.message || `Version ${body.versionName || "new"} of MOD NAKURU app is ready. Tap to download.`;
+    const notificationMessage = body.message || `Version ${body.versionName || "new"} of ORACLE TV MEDIA app is ready. Tap to download.`;
 
     // ── Fetch all users with fcm_token from Firestore ──
     const { db } = await import("@/lib/firebase");

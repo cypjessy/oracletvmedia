@@ -372,7 +372,7 @@ export default function WatchPageClient() {
         .watch-spinner {
           width: 36px; height: 36px;
           border: 3px solid rgba(255,255,255,0.06);
-          border-top-color: #E8A838;
+          border-top-color: var(--primary);
           border-radius: 50%;
           animation: watchSpin 0.8s linear infinite;
         }
@@ -398,7 +398,7 @@ export default function WatchPageClient() {
           margin-bottom: 12px; flex-wrap: wrap;
         }
         .watch-meta-item { display: flex; align-items: center; gap: 4px; }
-        .watch-meta-item i { font-size: 11px; color: #E8A838; }
+        .watch-meta-item i { font-size: 11px; color: var(--primary); }
         .watch-desc {
           font-size: 13px; color: #A0A0A0;
           line-height: 1.6; white-space: pre-wrap; word-break: break-word;
@@ -438,7 +438,7 @@ export default function WatchPageClient() {
         .watch-error i { font-size: 36px; color: #EF4444; opacity: 0.5; }
         .watch-error-btn {
           margin-top: 8px; padding: 10px 20px; border-radius: 10px; font-size: 13px; font-weight: 600;
-          background: #1A1A1A; border: 1px solid #2A2A2A; color: #E8A838;
+          background: #1A1A1A; border: 1px solid #2A2A2A; color: var(--primary);
           cursor: pointer; transition: all 0.15s ease;
         }
         .watch-error-btn:active { background: #242424; }
@@ -448,7 +448,7 @@ export default function WatchPageClient() {
           font-size: 15px; font-weight: 700; margin-bottom: 14px;
           display: flex; align-items: center; gap: 8px; color: #fff;
         }
-        .wn-section-title i { color: #E8A838; font-size: 14px; }
+        .wn-section-title i { color: var(--primary); font-size: 14px; }
 
         .wn-sub-tabs {
           display: flex; gap: 4px; margin-bottom: 14px;
@@ -461,7 +461,7 @@ export default function WatchPageClient() {
           transition: all 0.2s ease;
         }
         .wn-sub-tab i { font-size: 12px; }
-        .wn-sub-tab.active { background: #242424; color: #E8A838; }
+        .wn-sub-tab.active { background: #242424; color: var(--primary); }
         .wn-sub-tab:active:not(.active) { transform: scale(0.95); }
 
         .wn-current {
@@ -479,7 +479,7 @@ export default function WatchPageClient() {
           font-size: 13px; font-weight: 700; color: #fff;
           display: flex; align-items: center; gap: 6px;
         }
-        .wn-notes-label i { color: #E8A838; font-size: 12px; }
+        .wn-notes-label i { color: var(--primary); font-size: 12px; }
         .wn-notes-actions { display: flex; align-items: center; gap: 8px; }
         .wn-saving { font-size: 11px; color: #6B6B6B; display: flex; align-items: center; gap: 4px; }
         .wn-preview-btn {
@@ -489,10 +489,10 @@ export default function WatchPageClient() {
           transition: all 0.15s ease;
         }
         .wn-preview-btn:active { transform: scale(0.92); }
-        .wn-preview-btn.active { background: rgba(232,168,56,0.1); border-color: rgba(232,168,56,0.2); color: #E8A838; }
+        .wn-preview-btn.active { background: rgba(112,72,232,0.1); border-color: rgba(112,72,232,0.2); color: var(--primary); }
         .wn-save-btn {
           padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 700;
-          background: linear-gradient(135deg, #E8A838, #D4762A);
+          background: linear-gradient(135deg, var(--primary), #7048E8);
           border: none; color: #fff; cursor: pointer;
           display: flex; align-items: center; gap: 5px;
           transition: all 0.15s ease;
@@ -526,7 +526,7 @@ export default function WatchPageClient() {
           resize: vertical; outline: none; transition: all 0.2s;
           min-height: 160px;
         }
-        .wn-textarea:focus { border-color: #E8A838; box-shadow: 0 0 0 3px rgba(232,168,56,0.08); }
+        .wn-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(112,72,232,0.08); }
         .wn-textarea::placeholder { color: #6B6B6B; }
 
         .wn-preview {
@@ -539,15 +539,15 @@ export default function WatchPageClient() {
         }
         .wn-preview p { margin-bottom: 8px; }
         .wn-preview strong { color: #fff; font-weight: 700; }
-        .wn-preview em { color: #F5C76B; }
-        .wn-md-h3 { font-size: 16px; font-weight: 700; margin: 12px 0 6px; color: #E8A838; }
-        .wn-md-h4 { font-size: 14px; font-weight: 700; margin: 10px 0 4px; color: #F5C76B; }
+        .wn-preview em { color: var(--primary-light); }
+        .wn-md-h3 { font-size: 16px; font-weight: 700; margin: 12px 0 6px; color: var(--primary); }
+        .wn-md-h4 { font-size: 14px; font-weight: 700; margin: 10px 0 4px; color: var(--primary-light); }
         .wn-md-code {
           padding: 2px 6px; border-radius: 4px;
           background: #242424; font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
-          font-size: 13px; color: #F5C76B;
+          font-size: 13px; color: var(--primary-light);
         }
-        .wn-md-link { color: #E8A838; text-decoration: underline; text-underline-offset: 2px; }
+        .wn-md-link { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
         .wn-md-ul { margin: 6px 0; padding-left: 20px; }
         .wn-md-ul li { margin-bottom: 4px; }
         .wn-md-ol { margin: 6px 0; padding-left: 20px; }
@@ -562,7 +562,7 @@ export default function WatchPageClient() {
           font-size: 13px; font-weight: 700; color: #fff;
           display: flex; align-items: center; gap: 6px;
         }
-        .wn-library-title i { color: #E8A838; font-size: 12px; }
+        .wn-library-title i { color: var(--primary); font-size: 12px; }
         .wn-export-btn {
           width: 28px; height: 28px; border-radius: 6px;
           background: #1A1A1A; border: 1px solid #2A2A2A;
@@ -594,7 +594,7 @@ export default function WatchPageClient() {
           border-radius: 10px; color: #fff; font-size: 14px;
           outline: none; transition: all 0.2s;
         }
-        .wn-search-input:focus { border-color: #E8A838; box-shadow: 0 0 0 3px rgba(232,168,56,0.08); }
+        .wn-search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(112,72,232,0.08); }
         .wn-search-input::placeholder { color: #6B6B6B; }
         .wn-search-clear {
           position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
@@ -619,7 +619,7 @@ export default function WatchPageClient() {
           cursor: pointer;
         }
         .wn-list-item:active { transform: scale(0.97); background: #202020; }
-        .wn-list-item.active { border-color: rgba(232,168,56,0.2); background: rgba(232,168,56,0.04); }
+        .wn-list-item.active { border-color: rgba(112,72,232,0.2); background: rgba(112,72,232,0.04); }
         .wn-list-item-top {
           display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
         }
@@ -642,11 +642,11 @@ export default function WatchPageClient() {
           transition: all 0.15s;
         }
         .wn-list-delete:active { transform: scale(0.95); }
-        .wn-list-current-badge { font-size: 10px; font-weight: 700; color: #E8A838; display: flex; align-items: center; gap: 4px; }
+        .wn-list-current-badge { font-size: 10px; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 4px; }
         .wn-list-open-btn {
           padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
-          background: rgba(232,168,56,0.08); border: 1px solid rgba(232,168,56,0.12);
-          color: #E8A838; cursor: pointer;
+          background: rgba(112,72,232,0.08); border: 1px solid rgba(112,72,232,0.12);
+          color: var(--primary); cursor: pointer;
           display: flex; align-items: center; gap: 4px;
           transition: all 0.15s;
         }
@@ -680,8 +680,8 @@ export default function WatchPageClient() {
         }
         .wn-reader-edit-btn {
           padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 600;
-          background: rgba(232,168,56,0.08); border: 1px solid rgba(232,168,56,0.12);
-          color: #E8A838; cursor: pointer;
+          background: rgba(112,72,232,0.08); border: 1px solid rgba(112,72,232,0.12);
+          color: var(--primary); cursor: pointer;
           display: flex; align-items: center; gap: 4px;
           transition: all 0.15s;
         }
@@ -709,16 +709,16 @@ export default function WatchPageClient() {
         }
         .wn-reader-content p { margin-bottom: 10px; }
         .wn-reader-content strong { color: #fff; font-weight: 700; }
-        .wn-reader-content em { color: #F5C76B; }
-        .wn-reader-content h3 { font-size: 17px; font-weight: 700; margin: 16px 0 8px; color: #E8A838; }
-        .wn-reader-content h4 { font-size: 15px; font-weight: 700; margin: 14px 0 6px; color: #F5C76B; }
+        .wn-reader-content em { color: var(--primary-light); }
+        .wn-reader-content h3 { font-size: 17px; font-weight: 700; margin: 16px 0 8px; color: var(--primary); }
+        .wn-reader-content h4 { font-size: 15px; font-weight: 700; margin: 14px 0 6px; color: var(--primary-light); }
         .wn-reader-content ul, .wn-reader-content ol { margin: 8px 0; padding-left: 20px; }
         .wn-reader-content li { margin-bottom: 4px; }
-        .wn-reader-content a { color: #E8A838; text-decoration: underline; text-underline-offset: 2px; }
+        .wn-reader-content a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
         .wn-reader-content code {
           padding: 2px 6px; border-radius: 4px;
           background: #242424; font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
-          font-size: 14px; color: #F5C76B;
+          font-size: 14px; color: var(--primary-light);
         }
         .wn-reader-empty {
           display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -1064,7 +1064,7 @@ export default function WatchPageClient() {
                 </span>
               )}
               {video?.id === selectedNote.videoId && (
-                <span style={{ color: "#E8A838" }}>
+                <span style={{ color: "var(--primary)" }}>
                   <i className="fas fa-play" style={{ marginRight: 4 }}></i>Now Playing
                 </span>
               )}

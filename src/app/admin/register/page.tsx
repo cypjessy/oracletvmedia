@@ -217,23 +217,23 @@ export default function AdminRegisterPage() {
     <>
       <style>{`
         :root {
-          --primary: #E8A838;
-          --primary-light: #F5C76B;
-          --primary-dark: #C48A2A;
-          --bg: #0F0F0F;
-          --surface: #1A1A1A;
-          --surface-elevated: #242424;
-          --surface-card: #1E1E1E;
+          --primary: #9775FA;
+          --primary-light: #B197FC;
+          --primary-dark: #7048E8;
+          --bg: #15111F;
+          --surface: #1A1625;
+          --surface-elevated: #241E33;
+          --surface-card: #1E1A2A;
           --text-primary: #FFFFFF;
           --text-secondary: #A0A0A0;
           --text-tertiary: #6B6B6B;
-          --border: #2A2A2A;
+          --border: #2A2438;
           --error: #FF6B6B;
           --success: #4ADE80;
-          --overlay: rgba(0,0,0,0.85);
-          --gradient-start: #E8A838;
-          --gradient-end: #D4762A;
-          --shadow-soft: 0 4px 20px rgba(232,168,56,0.15);
+          --overlay: rgba(21,17,31,0.92);
+          --gradient-start: #7048E8;
+          --gradient-end: #9775FA;
+          --shadow-soft: 0 4px 20px rgba(112,72,232,0.15);
           --radius-full: 50%;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
@@ -245,7 +245,7 @@ export default function AdminRegisterPage() {
         .input-group { position: relative; }
         .input-group label { display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
         .input-wrapper { position: relative; background: var(--surface); border: 1.5px solid var(--border); border-radius: 16px; transition: all 0.25s ease; overflow: hidden; }
-        .input-wrapper:focus-within { border-color: var(--primary); background: var(--surface-elevated); box-shadow: 0 0 0 4px rgba(232,168,56,0.08); }
+        .input-wrapper:focus-within { border-color: var(--primary); background: var(--surface-elevated); box-shadow: 0 0 0 4px rgba(112,72,232,0.08); }
         .input-wrapper i { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); font-size: 18px; }
         .input-wrapper input { width: 100%; padding: 16px 18px 16px 50px; background: transparent; border: none; outline: none; color: var(--text-primary); font-size: 16px; font-weight: 500; }
         .input-wrapper input::placeholder { color: var(--text-tertiary); font-weight: 400; }

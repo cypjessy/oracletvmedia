@@ -473,7 +473,7 @@ export default function MemberListenPage() {
         }}>
           <i className="fas fa-headphones" style={{ fontSize: 32, color: "#fff" }}></i>
         </div>
-        <div style={{ color: "#E8A838", fontSize: 18, fontWeight: 700, letterSpacing: 1 }}>
+        <div style={{ color: "var(--primary)", fontSize: 18, fontWeight: 700, letterSpacing: 1 }}>
           {connecting ? "Connecting..." : "Loading..."}
         </div>
         <div style={{ width: 200, height: 3, background: "#1A1A1A", borderRadius: 2, overflow: "hidden" }}>
@@ -527,9 +527,9 @@ export default function MemberListenPage() {
     <>
       <style>{`
         :root {
-          --primary: #E8A838;
-          --primary-light: #F5C76B;
-          --bg: #0A0A0F;
+          --primary: #9775FA;
+          --primary-light: #B197FC;
+          --bg: #15111F;
           --surface: rgba(255,255,255,0.04);
           --surface-card: rgba(255,255,255,0.06);
           --border: rgba(255,255,255,0.06);
@@ -539,11 +539,11 @@ export default function MemberListenPage() {
           --success: #4ADE80;
           --error: #FF6B6B;
           --info: #38BDF8;
-          --gradient-start: #E8A838;
-          --gradient-end: #D4762A;
+          --gradient-start: #7048E8;
+          --gradient-end: #9775FA;
           --gradient-blue: #3B82F6;
           --gradient-purple: #8B5CF6;
-          --shadow-glow: 0 0 30px rgba(59,130,246,0.12);
+          --shadow-glow: 0 0 30px rgba(112,72,232,0.12);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -566,7 +566,7 @@ export default function MemberListenPage() {
           background:
             radial-gradient(ellipse at 30% 20%, rgba(59,130,246,0.05) 0%, transparent 60%),
             radial-gradient(ellipse at 70% 80%, rgba(139,92,246,0.04) 0%, transparent 50%),
-            radial-gradient(ellipse at 50% 50%, rgba(232,168,56,0.03) 0%, transparent 50%);
+            radial-gradient(ellipse at 50% 50%, rgba(112,72,232,0.03) 0%, transparent 50%);
         }
 
         .bg-orb {
@@ -593,7 +593,7 @@ export default function MemberListenPage() {
 
         .bg-orb:nth-child(3) {
           width: 200px; height: 200px;
-          background: rgba(232,168,56,0.06);
+          background: rgba(112,72,232,0.06);
           top: 30%; left: 60%;
           animation-delay: -16s;
         }
@@ -938,8 +938,8 @@ export default function MemberListenPage() {
           width: 100%;
           max-width: 340px;
           padding: 12px 16px;
-          background: rgba(232,168,56,0.06);
-          border: 1px solid rgba(232,168,56,0.15);
+          background: rgba(112,72,232,0.06);
+          border: 1px solid rgba(112,72,232,0.15);
           border-radius: 16px;
           backdrop-filter: blur(10px);
           animation: fadeIn 0.3s ease;
@@ -964,7 +964,7 @@ export default function MemberListenPage() {
           font-size: 10px;
           font-weight: 700;
           color: var(--primary);
-          background: rgba(232,168,56,0.12);
+          background: rgba(112,72,232,0.12);
           padding: 1px 7px;
           border-radius: 100px;
         }
@@ -981,8 +981,8 @@ export default function MemberListenPage() {
           gap: 5px;
           padding: 4px 10px;
           border-radius: 100px;
-          background: rgba(232,168,56,0.08);
-          border: 1px solid rgba(232,168,56,0.1);
+          background: rgba(112,72,232,0.08);
+          border: 1px solid rgba(112,72,232,0.1);
           font-size: 11px;
           font-weight: 600;
           color: var(--text-secondary);
@@ -1110,15 +1110,15 @@ export default function MemberListenPage() {
         }
 
         .ctrl-btn.hand.raised {
-          background: rgba(232,168,56,0.15);
+          background: rgba(112,72,232,0.15);
           color: var(--primary);
-          border-color: rgba(232,168,56,0.3);
+          border-color: rgba(112,72,232,0.3);
           animation: pttHandPulse 1.5s ease-in-out infinite;
         }
 
         @keyframes pttHandPulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(232,168,56,0.2); }
-          50% { box-shadow: 0 0 16px 4px rgba(232,168,56,0.1); }
+          0%, 100% { box-shadow: 0 0 0 0 rgba(112,72,232,0.2); }
+          50% { box-shadow: 0 0 16px 4px rgba(112,72,232,0.1); }
         }
 
         /* ===== PUSH-TO-TALK PREMIUM BUTTON ===== */
@@ -1791,7 +1791,7 @@ export default function MemberListenPage() {
                       <div style={{
                         width: 28, height: 28, borderRadius: "50%",
                         border: `2px solid ${item.isCompleted ? "var(--success)" : "var(--primary)"}`,
-                        background: item.isCompleted ? "var(--success)" : "rgba(232,168,56,0.08)",
+                        background: item.isCompleted ? "var(--success)" : "rgba(112,72,232,0.08)",
                         display: "flex", alignItems: "center", justifyContent: "center",
                         fontSize: 12, fontWeight: 800, color: item.isCompleted ? "#fff" : "var(--primary)",
                         flexShrink: 0,
@@ -1801,7 +1801,7 @@ export default function MemberListenPage() {
                       {idx < autoAgenda.items.length - 1 && (
                         <div style={{
                           width: 2, flex: 1, minHeight: 20,
-                          background: "rgba(232,168,56,0.12)",
+                          background: "rgba(112,72,232,0.12)",
                         }}></div>
                       )}
                     </div>

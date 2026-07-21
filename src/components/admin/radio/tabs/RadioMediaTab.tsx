@@ -276,7 +276,7 @@ export function RadioMediaTab(props: RadioMediaTabProps) {
         .media-content { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
         .upload-zone { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 20px; background: var(--surface-card); border: 2px dashed var(--border); border-radius: var(--radius-lg); cursor: pointer; transition: all 0.25s ease; text-align: center; }
         .upload-zone:active { background: var(--surface-elevated); border-color: var(--primary); }
-        .upload-zone.dragging { background: rgba(232,168,56,0.06); border-color: var(--primary); transform: scale(1.01); }
+        .upload-zone.dragging { background: rgba(112,72,232,0.06); border-color: var(--primary); transform: scale(1.01); }
         .upload-zone i { font-size: 36px; color: var(--text-tertiary); transition: all 0.25s ease; }
         .upload-zone.dragging i { color: var(--primary); transform: translateY(-4px); }
         .upload-zone-text h4 { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
@@ -294,13 +294,13 @@ export function RadioMediaTab(props: RadioMediaTabProps) {
         .media-search-wrapper { position: relative; display: flex; align-items: center; }
         .media-search-wrapper > i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); font-size: 15px; pointer-events: none; }
         .media-search-input { width: 100%; padding: 12px 40px 12px 42px; background: var(--surface-card); border: 1.5px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); font-size: 14px; font-weight: 500; outline: none; }
-        .media-search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(232,168,56,0.08); }
+        .media-search-input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(112,72,232,0.08); }
         .media-search-input::placeholder { color: var(--text-tertiary); font-weight: 400; }
         .media-search-clear { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: var(--radius-full); background: var(--surface-elevated); border: none; color: var(--text-secondary); font-size: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
         .media-search-clear:active { background: var(--surface-hover); }
         .media-filter-select { width: 100%; padding: 12px 16px; background: var(--surface-card); border: 1.5px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); font-size: 13px; font-weight: 500; outline: none; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%236B6B6B' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 40px; }
-        .media-filter-select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(232,168,56,0.08); }
-        .media-bulk-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: rgba(232,168,56,0.08); border: 1px solid rgba(232,168,56,0.15); border-radius: var(--radius-md); animation: fadeSlideUp 0.2s ease; }
+        .media-filter-select:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(112,72,232,0.08); }
+        .media-bulk-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: rgba(112,72,232,0.08); border: 1px solid rgba(112,72,232,0.15); border-radius: var(--radius-md); animation: fadeSlideUp 0.2s ease; }
         .media-bulk-count { font-size: 13px; font-weight: 700; color: var(--primary); flex-shrink: 0; }
         .media-bulk-actions { display: flex; gap: 8px; flex: 1; justify-content: flex-end; }
         .media-bulk-btn { padding: 8px 12px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; cursor: pointer; border: none; display: flex; align-items: center; gap: 5px; background: var(--surface-elevated); color: var(--text-primary); transition: all 0.2s ease; }
@@ -315,7 +315,7 @@ export function RadioMediaTab(props: RadioMediaTabProps) {
         .media-empty p { font-size: 14px; color: var(--text-secondary); }
         .media-file-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px; border-bottom: 1px solid var(--border); transition: background 0.2s ease; position: relative; }
         .media-file-item:last-child { border-bottom: none; }
-        .media-file-item.selected { background: rgba(232,168,56,0.04); }
+        .media-file-item.selected { background: rgba(112,72,232,0.04); }
         .media-checkbox { width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--border); flex-shrink: 0; margin-top: 6px; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
         .media-checkbox.checked { background: var(--primary); border-color: var(--primary); }
         .media-checkbox i { font-size: 11px; color: #fff; }
@@ -327,7 +327,7 @@ export function RadioMediaTab(props: RadioMediaTabProps) {
         .media-file-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
         .media-file-tag { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; color: var(--text-tertiary); background: var(--surface-elevated); }
         .media-file-playlists { display: flex; gap: 4px; flex-wrap: wrap; }
-        .media-playlist-chip { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; background: rgba(232,168,56,0.1); color: var(--primary); }
+        .media-playlist-chip { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; background: rgba(112,72,232,0.1); color: var(--primary); }
         .media-file-actions-relative { position: relative; }
         .media-file-menu { width: 32px; height: 32px; border-radius: var(--radius-full); background: none; border: none; color: var(--text-tertiary); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .media-file-menu:active { background: var(--surface-elevated); color: var(--text-primary); }
@@ -337,7 +337,7 @@ export function RadioMediaTab(props: RadioMediaTabProps) {
         .media-action-btn:active { background: var(--surface-hover); }
         .media-action-icon { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
         .media-action-icon.blue { background: rgba(59,130,246,0.12); color: var(--gradient-blue); }
-        .media-action-icon.gold { background: rgba(232,168,56,0.12); color: var(--primary); }
+        .media-action-icon.gold { background: rgba(112,72,232,0.12); color: var(--primary); }
         .media-action-icon.red { background: rgba(239,68,68,0.12); color: var(--error); }
         .media-action-info { flex: 1; }
         .media-action-info h4 { font-size: 14px; font-weight: 600; }
@@ -364,7 +364,7 @@ export function RadioMediaTab(props: RadioMediaTabProps) {
         .media-pl-item { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--border); cursor: pointer; transition: opacity 0.2s ease; }
         .media-pl-item:last-child { border-bottom: none; }
         .media-pl-item:active { opacity: 0.6; }
-        .media-pl-icon { width: 40px; height: 40px; border-radius: var(--radius-sm); background: rgba(232,168,56,0.1); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+        .media-pl-icon { width: 40px; height: 40px; border-radius: var(--radius-sm); background: rgba(112,72,232,0.1); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
         .media-pl-info { flex: 1; }
         .media-pl-name { font-size: 15px; font-weight: 600; }
         .media-pl-arrow { font-size: 14px; color: var(--text-tertiary); }

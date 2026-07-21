@@ -1,26 +1,36 @@
 {
   "project_info": {
-    "project_number": "91011410422",
-    "project_id": "campuslink-3fykr",
-    "storage_bucket": "campuslink-3fykr.firebasestorage.app"
+    "project_number": "805350988448",
+    "project_id": "campuslink-rgxfu",
+    "storage_bucket": "campuslink-rgxfu.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:91011410422:android:cabe86b8577c0ae8247fd7",
+        "mobilesdk_app_id": "1:805350988448:android:490d43b70df2cf1710c7c5",
         "android_client_info": {
-          "package_name": "com.mountainofdeliverance.church"
+          "package_name": "com.oracletvmedia.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "805350988448-33ulu63cbevnji0mmnd6tdet3f93sco7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyDzt2LqHNaN_wxpgZi6GoKXR8_jZwzcOc0"
+          "current_key": "AIzaSyAMQL8C8P8T6YcZdPzGoREowG3s5GCwBxQ"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "805350988448-33ulu63cbevnji0mmnd6tdet3f93sco7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

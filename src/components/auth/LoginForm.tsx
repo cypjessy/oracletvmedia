@@ -62,7 +62,7 @@ export default function LoginForm() {
         return;
       }
 
-      await NativeBiometric.verifyIdentity({ reason: "Sign in to MOD NAKURU", title: "Biometric Sign In" });
+      await NativeBiometric.verifyIdentity({ reason: "Sign in to ORACLE TV MEDIA", title: "Biometric Sign In" });
 
       setIsLoading(true);
       const result = await signInWithEmailAndPassword(auth, storedCreds.username, storedCreds.password);
@@ -274,6 +274,16 @@ export default function LoginForm() {
             document.body.style.overflow = "hidden";
           }}>
             Create Account
+          </a>
+        </p>
+        <p style={{ marginTop: 8, fontSize: 13, color: "var(--text-tertiary)" }}>
+          Admin?{" "}
+          <a href="#" onClick={(e) => {
+            e.preventDefault();
+            document.getElementById("tempAdminModal")?.classList.add("active");
+            document.body.style.overflow = "hidden";
+          }}>
+            Register Admin Account
           </a>
         </p>
       </div>

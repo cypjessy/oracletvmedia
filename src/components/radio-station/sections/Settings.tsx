@@ -41,7 +41,7 @@ export default function Settings({ showToast }: Props) {
         .rs-set-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--rs-border); }
         .rs-set-item:last-child { border-bottom: none; }
         .rs-set-icon { width: 36px; height: 36px; border-radius: var(--rs-radius-sm); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
-        .rs-set-icon.gold { background: rgba(232,168,56,0.12); color: var(--rs-primary); }
+        .rs-set-icon.gold { background: rgba(112,72,232,0.12); color: var(--rs-primary); }
         .rs-set-icon.blue { background: rgba(59,130,246,0.12); color: var(--rs-grad-blue); }
         .rs-set-icon.purple { background: rgba(139,92,246,0.12); color: var(--rs-grad-purple); }
         .rs-set-icon.green { background: rgba(34,197,94,0.12); color: var(--rs-grad-green); }

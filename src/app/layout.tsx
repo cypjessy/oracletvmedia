@@ -9,13 +9,13 @@ import UpdateChecker from "@/components/shared/UpdateChecker";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MOD NAKURU",
+  title: "ORACLE TV MEDIA",
   description:
-    "MOD NAKURU connects you to live radio, sermons, videos, and community — anywhere, anytime.",
+    "ORACLE TV MEDIA connects you to live radio, sermons, videos, and community — anywhere, anytime.",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "MOD NAKURU",
+    title: "ORACLE TV MEDIA",
   },
   icons: {
     icon: "/favicon.ico",

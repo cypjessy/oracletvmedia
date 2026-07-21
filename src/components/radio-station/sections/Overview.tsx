@@ -57,7 +57,7 @@ export default function Overview({ showToast }: Props) {
         .rs-ov-btn.green { background: rgba(34,197,94,0.12); color: var(--rs-success); }
         .rs-ov-btn:active { transform: scale(0.97); }
 
-        .rs-ov-np { background: linear-gradient(135deg, rgba(232,168,56,0.08), rgba(139,92,246,0.04)); border: 1px solid rgba(232,168,56,0.1); border-radius: var(--rs-radius-lg); padding: 16px; display: flex; align-items: center; gap: 14px; }
+        .rs-ov-np { background: linear-gradient(135deg, rgba(112,72,232,0.08), rgba(139,92,246,0.04)); border: 1px solid rgba(112,72,232,0.1); border-radius: var(--rs-radius-lg); padding: 16px; display: flex; align-items: center; gap: 14px; }
         .rs-ov-np-cover { width: 64px; height: 64px; border-radius: var(--rs-radius-md); overflow: hidden; flex-shrink: 0; border: 1px solid var(--rs-border); background: linear-gradient(135deg, var(--rs-surface-elevated), var(--rs-surface-hover)); display: flex; align-items: center; justify-content: center; }
         .rs-ov-np-cover img { width: 100%; height: 100%; object-fit: cover; }
         .rs-ov-np-cover i { font-size: 24px; color: var(--rs-text-tertiary); }
@@ -83,13 +83,13 @@ export default function Overview({ showToast }: Props) {
         .rs-ov-action-btn:active { background: var(--rs-surface-elevated); transform: scale(0.96); }
         .rs-ov-action-btn span { font-size: 11px; font-weight: 600; color: var(--rs-text-secondary); text-align: center; }
         .rs-ov-action-icon { width: 44px; height: 44px; border-radius: var(--rs-radius-sm); display: flex; align-items: center; justify-content: center; font-size: 18px; }
-        .rs-ov-action-icon.gold { background: rgba(232,168,56,0.12); color: var(--rs-primary); }
+        .rs-ov-action-icon.gold { background: rgba(112,72,232,0.12); color: var(--rs-primary); }
         .rs-ov-action-icon.blue { background: rgba(59,130,246,0.12); color: var(--rs-grad-blue); }
         .rs-ov-action-icon.purple { background: rgba(139,92,246,0.12); color: var(--rs-grad-purple); }
 
         .rs-ov-chart { display: flex; align-items: flex-end; gap: 4px; height: 100px; background: var(--rs-surface-card); border: 1px solid var(--rs-border); border-radius: var(--rs-radius-lg); padding: 12px; }
         .rs-ov-chart-bar { flex: 1; display: flex; align-items: flex-end; height: 100%; }
-        .rs-ov-chart-fill { width: 100%; border-radius: 3px 3px 0 0; background: linear-gradient(to top, rgba(232,168,56,0.3), var(--rs-primary)); transition: height 0.3s ease; min-height: 2px; }
+        .rs-ov-chart-fill { width: 100%; border-radius: 3px 3px 0 0; background: linear-gradient(to top, rgba(112,72,232,0.3), var(--rs-primary)); transition: height 0.3s ease; min-height: 2px; }
         .rs-ov-chart-labels { display: flex; justify-content: space-between; padding: 4px 12px 0; }
         .rs-ov-chart-labels span { font-size: 10px; color: var(--rs-text-tertiary); }
 

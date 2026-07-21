@@ -89,7 +89,7 @@ export default function Media({ showToast }: Props) {
         .rs-media-search input::placeholder { color: var(--rs-text-tertiary); }
         .rs-media-count { font-size: 12px; color: var(--rs-text-tertiary); text-align: right; }
 
-        .rs-media-bulk { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: rgba(232,168,56,0.08); border: 1px solid rgba(232,168,56,0.15); border-radius: var(--rs-radius-md); animation: rsFadeUp 0.2s ease; }
+        .rs-media-bulk { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: rgba(112,72,232,0.08); border: 1px solid rgba(112,72,232,0.15); border-radius: var(--rs-radius-md); animation: rsFadeUp 0.2s ease; }
         .rs-media-bulk-count { font-size: 13px; font-weight: 700; color: var(--rs-primary); }
         .rs-media-bulk-actions { display: flex; gap: 8px; flex: 1; justify-content: flex-end; }
         .rs-media-bulk-btn { padding: 6px 12px; border-radius: var(--rs-radius-sm); font-size: 12px; font-weight: 600; cursor: pointer; border: none; background: var(--rs-surface-elevated); color: var(--rs-text); display: flex; align-items: center; gap: 4px; }
@@ -99,7 +99,7 @@ export default function Media({ showToast }: Props) {
         .rs-media-list { background: var(--rs-surface-card); border: 1px solid var(--rs-border); border-radius: var(--rs-radius-lg); overflow: hidden; }
         .rs-media-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--rs-border); transition: all 0.15s ease; position: relative; }
         .rs-media-item:last-child { border-bottom: none; }
-        .rs-media-item.selected { background: rgba(232,168,56,0.04); }
+        .rs-media-item.selected { background: rgba(112,72,232,0.04); }
         .rs-media-cb { width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--rs-border); flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; }
         .rs-media-cb.checked { background: var(--rs-primary); border-color: var(--rs-primary); }
         .rs-media-cb i { font-size: 10px; color: #fff; }
@@ -128,7 +128,7 @@ export default function Media({ showToast }: Props) {
         .rs-media-pl-item { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--rs-border); cursor: pointer; }
         .rs-media-pl-item:last-child { border-bottom: none; }
         .rs-media-pl-item:active { opacity: 0.6; }
-        .rs-media-pl-icon { width: 36px; height: 36px; border-radius: var(--rs-radius-sm); background: rgba(232,168,56,0.1); color: var(--rs-primary); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        .rs-media-pl-icon { width: 36px; height: 36px; border-radius: var(--rs-radius-sm); background: rgba(112,72,232,0.1); color: var(--rs-primary); display: flex; align-items: center; justify-content: center; font-size: 16px; }
         .rs-media-pl-name { font-size: 15px; font-weight: 600; }
         .rs-media-pl-arrow { color: var(--rs-text-tertiary); font-size: 12px; margin-left: auto; }
 

@@ -17,7 +17,7 @@ export default function MemberLayout({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#0F0F0F",
+          background: "#15111F",
           color: "#fff",
           fontFamily: "Inter, sans-serif",
         }}
@@ -26,8 +26,8 @@ export default function MemberLayout({
           style={{
             width: 48,
             height: 48,
-            border: "3px solid #242424",
-            borderTopColor: "#E8A838",
+            border: "3px solid #2A2438",
+            borderTopColor: "#9775FA",
             borderRadius: "50%",
             animation: "spin 0.8s linear infinite",
           }}
