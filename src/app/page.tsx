@@ -40,23 +40,23 @@ export default function LoginPage() {
     <>
       <style>{`
         :root {
-            --primary: #9775FA;
-            --primary-light: #B197FC;
-            --primary-dark: #7048E8;
-            --bg: #15111F;
-            --surface: #1A1625;
-            --surface-elevated: #241E33;
-            --surface-card: #1E1A2A;
+            --primary: #E03131;
+            --primary-light: #F03E3E;
+            --primary-dark: #C92A2A;
+            --bg: #161213;
+            --surface: #1E1819;
+            --surface-elevated: #2A1E1F;
+            --surface-card: #221819;
             --text-primary: #FFFFFF;
             --text-secondary: #A0A0A0;
             --text-tertiary: #6B6B6B;
-            --border: #2A2438;
+            --border: #3A2425;
             --error: #FF6B6B;
             --success: #4ADE80;
-            --overlay: rgba(21,17,31,0.92);
-            --gradient-start: #7048E8;
-            --gradient-end: #9775FA;
-            --shadow-soft: 0 4px 20px rgba(112,72,232,0.15);
+            --overlay: rgba(22,18,19,0.92);
+            --gradient-start: #E03131;
+            --gradient-end: #F03E3E;
+            --shadow-soft: 0 4px 20px rgba(224,49,49,0.15);
             --shadow-elevated: 0 8px 32px rgba(0,0,0,0.45);
         }
 
@@ -95,12 +95,12 @@ export default function LoginPage() {
         .splash-logo {
             width: 120px;
             height: 120px;
-            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            background: linear-gradient(135deg, #FF922B, #F76707);
             border-radius: 32px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: var(--shadow-soft), 0 0 60px rgba(112,72,232,0.2);
+            box-shadow: 0 4px 20px rgba(255,146,43,0.15), 0 0 60px rgba(247,103,7,0.2);
             animation: splashPulse 2s ease-in-out infinite;
         }
 
@@ -114,7 +114,7 @@ export default function LoginPage() {
             font-size: 28px;
             font-weight: 800;
             letter-spacing: -0.5px;
-            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            background: linear-gradient(135deg, #FF922B, #F76707);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -138,8 +138,8 @@ export default function LoginPage() {
         }
 
         @keyframes splashPulse {
-            0%, 100% { transform: scale(1); box-shadow: var(--shadow-soft), 0 0 60px rgba(112,72,232,0.2); }
-            50% { transform: scale(1.05); box-shadow: var(--shadow-soft), 0 0 80px rgba(112,72,232,0.35); }
+            0%, 100% { transform: scale(1); box-shadow: 0 4px 20px rgba(255,146,43,0.15), 0 0 60px rgba(247,103,7,0.2); }
+            50% { transform: scale(1.05); box-shadow: 0 4px 20px rgba(255,146,43,0.15), 0 0 80px rgba(247,103,7,0.35); }
         }
 
         @keyframes spin {
@@ -181,14 +181,14 @@ export default function LoginPage() {
             transform: translateX(-50%);
             width: 400px;
             height: 400px;
-            background: radial-gradient(circle, rgba(112,72,232,0.12) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(224,49,49,0.12) 0%, transparent 70%);
             pointer-events: none;
         }
 
         .login-hero-logo {
             width: 88px;
             height: 88px;
-            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            background: linear-gradient(135deg, #FF922B, #F76707);
             border-radius: 24px;
             display: flex;
             align-items: center;
