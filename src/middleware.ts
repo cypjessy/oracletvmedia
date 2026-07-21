@@ -7,7 +7,7 @@ const ALLOWED_ORIGINS = [
   "http://localhost",
   "http://localhost:3000",
   "http://localhost:5173",
-  "https://mountain-of-delivarance.vercel.app",
+  "https://oracletvmedia.vercel.app",
   "null",
 ];
 

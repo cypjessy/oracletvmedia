@@ -118,7 +118,7 @@ echo ""
 
 # Step 5: Copy APK to Documents
 echo "[5/5] Copying APK to Documents..."
-cp "$PROJECT_DIR/android/app/build/outputs/apk/release/app-release.apk" "$OUTPUT_PATH"
+cp "$PROJECT_DIR/android/app/build/outputs/apk/release/oracle-tv-app.apk" "$OUTPUT_PATH"
 echo "  ✓ APK copied to: $OUTPUT_PATH"
 echo ""
 

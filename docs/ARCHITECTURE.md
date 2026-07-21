@@ -16,7 +16,7 @@ The app is a **Next.js 16** single-page church application serving both as a **r
 │                    USERS (Web + Android APK)              │
 ├──────────────────────────────────────────────────────────┤
 │                      Cloudflare DNS                       │
-│                  mountain-of-delivarance.vercel.app       │
+│                  oracletvmedia.vercel.app       │
 ├──────────────────────────────────────────────────────────┤
 │                    VERCEL (Hosting)                       │
 │  ┌────────────────────────────────────────────────────┐   │
@@ -56,8 +56,8 @@ The app is a **Next.js 16** single-page church application serving both as a **r
 
 | Environment | URL |
 |-------------|-----|
-| **Production (Web)** | https://mountain-of-delivarance.vercel.app |
-| **Android APK** | https://mountain-of-delivarance.vercel.app/app-release.apk |
+| **Production (Web)** | https://oracletvmedia.vercel.app |
+| **Android APK** | https://oracletvmedia.vercel.app/oracle-tv-app.apk |
 | **Source Code** | https://github.com/anomalyco/churchproject (assumed) |
 
 ---
@@ -67,7 +67,7 @@ The app is a **Next.js 16** single-page church application serving both as a **r
 ## 3.1 Vercel (Primary Hosting)
 - **Platform:** Vercel (Free/Hobby tier assumed)
 - **Deployment:** Automatic via Git push to `main` branch
-- **Domains:** `mountain-of-delivarance.vercel.app`
+- **Domains:** `oracletvmedia.vercel.app`
 - **Environment Variables:** Set in Vercel Project Settings → Environment Variables
 - **Build Command:** `npm run build`
 - **Output Directory:** `.next` (default)
@@ -462,7 +462,7 @@ ssh root@173.249.50.98
 | `/api/notify-update` | POST | Bearer token | FCM push to all users |
 | `/api/play-controls/config` | GET | None | Radio play button config |
 
-**Note:** All API routes are deployed on Vercel. The Android APK calls these via `NEXT_PUBLIC_API_HOST` (`https://mountain-of-delivarance.vercel.app`). All AzuraCast API calls go directly from the client to `azuracast.histoview.co.ke` (no Vercel proxy).
+**Note:** All API routes are deployed on Vercel. The Android APK calls these via `NEXT_PUBLIC_API_HOST` (`https://oracletvmedia.vercel.app`). All AzuraCast API calls go directly from the client to `azuracast.histoview.co.ke` (no Vercel proxy).
 
 ---
 
@@ -525,7 +525,7 @@ NEXT_PUBLIC_ADMIN_REG_TOKEN=faithstream-admin-2026
 # ============================================================
 # VERCEL
 # ============================================================
-NEXT_PUBLIC_VERCEL_URL=https://mountain-of-delivarance.vercel.app
+NEXT_PUBLIC_VERCEL_URL=https://oracletvmedia.vercel.app
 
 # ============================================================
 # LIVEKIT
@@ -562,7 +562,7 @@ RELEASE_ADMIN_PASSWORD=Mastar2000#
 # ============================================================
 # API HOST (for static export / APK)
 # ============================================================
-NEXT_PUBLIC_API_HOST=https://mountain-of-delivarance.vercel.app
+NEXT_PUBLIC_API_HOST=https://oracletvmedia.vercel.app
 ```
 
 ---
@@ -606,9 +606,9 @@ bash scripts/build-and-publish.sh
 
 When deploying changes:
 1. Push to GitHub `main` branch → Vercel auto-deploys
-2. Verify at https://mountain-of-delivarance.vercel.app
+2. Verify at https://oracletvmedia.vercel.app
 3. For Android: run `bash scripts/build-and-publish.sh` locally
-4. New APK becomes available at https://mountain-of-delivarance.vercel.app/app-release.apk
+4. New APK becomes available at https://oracletvmedia.vercel.app/oracle-tv-app.apk
 5. Run `POST /api/notify-update` (with Bearer build secret) to push notification to all users
 
 ---

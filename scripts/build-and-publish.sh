@@ -28,7 +28,7 @@ echo ""
 
 # ── Step 1b: Remove old APK from public/ so it doesn't get bundled into the static export ──
 echo "[2/7] Removing old APK from public/ to prevent recursive bloat..."
-rm -f "$PROJECT_DIR/public/app-release.apk"
+rm -f "$PROJECT_DIR/public/oracle-tv-app.apk"
 echo ""
 
 # ── Step 2: Build Next.js static export ──────────────────────────────────
@@ -88,13 +88,13 @@ echo ""
 # ── Step 6: Copy APK to public/ for Vercel ───────────────────────────────
 echo "[7/8] Copying APK to public/..."
 mkdir -p "$PROJECT_DIR/public"
-cp "$PROJECT_DIR/android/app/build/outputs/apk/release/app-release.apk" \
-   "$PROJECT_DIR/public/app-release.apk"
-echo "  ✅ APK copied to public/app-release.apk"
+cp "$PROJECT_DIR/android/app/build/outputs/apk/release/oracle-tv-app.apk" \
+   "$PROJECT_DIR/public/oracle-tv-app.apk"
+echo "  ✅ APK copied to public/oracle-tv-app.apk"
 
 # Get file size
-APK_SIZE=$(stat --format=%s "$PROJECT_DIR/public/app-release.apk" 2>/dev/null || \
-           stat -f%z "$PROJECT_DIR/public/app-release.apk" 2>/dev/null || echo "0")
+APK_SIZE=$(stat --format=%s "$PROJECT_DIR/public/oracle-tv-app.apk" 2>/dev/null || \
+           stat -f%z "$PROJECT_DIR/public/oracle-tv-app.apk" 2>/dev/null || echo "0")
 echo "  📦 Size: $(numfmt --to=iec $APK_SIZE 2>/dev/null || echo "${APK_SIZE}B")"
 echo ""
 
@@ -111,7 +111,7 @@ VERSION_CODE=$(grep 'versionCode' "$PROJECT_DIR/android/app/build.gradle" | grep
 echo ""
 echo "[8/8] Committing and pushing to GitHub..."
 
-git add android/app/build.gradle public/app-release.apk 2>/dev/null || true
+git add android/app/build.gradle public/oracle-tv-app.apk 2>/dev/null || true
 
 if git diff --cached --quiet; then
   echo "  ⚠️  No changes to commit"
@@ -131,6 +131,6 @@ echo ""
 echo "=========================================="
 echo "  ✅ Release complete!"
 echo "  Version: $VERSION_NAME (code $VERSION_CODE)"
-echo "  APK: public/app-release.apk"
+echo "  APK: public/oracle-tv-app.apk"
 echo "  Pushed to GitHub — Vercel will deploy"
 echo "=========================================="

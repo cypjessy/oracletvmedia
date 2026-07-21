@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BUILD_SECRET = process.env.BUILD_SECRET_TOKEN || "";
 const FCM_SERVER_KEY = process.env.NEXT_PUBLIC_FIREBASE_FCM_KEY || "";
-const APP_DOWNLOAD_URL = "https://mountain-of-delivarance.vercel.app/app-release.apk";
+const APP_DOWNLOAD_URL = "https://oracletvmedia.vercel.app/oracle-tv-app.apk";
 
 export async function POST(request: NextRequest) {
   // ── Verify build secret ──

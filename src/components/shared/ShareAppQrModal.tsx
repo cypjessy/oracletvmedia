@@ -7,7 +7,7 @@ interface ShareAppQrModalProps {
   onClose: () => void;
 }
 
-const APP_DOWNLOAD_URL = "https://mountain-of-delivarance.vercel.app/app-release.apk";
+const APP_DOWNLOAD_URL = "https://oracletvmedia.vercel.app/oracle-tv-app.apk";
 
 export default function ShareAppQrModal({ open, onClose }: ShareAppQrModalProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string>("");

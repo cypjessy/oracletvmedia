@@ -609,7 +609,7 @@ export default function AdminAccountsPage() {
                   try {
                     await setDoc(doc(db, "update_notifications", "latest"), {
                       versionName: "latest",
-                      downloadUrl: "https://mountain-of-delivarance.vercel.app/app-release.apk",
+                      downloadUrl: "https://oracletvmedia.vercel.app/oracle-tv-app.apk",
                       sentAt: serverTimestamp(),
                     });
                     setNotifResult("✅ App update notification sent!");
