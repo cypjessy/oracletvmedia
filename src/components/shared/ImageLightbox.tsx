@@ -166,49 +166,18 @@ export function useImageLightbox(): ImageLightboxAPI {
             <span className="il-counter">{currentIndex + 1} / {images.length}</span>
           </div>
           <div className="il-actions">
-            <button className="il-action-btn" onClick={async () => {
-              if (current) {
-                try {
-                  const { Share } = await import("@capacitor/share");
-                  await Share.share({ title: current.title, url: current.url });
-                } catch {
-                  try {
-                    const { Clipboard } = await import("@capacitor/clipboard");
-                    await Clipboard.write({ string: current.url });
-                  } catch {
-                    navigator.clipboard.writeText(current.url);
-                  }
-                  window.dispatchEvent(new CustomEvent("show-toast", {
-                    detail: { title: "Copied", message: "Image URL copied!", type: "success", duration: 2000 },
-                  }));
-                }
+            <button className="il-action-btn" onClick={() => {
+              if (current?.url) {
+                navigator.clipboard.writeText(current.url);
+                window.dispatchEvent(new CustomEvent("show-toast", {
+                  detail: { title: "Copied", message: "Image link copied", type: "success", duration: 2000 },
+                }));
               }
             }}>
               <i className="fas fa-share-nodes"></i>
             </button>
-            <button className="il-action-btn" onClick={async () => {
-              if (!current) return;
-              try {
-                const { Filesystem, Directory } = await import("@capacitor/filesystem");
-                const response = await fetch(current.url);
-                const blob = await response.blob();
-                const reader = new FileReader();
-                reader.onloadend = async () => {
-                  const base64 = reader.result as string;
-                  const filename = `${current.title.replace(/[^a-zA-Z0-9]/g, "_")}.jpg`;
-                  await Filesystem.writeFile({ path: filename, data: base64, directory: Directory.Documents });
-                  window.dispatchEvent(new CustomEvent("show-toast", {
-                    detail: { title: "Saved", message: "Photo saved to device", type: "success", duration: 2000 },
-                  }));
-                };
-                reader.readAsDataURL(blob);
-              } catch {
-                // Fallback: trigger download via anchor
-                const a = document.createElement("a");
-                a.href = current.url;
-                a.download = current.title;
-                a.click();
-              }
+            <button className="il-action-btn" onClick={() => {
+              if (current?.url) window.open(current.url, '_blank');
             }}>
               <i className="fas fa-download"></i>
             </button>
